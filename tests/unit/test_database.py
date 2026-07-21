@@ -20,7 +20,11 @@ class DatabaseTests(unittest.TestCase):
 
             self.assertEqual(
                 set(inspect(engine).get_table_names()),
-                {"climate_tests", "audit_events"},
+                {
+                    "climate_tests",
+                    "audit_events",
+                    "climate_condition_snapshots",
+                },
             )
 
             climate_test = ClimateTestRecord(

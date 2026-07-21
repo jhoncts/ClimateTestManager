@@ -52,10 +52,21 @@ apague os dados do laboratório.
 Os dados resultantes da Tabela 17 devem ser gravados no ensaio. O histórico continuará mostrando
 qual condição foi aplicada mesmo se uma versão futura do motor normativo for atualizada.
 
+A tabela `climate_condition_snapshots` armazena essa fotografia em uma relação de um para um com
+`climate_tests`. Ela registra temperaturas, umidade, durações, tolerâncias, opção e identificador
+da regra. A criação da nova tabela é compatível com bancos vazios da versão 0.1.0.
+
+### Fluxo do cadastro
+
+1. A tela coleta e valida os dados do operador.
+2. O domínio calcula Ts e resolve a condição normativa.
+3. O serviço monta o ensaio, a fotografia da regra e o evento de auditoria.
+4. O repositório grava o conjunto em uma única transação SQLite.
+5. O dashboard consulta os dados persistidos por meio do serviço.
+
 ## Próximas evoluções
 
-- Repositórios concretos para ensaios e auditoria.
-- Serviços de cadastro, início, transferência para secagem e encerramento.
+- Serviços de início, transferência para secagem e encerramento.
 - Migrações Alembic versionadas.
 - Relógio injetável para testes determinísticos de prazos.
 - Notificações locais enquanto a aplicação estiver em execução.

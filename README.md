@@ -6,19 +6,24 @@ Aplicação desktop para controle de ensaios de resistência climática realizad
 O projeto nasce para substituir uma planilha operacional por um software local, auditável e
 preparado para gerar um executável do Windows sem abrir navegador ou terminal.
 
-> Status: fundação técnica concluída. A interface inicial e o motor normativo da Tabela 17 já
-> possuem uma primeira implementação testável. Cadastro, fluxo completo e histórico serão
+> Status: versão 0.2.0. O cadastro de ensaios, o cálculo interativo da Tabela 17 e a persistência
+> local já estão funcionais. O início da câmara, os prazos e o histórico visual serão
 > desenvolvidos nas próximas etapas.
 
-## Funcionalidades planejadas
+## Funcionalidades disponíveis
 
-- Cadastro e acompanhamento de ensaios climáticos.
+- Cadastro de ensaios climáticos com validação dos campos obrigatórios.
 - Cálculo de `Ts = Tamb + ΔT`.
-- Seleção automática das condições da Tabela 17.
+- Consulta automática das condições da Tabela 17.
 - Escolha entre as opções A e B quando ambas forem permitidas.
+- Aceitação de ponto ou vírgula nos valores decimais.
+- Gravação local do ensaio, da condição normativa e do primeiro evento de auditoria.
+- Dashboard conectado aos ensaios cadastrados.
+
+## Próximas funcionalidades
+
 - Controle das etapas de câmara e secagem.
 - Situação operacional e condição de prazo separadas.
-- Dashboard de ensaios ativos e ações necessárias.
 - Histórico auditável de alterações.
 
 ## Tecnologias

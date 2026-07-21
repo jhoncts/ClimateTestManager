@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from climatetest_manager.database.base import Base
@@ -46,6 +46,42 @@ class ClimateTestRecord(Base):
         back_populates="climate_test",
         cascade="all, delete-orphan",
     )
+    condition_snapshot: Mapped[ClimateConditionSnapshot | None] = relationship(
+        back_populates="climate_test",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+
+
+class ClimateConditionSnapshot(Base):
+    """Condição normativa imutável aplicada no momento do cadastro."""
+
+    __tablename__ = "climate_condition_snapshots"
+
+    climate_test_id: Mapped[int] = mapped_column(
+        ForeignKey("climate_tests.id", ondelete="CASCADE"), primary_key=True
+    )
+    rule_id: Mapped[str] = mapped_column(String(40))
+    normative_rule_version: Mapped[str] = mapped_column(String(40))
+    option: Mapped[str] = mapped_column(String(1))
+    service_temperature_c: Mapped[Decimal] = mapped_column(Numeric(8, 2))
+    chamber_temperature_c: Mapped[Decimal] = mapped_column(Numeric(8, 2))
+    chamber_temperature_tolerance_k: Mapped[Decimal] = mapped_column(Numeric(5, 2))
+    chamber_humidity_percent: Mapped[Decimal] = mapped_column(Numeric(5, 2))
+    chamber_humidity_tolerance_percent: Mapped[Decimal] = mapped_column(Numeric(5, 2))
+    chamber_duration_hours: Mapped[int] = mapped_column(Integer)
+    chamber_duration_positive_tolerance_hours: Mapped[int] = mapped_column(Integer)
+    drying_required: Mapped[bool] = mapped_column(Boolean)
+    drying_temperature_c: Mapped[Decimal | None] = mapped_column(Numeric(8, 2), nullable=True)
+    drying_temperature_tolerance_k: Mapped[Decimal | None] = mapped_column(
+        Numeric(5, 2), nullable=True
+    )
+    drying_duration_hours: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    drying_duration_positive_tolerance_hours: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
+
+    climate_test: Mapped[ClimateTestRecord] = relationship(back_populates="condition_snapshot")
 
 
 class AuditEvent(Base):
