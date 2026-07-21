@@ -6,6 +6,7 @@ from decimal import Decimal
 import flet as ft
 
 from climatetest_manager.domain.climate_rules import (
+    DEFAULT_TAMB_MAX_C,
     ClimateCondition,
     ClimateRuleError,
     available_options,
@@ -18,7 +19,10 @@ from climatetest_manager.ui.theme import AppColors
 
 
 def _format_number(value: Decimal) -> str:
-    return format(value, "f").rstrip("0").rstrip(".") or "0"
+    formatted = format(value, "f")
+    if "." in formatted:
+        formatted = formatted.rstrip("0").rstrip(".")
+    return formatted or "0"
 
 
 def _number_text(value: str) -> str:
@@ -91,7 +95,7 @@ class NewTestView:
             on_select=self._recalculate,
             expand=True,
         )
-        self.tamb = _field("Tamb máxima (°C) *", hint="Ex.: 40")
+        self.tamb = _field("Tamb máxima (°C)", hint="Em branco: adota +40")
         self.delta_t = _field("Delta T máximo (K) *", hint="Ex.: 35")
         self.tamb.keyboard_type = ft.KeyboardType.NUMBER
         self.delta_t.keyboard_type = ft.KeyboardType.NUMBER
@@ -99,6 +103,11 @@ class NewTestView:
         self.delta_t.expand = True
         self.tamb.on_change = self._recalculate
         self.delta_t.on_change = self._recalculate
+        self.tamb_assumption = ft.Text(
+            "Tamb não informada: será adotado +40 °C conforme a Tabela 1.",
+            size=11,
+            color=AppColors.TEXT_SECONDARY,
+        )
         self.notes = _field("Observações", hint="Informações adicionais", multiline=True)
 
         self.option_b = ft.Radio(value="B", label="Opção B", disabled=True)
@@ -113,7 +122,7 @@ class NewTestView:
             on_change=self._recalculate,
         )
         self.option_help = ft.Text(
-            "Informe EPL, Tamb e Delta T para consultar as opções.",
+            "Informe EPL e Delta T para consultar as opções.",
             size=12,
             color=AppColors.TEXT_SECONDARY,
         )
@@ -242,6 +251,7 @@ class NewTestView:
                                 color=AppColors.TEXT_PRIMARY,
                             ),
                             ft.Row(spacing=14, controls=[self.epl, self.tamb, self.delta_t]),
+                            self.tamb_assumption,
                             ft.Container(
                                 bgcolor=AppColors.INFO_LIGHT,
                                 border_radius=12,
@@ -305,18 +315,23 @@ class NewTestView:
 
     def _recalculate(self, _event: object | None = None) -> None:
         self.error_banner.visible = False
-        if not self.epl.value or not self.tamb.value.strip() or not self.delta_t.value.strip():
+        tamb_was_defaulted = not self.tamb.value.strip()
+        self.tamb_assumption.visible = tamb_was_defaulted
+        if not self.epl.value or not self.delta_t.value.strip():
             self._condition = None
             self.save_button.disabled = True
             self.ts_value.value = "Ts = —"
-            self.option_help.value = "Informe EPL, Tamb e Delta T para consultar as opções."
+            self.option_help.value = "Informe EPL e Delta T para consultar as opções."
             self._refresh()
             return
 
         try:
-            ts = calculate_service_temperature(
-                _number_text(self.tamb.value), _number_text(self.delta_t.value)
+            effective_tamb = (
+                _format_number(DEFAULT_TAMB_MAX_C)
+                if tamb_was_defaulted
+                else _number_text(self.tamb.value)
             )
+            ts = calculate_service_temperature(effective_tamb, _number_text(self.delta_t.value))
             options = available_options(self.epl.value, ts)
             option_values = {option.value for option in options}
             self.option_b.disabled = TestOption.B.value not in option_values

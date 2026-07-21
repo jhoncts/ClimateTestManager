@@ -1,10 +1,15 @@
-# Regras de negócio — versão 0.1
+# Regras de negócio
 
 ## Fonte normativa
 
 - Norma informada pelo laboratório: **ABNT NBR IEC 60079-0:2020**.
 - Referência utilizada nesta etapa: Tabela 17 fornecida para o projeto.
 - Cálculo da temperatura de serviço: `Ts = Tamb máxima + ΔT máximo`.
+- Quando o cliente não informar a Tamb máxima, adotar `+40 °C`, conforme a Tabela 1 da
+  ABNT NBR IEC 60079-0:2020.
+
+O formulário deve informar explicitamente quando `+40 °C` estiver sendo adotado. O valor efetivo
+deve ser persistido no ensaio e a origem desse valor deve constar no evento inicial de auditoria.
 
 Os valores calculados deverão ser armazenados como fotografia da regra usada no cadastro.
 Uma atualização futura da norma não deverá alterar retroativamente ensaios já registrados.

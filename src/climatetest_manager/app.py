@@ -239,4 +239,5 @@ def main(page: ft.Page) -> None:
         return
 
     repository = ClimateTestRepository(create_session_factory(engine))
+    page.on_close = lambda _event: engine.dispose()
     ClimateTestApplication(page, ClimateTestService(repository)).start()

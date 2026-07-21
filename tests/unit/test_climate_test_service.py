@@ -67,6 +67,16 @@ class ClimateTestServiceTests(unittest.TestCase):
         self.assertEqual(recent[0].service_temperature_c, "70.00")
         self.assertEqual(recent[0].selected_option, "A")
 
+    def test_blank_tamb_is_stored_as_positive_40_with_audit_reason(self) -> None:
+        self.service.create(_command(tamb_max_c=""), actor="João")
+
+        with self.session_factory() as session:
+            stored = session.scalar(select(ClimateTestRecord))
+
+            self.assertEqual(stored.tamb_max_c, Decimal("40.00"))
+            self.assertEqual(stored.service_temperature_c, Decimal("75.00"))
+            self.assertIn("adotada conforme Tabela 1", stored.audit_events[0].new_value)
+
     def test_rejects_missing_required_field(self) -> None:
         with self.assertRaisesRegex(ClimateTestValidationError, "Cliente"):
             self.service.create(_command(client="  "))
