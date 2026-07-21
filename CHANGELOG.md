@@ -12,6 +12,20 @@ e o projeto utiliza versionamento semântico.
 - Persistência do fluxo de câmara e secagem.
 - Histórico auditável de alterações.
 
+## [0.2.1] - 2026-07-21
+
+### Corrigido
+
+- Liberação explícita da conexão SQLite ao fechar a aplicação.
+- Limpeza dos bancos temporários nos testes executados no Windows.
+- Exibição de valores inteiros terminados em zero, como 90 °C, 90% UR e Ts de 140 °C.
+
+### Alterado
+
+- Integração contínua executada em Linux e Windows para detectar diferenças entre plataformas.
+- Tamb máxima passa a adotar +40 °C, de forma visível e auditável, quando não informada pelo
+  cliente.
+
 ## [0.2.0] - 2026-07-21
 
 ### Adicionado

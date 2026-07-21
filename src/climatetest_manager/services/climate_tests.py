@@ -9,7 +9,11 @@ from climatetest_manager.database.models import (
     ClimateConditionSnapshot,
     ClimateTestRecord,
 )
-from climatetest_manager.domain.climate_rules import ClimateCondition, calculate_condition
+from climatetest_manager.domain.climate_rules import (
+    DEFAULT_TAMB_MAX_C,
+    ClimateCondition,
+    calculate_condition,
+)
 from climatetest_manager.domain.enums import TestSituation
 from climatetest_manager.repositories.climate_tests import (
     ClimateTestRepository,
@@ -100,23 +104,26 @@ class ClimateTestService:
         product = _required(command.product, label="Produto")
         ex_marking = _required(command.ex_marking, label="Marcação Ex")
         epl = _required(command.epl, label="EPL")
-        tamb_max_c = _required(command.tamb_max_c, label="Tamb")
+        tamb_was_defaulted = not command.tamb_max_c.strip()
+        tamb_max_c = command.tamb_max_c.strip() or str(DEFAULT_TAMB_MAX_C)
         delta_t_max_k = _required(command.delta_t_max_k, label="Delta T")
         selected_option = _required(command.selected_option, label="Opção de ensaio")
+        normalized_tamb_max_c = _numeric_text(tamb_max_c)
 
         condition = calculate_condition(
             epl,
-            _numeric_text(tamb_max_c),
+            normalized_tamb_max_c,
             _numeric_text(delta_t_max_k),
             selected_option,
         )
+        tamb_max_decimal = Decimal(normalized_tamb_max_c)
         climate_test = ClimateTestRecord(
             client=client,
             process_number=process_number,
             product=product,
             ex_marking=ex_marking,
             epl=condition.epl.value,
-            tamb_max_c=Decimal(_numeric_text(tamb_max_c)),
+            tamb_max_c=tamb_max_decimal,
             delta_t_max_k=Decimal(_numeric_text(delta_t_max_k)),
             service_temperature_c=condition.service_temperature_c,
             selected_option=condition.option.value,
@@ -125,12 +132,15 @@ class ClimateTestService:
             normative_rule_version=condition.normative_rule_version,
             condition_snapshot=_snapshot(condition),
         )
+        tamb_audit_value = f"{tamb_max_decimal} °C"
+        if tamb_was_defaulted:
+            tamb_audit_value += " (adotada conforme Tabela 1)"
         climate_test.audit_events.append(
             AuditEvent(
                 actor=(actor or getpass.getuser() or "Operador local"),
                 action="Ensaio cadastrado",
                 new_value=(
-                    f"Ts={condition.service_temperature_c} °C; "
+                    f"Tamb={tamb_audit_value}; Ts={condition.service_temperature_c} °C; "
                     f"opção={condition.option.value}; regra={condition.rule_id}"
                 ),
                 reason="Cadastro inicial",

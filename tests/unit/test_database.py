@@ -18,44 +18,47 @@ class DatabaseTests(unittest.TestCase):
             engine = initialize_database(database_path)
             session_factory = create_session_factory(engine)
 
-            self.assertEqual(
-                set(inspect(engine).get_table_names()),
-                {
-                    "climate_tests",
-                    "audit_events",
-                    "climate_condition_snapshots",
-                },
-            )
-
-            climate_test = ClimateTestRecord(
-                client="Cliente de teste",
-                process_number="26000.1",
-                product="Luminária",
-                ex_marking="Ex db",
-                epl="Gb",
-                tamb_max_c=Decimal("40"),
-                delta_t_max_k=Decimal("29.48"),
-                service_temperature_c=Decimal("69.48"),
-                selected_option="A",
-            )
-            climate_test.audit_events.append(
-                AuditEvent(
-                    actor="Operador de teste",
-                    action="Ensaio criado",
-                    reason="Validação automatizada",
+            try:
+                self.assertEqual(
+                    set(inspect(engine).get_table_names()),
+                    {
+                        "climate_tests",
+                        "audit_events",
+                        "climate_condition_snapshots",
+                    },
                 )
-            )
 
-            with session_factory() as session:
-                session.add(climate_test)
-                session.commit()
+                climate_test = ClimateTestRecord(
+                    client="Cliente de teste",
+                    process_number="26000.1",
+                    product="Luminária",
+                    ex_marking="Ex db",
+                    epl="Gb",
+                    tamb_max_c=Decimal("40"),
+                    delta_t_max_k=Decimal("29.48"),
+                    service_temperature_c=Decimal("69.48"),
+                    selected_option="A",
+                )
+                climate_test.audit_events.append(
+                    AuditEvent(
+                        actor="Operador de teste",
+                        action="Ensaio criado",
+                        reason="Validação automatizada",
+                    )
+                )
 
-            with session_factory() as session:
-                stored_test = session.scalar(select(ClimateTestRecord))
+                with session_factory() as session:
+                    session.add(climate_test)
+                    session.commit()
 
-                self.assertIsNotNone(stored_test)
-                self.assertEqual(stored_test.service_temperature_c, Decimal("69.48"))
-                self.assertEqual(len(stored_test.audit_events), 1)
+                with session_factory() as session:
+                    stored_test = session.scalar(select(ClimateTestRecord))
+
+                    self.assertIsNotNone(stored_test)
+                    self.assertEqual(stored_test.service_temperature_c, Decimal("69.48"))
+                    self.assertEqual(len(stored_test.audit_events), 1)
+            finally:
+                engine.dispose()
 
 
 if __name__ == "__main__":

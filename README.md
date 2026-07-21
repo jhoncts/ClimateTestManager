@@ -6,7 +6,7 @@ Aplicação desktop para controle de ensaios de resistência climática realizad
 O projeto nasce para substituir uma planilha operacional por um software local, auditável e
 preparado para gerar um executável do Windows sem abrir navegador ou terminal.
 
-> Status: versão 0.2.0. O cadastro de ensaios, o cálculo interativo da Tabela 17 e a persistência
+> Status: versão 0.2.1. O cadastro de ensaios, o cálculo interativo da Tabela 17 e a persistência
 > local já estão funcionais. O início da câmara, os prazos e o histórico visual serão
 > desenvolvidos nas próximas etapas.
 

@@ -18,6 +18,7 @@ class FakePage:
         self.window = SimpleNamespace()
         self.controls: list[ft.Control] = []
         self.update_count = 0
+        self.on_close = None
 
     def add(self, *controls: ft.Control) -> None:
         self.controls.extend(controls)
@@ -40,6 +41,8 @@ class ApplicationTests(unittest.TestCase):
             self.assertIsInstance(page.controls[0], ft.Row)
             self.assertGreaterEqual(page.update_count, 1)
             self.assertTrue(Path(temporary_directory, "climatetest_manager.db").exists())
+            self.assertIsNotNone(page.on_close)
+            page.on_close(None)
 
 
 if __name__ == "__main__":
