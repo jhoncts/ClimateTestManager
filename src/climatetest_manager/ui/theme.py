@@ -1,0 +1,25 @@
+"""Paleta visual centralizada da aplicação."""
+
+
+class AppColors:
+    """Cores semânticas para manter consistência entre as telas."""
+
+    PRIMARY = "#0F766E"
+    PRIMARY_LIGHT = "#CCFBF1"
+    PAGE_BACKGROUND = "#F4F7F9"
+    NAV_BACKGROUND = "#FFFFFF"
+    NAV_SELECTED = "#E6FFFB"
+    NAV_TEXT = "#475569"
+    SURFACE = "#FFFFFF"
+    TEXT_PRIMARY = "#0F172A"
+    TEXT_SECONDARY = "#64748B"
+    DIVIDER = "#E2E8F0"
+    WARNING = "#D97706"
+    WARNING_LIGHT = "#FEF3C7"
+    DANGER = "#DC2626"
+    DANGER_LIGHT = "#FEE2E2"
+    INFO = "#2563EB"
+    INFO_LIGHT = "#DBEAFE"
+    DRYING = "#7C3AED"
+    DRYING_LIGHT = "#EDE9FE"
+    WHITE = "#FFFFFF"

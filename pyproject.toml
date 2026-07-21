@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=78"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "climatetest-manager"
+version = "0.1.0"
+description = "Desktop application for managing climate-resistance tests according to ABNT NBR IEC 60079-0:2020."
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+authors = [
+  { name = "Jhon Cleiton" },
+]
+dependencies = [
+  "flet[all]==0.86.1",
+  "SQLAlchemy==2.0.51",
+  "alembic==1.18.5",
+  "platformdirs==4.11.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest==9.1.1",
+  "pytest-cov==7.1.0",
+  "ruff==0.15.22",
+  "pyinstaller==6.21.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["climatetest_manager*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers --cov=climatetest_manager --cov-report=term-missing"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
