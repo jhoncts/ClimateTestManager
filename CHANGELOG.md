@@ -7,6 +7,13 @@ e o projeto utiliza versionamento semântico.
 
 ## [Não publicado]
 
+### Planejado
+
+- Persistência do fluxo de câmara e secagem.
+- Histórico auditável de alterações.
+
+## [0.3.0] - 2026-07-22
+
 ### Adicionado
 
 - Conversão operacional das permanências em dias nominais e limite com tolerância.
@@ -24,11 +31,6 @@ e o projeto utiliza versionamento semântico.
 
 - Campo Marcação Ex da tela e do caso de uso de cadastro; somente o EPL é necessário para a
   determinação das condições climáticas.
-
-### Planejado
-
-- Persistência do fluxo de câmara e secagem.
-- Histórico auditável de alterações.
 
 ## [0.2.1] - 2026-07-21
 
