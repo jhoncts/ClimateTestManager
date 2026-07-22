@@ -1,12 +1,14 @@
 """Dashboard conectado aos dados persistidos."""
 
 from collections.abc import Callable
+from decimal import Decimal
 
 import flet as ft
 
 from climatetest_manager.repositories.climate_tests import RecentClimateTest
 from climatetest_manager.services.climate_tests import DashboardSummary
 from climatetest_manager.ui.components import metric_card
+from climatetest_manager.ui.formatters import format_decimal
 from climatetest_manager.ui.theme import AppColors
 
 
@@ -98,7 +100,8 @@ def _recent_tests(tests: list[RecentClimateTest], on_new_test: Callable[[], None
                             ],
                         ),
                         ft.Text(
-                            f"EPL {test.epl}  •  Ts {test.service_temperature_c} °C  •  "
+                            f"EPL {test.epl}  •  "
+                            f"Ts {format_decimal(Decimal(test.service_temperature_c))} °C  •  "
                             f"Opção {test.selected_option}",
                             size=12,
                             color=AppColors.TEXT_SECONDARY,
@@ -171,7 +174,8 @@ def build_dashboard(
                     controls=[
                         ft.Icon(ft.Icons.INFO, color=AppColors.INFO, size=20),
                         ft.Text(
-                            "Cadastro conectado ao banco e à Tabela 17 da norma.",
+                            "Os ensaios são salvos localmente e suas condições são calculadas "
+                            "pelas regras versionadas da Tabela 17.",
                             size=13,
                             color=AppColors.TEXT_PRIMARY,
                         ),

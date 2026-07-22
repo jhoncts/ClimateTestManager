@@ -11,6 +11,14 @@
 O formulário deve informar explicitamente quando `+40 °C` estiver sendo adotado. O valor efetivo
 deve ser persistido no ensaio e a origem desse valor deve constar no evento inicial de auditoria.
 
+## Dados do cadastro
+
+- A determinação da condição climática utiliza o EPL; a Marcação Ex não é solicitada.
+- O processo é um identificador obrigatório de conteúdo livre, limitado a 10 caracteres na tela.
+- Tamb e Delta T aceitam somente conteúdo numérico, com vírgula como separador visual.
+- Um ponto digitado como separador decimal deve ser convertido imediatamente para vírgula.
+- As permanências devem exibir horas, dias nominais e o limite superior incluindo a tolerância.
+
 Os valores calculados deverão ser armazenados como fotografia da regra usada no cadastro.
 Uma atualização futura da norma não deverá alterar retroativamente ensaios já registrados.
 

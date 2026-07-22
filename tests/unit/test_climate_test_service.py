@@ -20,9 +20,8 @@ from climatetest_manager.services.climate_tests import (
 def _command(**changes: str) -> CreateClimateTestCommand:
     values = {
         "client": "Cliente Exemplo",
-        "process_number": "26000.001/2026-10",
+        "process_number": "26123.1",
         "product": "Luminária",
-        "ex_marking": "Ex db IIC T6 Gb",
         "epl": "Gb",
         "tamb_max_c": "40",
         "delta_t_max_k": "35",
@@ -54,6 +53,7 @@ class ClimateTestServiceTests(unittest.TestCase):
 
             self.assertIsNotNone(stored)
             self.assertEqual(stored.id, test_id)
+            self.assertEqual(stored.ex_marking, "")
             self.assertEqual(stored.service_temperature_c, Decimal("75.00"))
             self.assertEqual(stored.condition_snapshot.rule_id, "G1-HIGH-B")
             self.assertEqual(stored.condition_snapshot.chamber_duration_hours, 504)

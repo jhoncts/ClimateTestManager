@@ -64,6 +64,13 @@ da regra. A criação da nova tabela é compatível com bancos vazios da versão
 4. O repositório grava o conjunto em uma única transação SQLite.
 5. O dashboard consulta os dados persistidos por meio do serviço.
 
+### Compatibilidade do campo Marcação Ex
+
+A versão 0.3.0 não solicita Marcação Ex porque a condição climática depende do EPL. Para manter
+compatibilidade com bancos criados pela v0.2.1, a coluna legada `ex_marking` permanece no SQLite e
+recebe uma string vazia nos novos cadastros. A coluna será removida somente após a introdução de
+migrações versionadas, evitando exigir que o usuário apague ou recrie o banco existente.
+
 ## Próximas evoluções
 
 - Serviços de início, transferência para secagem e encerramento.

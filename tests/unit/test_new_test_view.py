@@ -19,6 +19,10 @@ class NewTestViewTests(unittest.TestCase):
         self.assertFalse(view.option_b.disabled)
         self.assertEqual(view.chamber_temperature.value, "95 ± 2 °C")
         self.assertEqual(view.chamber_duration.value, "336 h (+30 h)")
+        self.assertEqual(
+            view.chamber_duration_detail.value,
+            "14 dias nominais • limite: 15 dias e 6 horas",
+        )
 
     def test_display_preserves_trailing_zeros_of_integer_values(self) -> None:
         view = NewTestView(on_cancel=lambda: None, on_save=lambda _command: None)
@@ -46,13 +50,31 @@ class NewTestViewTests(unittest.TestCase):
         self.assertTrue(view.tamb_assumption.visible)
         self.assertFalse(view.save_button.disabled)
 
+    def test_numeric_fields_remove_letters_and_normalize_decimal_separator(self) -> None:
+        view = NewTestView(on_cancel=lambda: None, on_save=lambda _command: None)
+        view.tamb.value = "-20.5 abc"
+        view.delta_t.value = "35.75 K"
+
+        view._on_tamb_change()
+        view._on_delta_t_change()
+
+        self.assertEqual(view.tamb.value, "-20,5")
+        self.assertEqual(view.delta_t.value, "35,75")
+
+    def test_process_field_is_free_text_with_updated_example_and_length(self) -> None:
+        view = NewTestView(on_cancel=lambda: None, on_save=lambda _command: None)
+
+        self.assertEqual(view.process_number.hint_text, "Ex.: 26123.1")
+        self.assertEqual(view.process_number.max_length, 10)
+        self.assertEqual(view.process_number.counter, "")
+        self.assertFalse(hasattr(view, "ex_marking"))
+
     def test_submit_passes_filled_command_to_callback(self) -> None:
         received: list[CreateClimateTestCommand] = []
         view = NewTestView(on_cancel=lambda: None, on_save=received.append)
         view.client.value = "Cliente"
         view.process_number.value = "Processo"
         view.product.value = "Produto"
-        view.ex_marking.value = "Ex db"
         view.epl.value = "Gc"
         view.tamb.value = "50"
         view.delta_t.value = "30"
