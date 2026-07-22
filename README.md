@@ -6,9 +6,9 @@ Aplicação desktop para controle de ensaios de resistência climática realizad
 O projeto nasce para substituir uma planilha operacional por um software local, auditável e
 preparado para gerar um executável do Windows sem abrir navegador ou terminal.
 
-> Status: versão 0.2.1. O cadastro de ensaios, o cálculo interativo da Tabela 17 e a persistência
-> local já estão funcionais. O início da câmara, os prazos e o histórico visual serão
-> desenvolvidos nas próximas etapas.
+> Status: versão 0.3.0 em desenvolvimento. O cadastro de ensaios, o cálculo interativo da
+> Tabela 17 e a persistência local já estão funcionais. O início da câmara, os prazos e o
+> histórico visual serão desenvolvidos nas próximas etapas.
 
 ## Funcionalidades disponíveis
 
@@ -16,7 +16,8 @@ preparado para gerar um executável do Windows sem abrir navegador ou terminal.
 - Cálculo de `Ts = Tamb + ΔT`.
 - Consulta automática das condições da Tabela 17.
 - Escolha entre as opções A e B quando ambas forem permitidas.
-- Aceitação de ponto ou vírgula nos valores decimais.
+- Normalização das entradas decimais para vírgula e bloqueio de caracteres não numéricos.
+- Apresentação das permanências em horas, dias nominais e limite com tolerância.
 - Gravação local do ensaio, da condição normativa e do primeiro evento de auditoria.
 - Dashboard conectado aos ensaios cadastrados.
 
@@ -38,6 +39,12 @@ preparado para gerar um executável do Windows sem abrir navegador ou terminal.
 - PyInstaller por meio de `flet pack`
 
 Todas as ferramentas utilizadas são gratuitas ou open source.
+
+## Independência e dados de demonstração
+
+Este é um projeto pessoal e independente desenvolvido para aprendizado e portfólio. Ele não
+representa um produto oficial ou endossado por qualquer laboratório. Todos os nomes, processos e
+demais dados usados em demonstrações públicas devem ser fictícios.
 
 ## Estrutura
 

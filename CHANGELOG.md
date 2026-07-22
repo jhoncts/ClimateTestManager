@@ -7,6 +7,24 @@ e o projeto utiliza versionamento semântico.
 
 ## [Não publicado]
 
+### Adicionado
+
+- Conversão operacional das permanências em dias nominais e limite com tolerância.
+- Normalização imediata das entradas decimais para o padrão brasileiro.
+- Filtros que removem caracteres não numéricos de Tamb e Delta T.
+
+### Alterado
+
+- Exemplo do processo atualizado para `26123.1`, com limite de 10 caracteres, conteúdo livre e
+  contador oculto para preservar o alinhamento da tela.
+- Valores decimais apresentados com vírgula na interface.
+- Mensagem do dashboard esclarece a persistência local e as regras versionadas da Tabela 17.
+
+### Removido
+
+- Campo Marcação Ex da tela e do caso de uso de cadastro; somente o EPL é necessário para a
+  determinação das condições climáticas.
+
 ### Planejado
 
 - Persistência do fluxo de câmara e secagem.

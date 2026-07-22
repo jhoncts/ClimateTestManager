@@ -32,7 +32,6 @@ class CreateClimateTestCommand:
     client: str
     process_number: str
     product: str
-    ex_marking: str
     epl: str
     tamb_max_c: str
     delta_t_max_k: str
@@ -102,7 +101,6 @@ class ClimateTestService:
         client = _required(command.client, label="Cliente")
         process_number = _required(command.process_number, label="Processo")
         product = _required(command.product, label="Produto")
-        ex_marking = _required(command.ex_marking, label="Marcação Ex")
         epl = _required(command.epl, label="EPL")
         tamb_was_defaulted = not command.tamb_max_c.strip()
         tamb_max_c = command.tamb_max_c.strip() or str(DEFAULT_TAMB_MAX_C)
@@ -121,7 +119,8 @@ class ClimateTestService:
             client=client,
             process_number=process_number,
             product=product,
-            ex_marking=ex_marking,
+            # Compatibilidade com bancos v0.2.1, cuja coluna ainda é obrigatória.
+            ex_marking="",
             epl=condition.epl.value,
             tamb_max_c=tamb_max_decimal,
             delta_t_max_k=Decimal(_numeric_text(delta_t_max_k)),

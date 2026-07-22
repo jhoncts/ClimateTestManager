@@ -15,24 +15,30 @@ from climatetest_manager.domain.climate_rules import (
 )
 from climatetest_manager.domain.enums import EPL, TestOption
 from climatetest_manager.services.climate_tests import CreateClimateTestCommand
+from climatetest_manager.ui.formatters import (
+    format_decimal,
+    format_duration_detail,
+    normalize_decimal_input,
+)
 from climatetest_manager.ui.theme import AppColors
-
-
-def _format_number(value: Decimal) -> str:
-    formatted = format(value, "f")
-    if "." in formatted:
-        formatted = formatted.rstrip("0").rstrip(".")
-    return formatted or "0"
 
 
 def _number_text(value: str) -> str:
     return value.strip().replace(",", ".")
 
 
-def _field(label: str, *, hint: str = "", multiline: bool = False) -> ft.TextField:
+def _field(
+    label: str,
+    *,
+    hint: str = "",
+    multiline: bool = False,
+    max_length: int | None = None,
+) -> ft.TextField:
     return ft.TextField(
         label=label,
         hint_text=hint,
+        max_length=max_length,
+        counter="" if max_length is not None else None,
         multiline=multiline,
         min_lines=3 if multiline else None,
         max_lines=4 if multiline else None,
@@ -43,7 +49,19 @@ def _field(label: str, *, hint: str = "", multiline: bool = False) -> ft.TextFie
     )
 
 
-def _condition_item(icon: ft.IconData, title: str, value: ft.Text) -> ft.Container:
+def _condition_item(
+    icon: ft.IconData,
+    title: str,
+    value: ft.Text,
+    detail: ft.Text | None = None,
+) -> ft.Container:
+    text_controls: list[ft.Control] = [
+        ft.Text(title, size=11, color=AppColors.TEXT_SECONDARY),
+        value,
+    ]
+    if detail is not None:
+        text_controls.append(detail)
+
     return ft.Container(
         expand=True,
         border_radius=12,
@@ -55,10 +73,7 @@ def _condition_item(icon: ft.IconData, title: str, value: ft.Text) -> ft.Contain
                 ft.Icon(icon, size=20, color=AppColors.PRIMARY),
                 ft.Column(
                     spacing=2,
-                    controls=[
-                        ft.Text(title, size=11, color=AppColors.TEXT_SECONDARY),
-                        value,
-                    ],
+                    controls=text_controls,
                 ),
             ],
         ),
@@ -79,10 +94,9 @@ class NewTestView:
         self._condition: ClimateCondition | None = None
 
         self.client = _field("Cliente *", hint="Nome ou razão social")
-        self.process_number = _field("Processo *", hint="Ex.: 26000.001234/2026-10")
+        self.process_number = _field("Processo *", hint="Ex.: 26123.1", max_length=10)
         self.product = _field("Produto *", hint="Ex.: Luminária Ex")
-        self.ex_marking = _field("Marcação Ex *", hint="Ex.: Ex db IIC T6 Gb")
-        for field in (self.client, self.process_number, self.product, self.ex_marking):
+        for field in (self.client, self.process_number, self.product):
             field.expand = True
         self.epl = ft.Dropdown(
             label="EPL *",
@@ -101,8 +115,8 @@ class NewTestView:
         self.delta_t.keyboard_type = ft.KeyboardType.NUMBER
         self.tamb.expand = True
         self.delta_t.expand = True
-        self.tamb.on_change = self._recalculate
-        self.delta_t.on_change = self._recalculate
+        self.tamb.on_change = self._on_tamb_change
+        self.delta_t.on_change = self._on_delta_t_change
         self.tamb_assumption = ft.Text(
             "Tamb não informada: será adotado +40 °C conforme a Tabela 1.",
             size=11,
@@ -132,8 +146,10 @@ class NewTestView:
         self.chamber_temperature = ft.Text("—", **value_style)
         self.chamber_humidity = ft.Text("—", **value_style)
         self.chamber_duration = ft.Text("—", **value_style)
+        self.chamber_duration_detail = ft.Text("", size=11, color=AppColors.TEXT_SECONDARY)
         self.drying_temperature = ft.Text("—", **value_style)
         self.drying_duration = ft.Text("—", **value_style)
+        self.drying_duration_detail = ft.Text("", size=11, color=AppColors.TEXT_SECONDARY)
         self.rule_reference = ft.Text("", size=11, color=AppColors.TEXT_SECONDARY)
         self.result_panel = self._build_result_panel()
         self.error_banner = ft.Container(visible=False)
@@ -181,7 +197,10 @@ class NewTestView:
                             ),
                             _condition_item(ft.Icons.WATER_DROP, "Umidade", self.chamber_humidity),
                             _condition_item(
-                                ft.Icons.SCHEDULE, "Permanência", self.chamber_duration
+                                ft.Icons.SCHEDULE,
+                                "Permanência",
+                                self.chamber_duration,
+                                self.chamber_duration_detail,
                             ),
                         ],
                     ),
@@ -198,7 +217,12 @@ class NewTestView:
                             _condition_item(
                                 ft.Icons.THERMOSTAT, "Temperatura", self.drying_temperature
                             ),
-                            _condition_item(ft.Icons.AIR, "Permanência", self.drying_duration),
+                            _condition_item(
+                                ft.Icons.AIR,
+                                "Permanência",
+                                self.drying_duration,
+                                self.drying_duration_detail,
+                            ),
                         ],
                     ),
                     self.rule_reference,
@@ -243,7 +267,7 @@ class NewTestView:
                                 color=AppColors.TEXT_PRIMARY,
                             ),
                             ft.Row(spacing=14, controls=[self.client, self.process_number]),
-                            ft.Row(spacing=14, controls=[self.product, self.ex_marking]),
+                            ft.Row(spacing=14, controls=[self.product]),
                             ft.Text(
                                 "Dados térmicos",
                                 size=17,
@@ -313,6 +337,14 @@ class NewTestView:
             return
         self.root.update()
 
+    def _on_tamb_change(self, _event: object | None = None) -> None:
+        self.tamb.value = normalize_decimal_input(self.tamb.value, allow_negative=True)
+        self._recalculate()
+
+    def _on_delta_t_change(self, _event: object | None = None) -> None:
+        self.delta_t.value = normalize_decimal_input(self.delta_t.value)
+        self._recalculate()
+
     def _recalculate(self, _event: object | None = None) -> None:
         self.error_banner.visible = False
         tamb_was_defaulted = not self.tamb.value.strip()
@@ -327,7 +359,7 @@ class NewTestView:
 
         try:
             effective_tamb = (
-                _format_number(DEFAULT_TAMB_MAX_C)
+                format_decimal(DEFAULT_TAMB_MAX_C)
                 if tamb_was_defaulted
                 else _number_text(self.tamb.value)
             )
@@ -355,30 +387,37 @@ class NewTestView:
 
     def _display_condition(self, condition: ClimateCondition) -> None:
         chamber = condition.chamber
-        self.ts_value.value = f"Ts = {_format_number(condition.service_temperature_c)} °C"
+        self.ts_value.value = f"Ts = {format_decimal(condition.service_temperature_c)} °C"
         self.chamber_temperature.value = (
-            f"{_format_number(chamber.temperature_c)} ± "
-            f"{_format_number(chamber.temperature_tolerance_k)} °C"
+            f"{format_decimal(chamber.temperature_c)} ± "
+            f"{format_decimal(chamber.temperature_tolerance_k)} °C"
         )
         self.chamber_humidity.value = (
-            f"{_format_number(chamber.humidity_percent or Decimal('0'))} ± "
-            f"{_format_number(chamber.humidity_tolerance_percent or Decimal('0'))} % UR"
+            f"{format_decimal(chamber.humidity_percent or Decimal('0'))} ± "
+            f"{format_decimal(chamber.humidity_tolerance_percent or Decimal('0'))} % UR"
         )
         self.chamber_duration.value = (
             f"{chamber.duration_hours} h (+{chamber.duration_positive_tolerance_hours} h)"
         )
+        self.chamber_duration_detail.value = format_duration_detail(
+            chamber.duration_hours, chamber.duration_positive_tolerance_hours
+        )
         if condition.drying:
             drying = condition.drying
             self.drying_temperature.value = (
-                f"{_format_number(drying.temperature_c)} ± "
-                f"{_format_number(drying.temperature_tolerance_k)} °C"
+                f"{format_decimal(drying.temperature_c)} ± "
+                f"{format_decimal(drying.temperature_tolerance_k)} °C"
             )
             self.drying_duration.value = (
                 f"{drying.duration_hours} h (+{drying.duration_positive_tolerance_hours} h)"
             )
+            self.drying_duration_detail.value = format_duration_detail(
+                drying.duration_hours, drying.duration_positive_tolerance_hours
+            )
         else:
             self.drying_temperature.value = "Não requerida"
             self.drying_duration.value = "—"
+            self.drying_duration_detail.value = ""
         self.rule_reference.value = (
             f"Regra {condition.rule_id} • {condition.normative_rule_version} • "
             f"Opção {condition.option.value}"
@@ -389,7 +428,6 @@ class NewTestView:
             (self.client, "Cliente"),
             (self.process_number, "Processo"),
             (self.product, "Produto"),
-            (self.ex_marking, "Marcação Ex"),
         ]
         missing = False
         for field, label in required_fields:
@@ -405,7 +443,6 @@ class NewTestView:
             client=self.client.value,
             process_number=self.process_number.value,
             product=self.product.value,
-            ex_marking=self.ex_marking.value,
             epl=self.epl.value or "",
             tamb_max_c=self.tamb.value,
             delta_t_max_k=self.delta_t.value,
