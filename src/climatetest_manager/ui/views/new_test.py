@@ -1,20 +1,31 @@
 """Formulário de cadastro com cálculo normativo em tempo real."""
 
 from collections.abc import Callable
-from decimal import Decimal
+from contextlib import suppress
+from decimal import Decimal, InvalidOperation
 
 import flet as ft
 
 from climatetest_manager.domain.climate_rules import (
     DEFAULT_TAMB_MAX_C,
+    DURATION_POSITIVE_TOLERANCE_HOURS,
+    HUMIDITY_PERCENT,
+    HUMIDITY_TOLERANCE_PERCENT,
+    NORMATIVE_RULE_VERSION,
+    TEMPERATURE_TOLERANCE_K,
     ClimateCondition,
     ClimateRuleError,
+    PhaseCondition,
     available_options,
     calculate_service_temperature,
     resolve_condition,
 )
-from climatetest_manager.domain.enums import EPL, TestOption
-from climatetest_manager.services.climate_tests import CreateClimateTestCommand
+from climatetest_manager.domain.enums import EPL, ConditionInputMode, TestOption
+from climatetest_manager.services.climate_tests import (
+    ClimateTestDetails,
+    CreateClimateTestCommand,
+    UpdateClimateTestCommand,
+)
 from climatetest_manager.ui.formatters import (
     format_decimal,
     format_duration_detail,
@@ -87,19 +98,51 @@ class NewTestView:
         self,
         *,
         on_cancel: Callable[[], None],
-        on_save: Callable[[CreateClimateTestCommand], None],
+        on_save: Callable[[CreateClimateTestCommand | UpdateClimateTestCommand], None],
+        details: ClimateTestDetails | None = None,
     ) -> None:
         self._on_cancel = on_cancel
         self._on_save = on_save
+        self._details = details
         self._condition: ClimateCondition | None = None
+        self.mode_group = ft.RadioGroup(
+            value=ConditionInputMode.CALCULATED.value,
+            content=ft.Column(
+                spacing=4,
+                controls=[
+                    ft.Radio(
+                        value=ConditionInputMode.CALCULATED.value,
+                        label="Calcular com Tamb + ΔT",
+                    ),
+                    ft.Radio(
+                        value=ConditionInputMode.DIRECT_TS.value,
+                        label="Usar Ts informado",
+                    ),
+                    ft.Radio(
+                        value=ConditionInputMode.DIRECT_CONFIGURATION.value,
+                        label="Personalizado",
+                    ),
+                ],
+            ),
+            on_change=self._on_mode_change,
+        )
 
         self.client = _field("Cliente *", hint="Nome ou razão social")
         self.process_number = _field("Processo *", hint="Ex.: 26123.1", max_length=10)
         self.product = _field("Produto *", hint="Ex.: Luminária Ex")
+        self.sample_quantity = _field(
+            "Quantidade de amostras *",
+            hint="Ex.: 2",
+            max_length=4,
+        )
+        self.sample_quantity.value = "1"
+        self.sample_quantity.keyboard_type = ft.KeyboardType.NUMBER
+        self.sample_quantity.on_change = self._on_sample_quantity_change
         for field in (self.client, self.process_number, self.product):
             field.expand = True
+        self.sample_quantity.width = 220
         self.epl = ft.Dropdown(
-            label="EPL *",
+            label="EPL",
             hint_text="Selecione",
             options=[ft.DropdownOption(key=item.value, text=item.value) for item in EPL],
             border_radius=10,
@@ -111,8 +154,70 @@ class NewTestView:
         )
         self.tamb = _field("Tamb máxima (°C)", hint="Em branco: adota +40")
         self.delta_t = _field("Delta T máximo (K) *", hint="Ex.: 35")
+        self.service_temperature = _field("Ts informado (°C) *", hint="Ex.: 75")
+        self.ts_reference = _field(
+            "Critério descrito no plano *",
+            hint="Ex.: Ts > 70 °C — EPL Gb",
+            max_length=100,
+        )
+        self.manual_chamber_temperature = _field(
+            "Temperatura personalizada (°C) *",
+            hint="Ex.: 90",
+        )
+        self.manual_chamber_duration = _field(
+            "Permanência na câmara (h) *",
+            hint="Ex.: 504",
+        )
+        self.manual_chamber_humidity = _field(
+            "Umidade personalizada (% UR) *",
+            hint="Ex.: 90",
+        )
+        self.manual_chamber_humidity.value = format_decimal(HUMIDITY_PERCENT)
+        self.manual_drying_required = ft.Switch(
+            label="O plano exige secagem",
+            value=False,
+            on_change=self._on_manual_drying_change,
+        )
+        self.manual_drying_temperature = _field(
+            "Temperatura da secagem (0 a 100 °C) *",
+            hint="Ex.: 95",
+        )
+        self.manual_drying_duration = _field(
+            "Permanência na secagem (h) *",
+            hint="Ex.: 336",
+        )
+        self.ts_reference.on_change = self._recalculate
         self.tamb.keyboard_type = ft.KeyboardType.NUMBER
         self.delta_t.keyboard_type = ft.KeyboardType.NUMBER
+        for field in (
+            self.tamb,
+            self.delta_t,
+            self.service_temperature,
+            self.manual_chamber_temperature,
+            self.manual_chamber_humidity,
+            self.manual_chamber_duration,
+            self.manual_drying_temperature,
+            self.manual_drying_duration,
+        ):
+            field.keyboard_type = ft.KeyboardType.NUMBER
+            field.expand = True
+            field.on_change = self._on_condition_input_change
+        decimal_filter = ft.InputFilter(allow=True, regex_string=r"[0-9,.]")
+        integer_filter = ft.InputFilter(allow=True, regex_string=r"[0-9]")
+        for field in (
+            self.service_temperature,
+            self.manual_chamber_temperature,
+            self.manual_chamber_humidity,
+            self.manual_drying_temperature,
+        ):
+            field.input_filter = decimal_filter
+        for field in (
+            self.manual_chamber_duration,
+            self.manual_drying_duration,
+        ):
+            field.input_filter = integer_filter
+        # A filtragem via evento permite apagar o valor inicial sem o cursor ser
+        # restaurado pelo formatter nativo do Flet.
         self.tamb.expand = True
         self.delta_t.expand = True
         self.tamb.on_change = self._on_tamb_change
@@ -123,6 +228,11 @@ class NewTestView:
             color=AppColors.TEXT_SECONDARY,
         )
         self.notes = _field("Observações", hint="Informações adicionais", multiline=True)
+        self.change_reason = _field(
+            "Motivo da alteração *",
+            hint="Explique por que os dados estão sendo corrigidos",
+            multiline=True,
+        )
 
         self.option_b = ft.Radio(value="B", label="Opção B", disabled=True)
         self.option_group = ft.RadioGroup(
@@ -140,6 +250,70 @@ class NewTestView:
             size=12,
             color=AppColors.TEXT_SECONDARY,
         )
+        self.calculated_fields = ft.Container(
+            content=ft.Column(
+                spacing=8,
+                controls=[
+                    ft.Row(spacing=14, controls=[self.tamb, self.delta_t]),
+                    self.tamb_assumption,
+                ],
+            )
+        )
+        self.direct_ts_fields = ft.Container(
+            visible=False,
+            content=ft.Row(spacing=14, controls=[self.service_temperature]),
+        )
+        self.manual_drying_fields = ft.Row(
+            visible=False,
+            spacing=14,
+            controls=[
+                self.manual_drying_temperature,
+                self.manual_drying_duration,
+            ],
+        )
+        self.manual_condition_fields = ft.Container(
+            visible=False,
+            content=ft.Column(
+                spacing=12,
+                controls=[
+                    ft.Text(
+                        "Informe a condição que será realmente aplicada. Temperatura e "
+                        "umidade aceitam valores de 0 a 100; o tempo não possui limite "
+                        "máximo e é informado em horas inteiras.",
+                        size=11,
+                        color=AppColors.TEXT_SECONDARY,
+                    ),
+                    ft.Row(
+                        spacing=14,
+                        controls=[
+                            self.manual_chamber_temperature,
+                            self.manual_chamber_humidity,
+                            self.manual_chamber_duration,
+                        ],
+                    ),
+                    self.manual_drying_required,
+                    self.manual_drying_fields,
+                ],
+            ),
+        )
+        self.option_panel = ft.Container(
+            bgcolor=AppColors.INFO_LIGHT,
+            border_radius=12,
+            padding=14,
+            content=ft.Column(
+                spacing=4,
+                controls=[
+                    ft.Text(
+                        "Alternativa da Tabela 17",
+                        size=13,
+                        weight=ft.FontWeight.BOLD,
+                        color=AppColors.TEXT_PRIMARY,
+                    ),
+                    self.option_group,
+                    self.option_help,
+                ],
+            ),
+        )
 
         value_style = {"size": 14, "weight": ft.FontWeight.BOLD, "color": AppColors.TEXT_PRIMARY}
         self.ts_value = ft.Text("—", **value_style)
@@ -154,7 +328,7 @@ class NewTestView:
         self.result_panel = self._build_result_panel()
         self.error_banner = ft.Container(visible=False)
         self.save_button = ft.Button(
-            content="Salvar ensaio",
+            content="Salvar alterações" if details else "Salvar ensaio",
             icon=ft.Icons.SAVE,
             bgcolor=AppColors.PRIMARY,
             color=AppColors.WHITE,
@@ -162,6 +336,8 @@ class NewTestView:
             on_click=self._submit,
         )
         self.root = self._build()
+        if details is not None:
+            self._load_details(details)
 
     def _build_result_panel(self) -> ft.Container:
         return ft.Container(
@@ -175,7 +351,7 @@ class NewTestView:
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                         controls=[
                             ft.Text(
-                                "Condição calculada",
+                                "Condição do ensaio",
                                 size=17,
                                 weight=ft.FontWeight.BOLD,
                                 color=AppColors.TEXT_PRIMARY,
@@ -240,17 +416,41 @@ class NewTestView:
                     spacing=3,
                     controls=[
                         ft.Text(
-                            "Novo ensaio",
+                            "Editar ensaio" if self._details else "Novo ensaio",
                             size=28,
                             weight=ft.FontWeight.BOLD,
                             color=AppColors.TEXT_PRIMARY,
                         ),
                         ft.Text(
-                            "Cadastre os dados e confira a condição calculada antes de salvar.",
+                            (
+                                "Corrija os dados, confira os cálculos e informe o motivo "
+                                "da alteração."
+                                if self._details
+                                else "Cadastre os dados e confira a condição calculada "
+                                "antes de salvar."
+                            ),
                             size=14,
                             color=AppColors.TEXT_SECONDARY,
                         ),
                     ],
+                ),
+                *(
+                    [
+                        ft.Container(
+                            bgcolor=AppColors.WARNING_LIGHT,
+                            border_radius=12,
+                            padding=14,
+                            content=ft.Text(
+                                "Alterações térmicas recalculam Ts, condição normativa e prazos "
+                                "da etapa ativa. Os valores anteriores serão preservados no "
+                                "registro de atividades.",
+                                size=12,
+                                color=AppColors.TEXT_PRIMARY,
+                            ),
+                        )
+                    ]
+                    if self._details
+                    else []
                 ),
                 self.error_banner,
                 ft.Container(
@@ -267,33 +467,40 @@ class NewTestView:
                                 color=AppColors.TEXT_PRIMARY,
                             ),
                             ft.Row(spacing=14, controls=[self.client, self.process_number]),
-                            ft.Row(spacing=14, controls=[self.product]),
+                            ft.Row(spacing=14, controls=[self.product, self.sample_quantity]),
                             ft.Text(
                                 "Dados térmicos",
                                 size=17,
                                 weight=ft.FontWeight.BOLD,
                                 color=AppColors.TEXT_PRIMARY,
                             ),
-                            ft.Row(spacing=14, controls=[self.epl, self.tamb, self.delta_t]),
-                            self.tamb_assumption,
                             ft.Container(
-                                bgcolor=AppColors.INFO_LIGHT,
+                                bgcolor=AppColors.PAGE_BACKGROUND,
                                 border_radius=12,
                                 padding=14,
                                 content=ft.Column(
-                                    spacing=4,
+                                    spacing=6,
                                     controls=[
                                         ft.Text(
-                                            "Alternativa da Tabela 17",
+                                            "Como a condição será definida?",
                                             size=13,
                                             weight=ft.FontWeight.BOLD,
-                                            color=AppColors.TEXT_PRIMARY,
                                         ),
-                                        self.option_group,
-                                        self.option_help,
+                                        self.mode_group,
+                                        ft.Text(
+                                            "Escolha a origem realmente registrada no plano "
+                                            "ou informada pelo cliente.",
+                                            size=11,
+                                            color=AppColors.TEXT_SECONDARY,
+                                        ),
                                     ],
                                 ),
                             ),
+                            ft.Row(spacing=14, controls=[self.epl]),
+                            self.calculated_fields,
+                            self.direct_ts_fields,
+                            self.manual_condition_fields,
+                            self.option_panel,
                         ],
                     ),
                 ),
@@ -303,6 +510,18 @@ class NewTestView:
                     border_radius=16,
                     padding=22,
                     content=self.notes,
+                ),
+                *(
+                    [
+                        ft.Container(
+                            bgcolor=AppColors.SURFACE,
+                            border_radius=16,
+                            padding=22,
+                            content=self.change_reason,
+                        )
+                    ]
+                    if self._details
+                    else []
                 ),
                 ft.Row(
                     alignment=ft.MainAxisAlignment.END,
@@ -328,6 +547,45 @@ class NewTestView:
         self.error_banner.padding = 14
         self.error_banner.visible = True
 
+    def _load_details(self, details: ClimateTestDetails) -> None:
+        mode = details.input_mode
+        if mode in {
+            ConditionInputMode.PLAN_DEFINED.value,
+            ConditionInputMode.PLAN_CRITERION.value,
+        }:
+            mode = ConditionInputMode.DIRECT_CONFIGURATION.value
+        self.mode_group.value = mode
+        self.client.value = details.client
+        self.process_number.value = details.process_number
+        self.product.value = details.product
+        self.sample_quantity.value = str(details.sample_quantity)
+        self.epl.value = details.epl or None
+        self.tamb.value = format_decimal(details.tamb_max_c)
+        self.delta_t.value = format_decimal(details.delta_t_max_k)
+        self.service_temperature.value = (
+            format_decimal(details.service_temperature_c)
+            if mode == ConditionInputMode.DIRECT_TS.value
+            else ""
+        )
+        self.ts_reference.value = details.ts_reference or ""
+        self.manual_chamber_temperature.value = format_decimal(details.chamber_temperature_c)
+        self.manual_chamber_humidity.value = format_decimal(details.chamber_humidity_percent)
+        self.manual_chamber_duration.value = str(details.chamber_duration_hours)
+        self.manual_drying_required.value = details.drying_required
+        self.manual_drying_temperature.value = (
+            format_decimal(details.drying_temperature_c)
+            if details.drying_temperature_c is not None
+            else ""
+        )
+        self.manual_drying_duration.value = (
+            str(details.drying_duration_hours) if details.drying_duration_hours is not None else ""
+        )
+        self.option_group.value = (
+            details.selected_option if details.selected_option in {"A", "B"} else None
+        )
+        self.notes.value = details.notes or ""
+        self._on_mode_change()
+
     def _refresh(self) -> None:
         """Atualiza a tela quando o controle já pertence a uma página Flet."""
 
@@ -345,43 +603,188 @@ class NewTestView:
         self.delta_t.value = normalize_decimal_input(self.delta_t.value)
         self._recalculate()
 
+    def _on_sample_quantity_change(self, _event: object | None = None) -> None:
+        normalized = "".join(
+            character for character in self.sample_quantity.value if character.isdigit()
+        )
+        if normalized == self.sample_quantity.value:
+            return
+        self.sample_quantity.value = normalized
+        self.sample_quantity.selection = ft.TextSelection(
+            base_offset=len(normalized),
+            extent_offset=len(normalized),
+        )
+        with suppress(RuntimeError):
+            self.sample_quantity.update()
+
+    def _on_mode_change(self, _event: object | None = None) -> None:
+        mode = self.mode_group.value or ConditionInputMode.CALCULATED.value
+        self.calculated_fields.visible = mode == ConditionInputMode.CALCULATED.value
+        self.direct_ts_fields.visible = mode == ConditionInputMode.DIRECT_TS.value
+        manual_mode = mode == ConditionInputMode.DIRECT_CONFIGURATION.value
+        self.manual_condition_fields.visible = manual_mode
+        self.option_panel.visible = mode in {
+            ConditionInputMode.CALCULATED.value,
+            ConditionInputMode.DIRECT_TS.value,
+        }
+        if mode == ConditionInputMode.DIRECT_CONFIGURATION.value:
+            self.epl.label = "EPL (opcional)"
+        else:
+            self.epl.label = "EPL *"
+        self.manual_drying_fields.visible = bool(self.manual_drying_required.value)
+        self._recalculate()
+
+    def _on_condition_input_change(self, _event: object | None = None) -> None:
+        for field in (
+            self.service_temperature,
+            self.manual_chamber_temperature,
+            self.manual_chamber_humidity,
+            self.manual_drying_temperature,
+        ):
+            field.value = normalize_decimal_input(field.value)
+        for field in (self.manual_chamber_duration, self.manual_drying_duration):
+            field.value = "".join(character for character in field.value if character.isdigit())
+        self._recalculate()
+
+    def _on_manual_drying_change(self, _event: object | None = None) -> None:
+        self.manual_drying_fields.visible = bool(self.manual_drying_required.value)
+        self._recalculate()
+
+    def _clear_condition(self, help_text: str) -> None:
+        self._condition = None
+        self.save_button.disabled = True
+        self.ts_value.value = "Ts = —"
+        self.option_help.value = help_text
+
+    def _manual_condition(self) -> ClimateCondition:
+        chamber_temperature = Decimal(_number_text(self.manual_chamber_temperature.value))
+        chamber_humidity = Decimal(_number_text(self.manual_chamber_humidity.value))
+        if not Decimal("0") <= chamber_temperature <= Decimal("100"):
+            raise ValueError("Temperatura da câmara deve estar entre 0 e 100 °C.")
+        if not Decimal("0") <= chamber_humidity <= Decimal("100"):
+            raise ValueError("Umidade da câmara deve estar entre 0 e 100%.")
+        chamber_duration = int(self.manual_chamber_duration.value)
+        if chamber_duration < 1:
+            raise ValueError("Permanência da câmara deve ser maior que zero.")
+        drying: PhaseCondition | None = None
+        if self.manual_drying_required.value:
+            drying_temperature = Decimal(_number_text(self.manual_drying_temperature.value))
+            if not Decimal("0") <= drying_temperature <= Decimal("100"):
+                raise ValueError("Temperatura da secagem deve estar entre 0 e 100 °C.")
+            drying_duration = int(self.manual_drying_duration.value)
+            if drying_duration < 1:
+                raise ValueError("Permanência da secagem deve ser maior que zero.")
+            drying = PhaseCondition(
+                temperature_c=drying_temperature,
+                duration_hours=drying_duration,
+                temperature_tolerance_k=TEMPERATURE_TOLERANCE_K,
+                duration_positive_tolerance_hours=DURATION_POSITIVE_TOLERANCE_HOURS,
+            )
+        return ClimateCondition(
+            epl=EPL(self.epl.value) if self.epl.value else None,
+            service_temperature_c=Decimal("0"),
+            option=None,
+            chamber=PhaseCondition(
+                temperature_c=chamber_temperature,
+                duration_hours=chamber_duration,
+                temperature_tolerance_k=TEMPERATURE_TOLERANCE_K,
+                duration_positive_tolerance_hours=DURATION_POSITIVE_TOLERANCE_HOURS,
+                humidity_percent=chamber_humidity,
+                humidity_tolerance_percent=HUMIDITY_TOLERANCE_PERCENT,
+            ),
+            drying=drying,
+            rule_id="DIRECT-CONFIGURATION",
+            normative_rule_version=f"{NORMATIVE_RULE_VERSION}+CONFIGURACAO-DIRETA",
+        )
+
     def _recalculate(self, _event: object | None = None) -> None:
         self.error_banner.visible = False
-        tamb_was_defaulted = not self.tamb.value.strip()
-        self.tamb_assumption.visible = tamb_was_defaulted
-        if not self.epl.value or not self.delta_t.value.strip():
-            self._condition = None
-            self.save_button.disabled = True
-            self.ts_value.value = "Ts = —"
-            self.option_help.value = "Informe EPL e Delta T para consultar as opções."
+        mode = self.mode_group.value or ConditionInputMode.CALCULATED.value
+        self.option_b.disabled = False
+        epl_required = mode != ConditionInputMode.DIRECT_CONFIGURATION.value
+        if epl_required and not self.epl.value:
+            self._clear_condition("Informe o EPL para continuar.")
             self._refresh()
             return
 
         try:
-            effective_tamb = (
-                format_decimal(DEFAULT_TAMB_MAX_C)
-                if tamb_was_defaulted
-                else _number_text(self.tamb.value)
-            )
-            ts = calculate_service_temperature(effective_tamb, _number_text(self.delta_t.value))
-            options = available_options(self.epl.value, ts)
-            option_values = {option.value for option in options}
-            self.option_b.disabled = TestOption.B.value not in option_values
-            if self.option_group.value not in option_values:
-                self.option_group.value = TestOption.A.value
-
-            if len(options) == 1:
-                self.option_help.value = "Somente a opção A é aplicável para esta combinação."
+            if mode == ConditionInputMode.CALCULATED.value:
+                tamb_was_defaulted = not self.tamb.value.strip()
+                self.tamb_assumption.visible = tamb_was_defaulted
+                if not self.delta_t.value.strip():
+                    self._clear_condition("Informe o Delta T para calcular Ts.")
+                    self._refresh()
+                    return
+                effective_tamb = (
+                    format_decimal(DEFAULT_TAMB_MAX_C)
+                    if tamb_was_defaulted
+                    else _number_text(self.tamb.value)
+                )
+                ts = calculate_service_temperature(
+                    effective_tamb,
+                    _number_text(self.delta_t.value),
+                )
+                options = available_options(self.epl.value, ts)
+                option_values = {option.value for option in options}
+                self.option_b.disabled = TestOption.B.value not in option_values
+                if self.option_group.value not in option_values:
+                    self.option_group.value = TestOption.A.value
+                self.option_help.value = (
+                    "Somente a opção A é aplicável para esta combinação."
+                    if len(options) == 1
+                    else "As opções A e B são permitidas. Confirme sua escolha."
+                )
+                self._condition = resolve_condition(
+                    self.epl.value,
+                    ts,
+                    self.option_group.value,
+                )
+            elif mode == ConditionInputMode.DIRECT_TS.value:
+                self.tamb_assumption.visible = False
+                if not self.service_temperature.value.strip():
+                    self._clear_condition("Informe o Ts indicado pelo cliente ou plano.")
+                    self._refresh()
+                    return
+                ts = Decimal(_number_text(self.service_temperature.value))
+                options = available_options(self.epl.value, ts)
+                option_values = {option.value for option in options}
+                self.option_b.disabled = TestOption.B.value not in option_values
+                if self.option_group.value not in option_values:
+                    self.option_group.value = TestOption.A.value
+                self.option_help.value = (
+                    "Somente a opção A é aplicável para este Ts."
+                    if len(options) == 1
+                    else "As opções A e B são permitidas. Confirme sua escolha."
+                )
+                self._condition = resolve_condition(
+                    self.epl.value,
+                    ts,
+                    self.option_group.value,
+                )
             else:
-                self.option_help.value = "As opções A e B são permitidas. Confirme sua escolha."
-
-            self._condition = resolve_condition(self.epl.value, ts, self.option_group.value)
+                self.tamb_assumption.visible = False
+                required_manual = (
+                    self.manual_chamber_temperature.value.strip()
+                    and self.manual_chamber_humidity.value.strip()
+                    and self.manual_chamber_duration.value.strip()
+                )
+                if self.manual_drying_required.value:
+                    required_manual = bool(
+                        required_manual
+                        and self.manual_drying_temperature.value.strip()
+                        and self.manual_drying_duration.value.strip()
+                    )
+                if not required_manual:
+                    self._clear_condition("Informe a condição personalizada que será aplicada.")
+                    self._refresh()
+                    return
+                self._condition = self._manual_condition()
             self._display_condition(self._condition)
+            if mode == ConditionInputMode.DIRECT_CONFIGURATION.value:
+                self.ts_value.value = "Ts não informado"
             self.save_button.disabled = False
-        except ClimateRuleError as error:
-            self._condition = None
-            self.save_button.disabled = True
-            self.ts_value.value = "Ts = —"
+        except (ClimateRuleError, InvalidOperation, ValueError) as error:
+            self._clear_condition(str(error) or "Revise os valores informados.")
             self.option_help.value = str(error)
         self._refresh()
 
@@ -418,9 +821,8 @@ class NewTestView:
             self.drying_temperature.value = "Não requerida"
             self.drying_duration.value = "—"
             self.drying_duration_detail.value = ""
-        self.rule_reference.value = (
-            f"Regra {condition.rule_id} • {condition.normative_rule_version} • "
-            f"Opção {condition.option.value}"
+        self.rule_reference.value = f"Condição registrada • {condition.normative_rule_version}" + (
+            f" • Opção {condition.option.value}" if condition.option is not None else ""
         )
 
     def _submit(self, _event: object | None = None) -> None:
@@ -428,6 +830,7 @@ class NewTestView:
             (self.client, "Cliente"),
             (self.process_number, "Processo"),
             (self.product, "Produto"),
+            (self.sample_quantity, "Quantidade de amostras"),
         ]
         missing = False
         for field, label in required_fields:
@@ -439,16 +842,52 @@ class NewTestView:
             self._refresh()
             return
 
-        command = CreateClimateTestCommand(
-            client=self.client.value,
-            process_number=self.process_number.value,
-            product=self.product.value,
-            epl=self.epl.value or "",
-            tamb_max_c=self.tamb.value,
-            delta_t_max_k=self.delta_t.value,
-            selected_option=self.option_group.value or "",
-            notes=self.notes.value,
-        )
+        if not self.sample_quantity.value.isdigit() or int(self.sample_quantity.value) < 1:
+            self.sample_quantity.error = "Informe um número inteiro maior que zero."
+            self._show_error("Revise a quantidade de amostras.")
+            self._refresh()
+            return
+
+        common_values = {
+            "client": self.client.value,
+            "process_number": self.process_number.value,
+            "product": self.product.value,
+            "epl": self.epl.value or "",
+            "tamb_max_c": self.tamb.value,
+            "delta_t_max_k": self.delta_t.value,
+            "selected_option": (
+                self.option_group.value or ""
+                if self.mode_group.value
+                in {
+                    ConditionInputMode.CALCULATED.value,
+                    ConditionInputMode.DIRECT_TS.value,
+                }
+                else ""
+            ),
+            "sample_quantity": self.sample_quantity.value,
+            "notes": self.notes.value,
+            "input_mode": self.mode_group.value or ConditionInputMode.CALCULATED.value,
+            "service_temperature_c": self.service_temperature.value,
+            "ts_reference": "",
+            "manual_chamber_temperature_c": self.manual_chamber_temperature.value,
+            "manual_chamber_humidity_percent": self.manual_chamber_humidity.value,
+            "manual_chamber_duration_hours": self.manual_chamber_duration.value,
+            "manual_drying_required": bool(self.manual_drying_required.value),
+            "manual_drying_temperature_c": self.manual_drying_temperature.value,
+            "manual_drying_duration_hours": self.manual_drying_duration.value,
+        }
+        if self._details is not None:
+            if not self.change_reason.value.strip():
+                self.change_reason.error = "Informe o motivo da alteração."
+                self._show_error("O motivo é obrigatório para preservar a rastreabilidade.")
+                self._refresh()
+                return
+            command: CreateClimateTestCommand | UpdateClimateTestCommand = UpdateClimateTestCommand(
+                **common_values,
+                reason=self.change_reason.value,
+            )
+        else:
+            command = CreateClimateTestCommand(**common_values)
         try:
             self._on_save(command)
         except ValueError as error:
@@ -464,3 +903,18 @@ def build_new_test_view(
     """Cria uma nova instância limpa do formulário."""
 
     return NewTestView(on_cancel=on_cancel, on_save=on_save).root
+
+
+def build_edit_test_view(
+    details: ClimateTestDetails,
+    *,
+    on_cancel: Callable[[], None],
+    on_save: Callable[[UpdateClimateTestCommand], None],
+) -> ft.Column:
+    """Cria o formulário preenchido para correção auditável de um ensaio."""
+
+    return NewTestView(
+        on_cancel=on_cancel,
+        on_save=on_save,  # type: ignore[arg-type]
+        details=details,
+    ).root

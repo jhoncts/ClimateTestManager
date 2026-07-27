@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 from climatetest_manager.domain.climate_rules import PhaseCondition
+from climatetest_manager.domain.enums import DeadlineCondition
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,3 +24,19 @@ def schedule_phase(started_at: datetime, condition: PhaseCondition) -> PhaseSche
         nominal_end_at=started_at + timedelta(hours=condition.duration_hours),
         maximum_end_at=started_at + timedelta(hours=condition.maximum_duration_hours),
     )
+
+
+def classify_deadline(
+    now: datetime,
+    nominal_end_at: datetime,
+    maximum_end_at: datetime,
+) -> DeadlineCondition:
+    """Classifica a próxima retirada, preservando a tolerância positiva de 30 horas."""
+
+    if now > maximum_end_at:
+        return DeadlineCondition.OVERDUE
+    if now >= nominal_end_at:
+        return DeadlineCondition.IN_TOLERANCE
+    if now.date() == nominal_end_at.date():
+        return DeadlineCondition.DUE_TODAY
+    return DeadlineCondition.ON_TIME

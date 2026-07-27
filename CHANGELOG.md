@@ -7,10 +7,70 @@ e o projeto utiliza versionamento semântico.
 
 ## [Não publicado]
 
+### Adicionado
+
+- Controle operacional das etapas de câmara e secagem com horários reais.
+- Saídas nominal e máxima, mantendo a tolerância positiva de 30 horas visível.
+- Condição de prazo `Em tolerância`; atraso somente depois do limite máximo.
+- Início imediato ou registro manual de data e hora.
+- Finalização e cancelamento auditável com motivo obrigatório.
+- Tela de ensaios com pesquisa, filtro e acesso aos detalhes.
+- Histórico por ensaio e consulta global dos eventos.
+- Exportação CSV dos ensaios e arquivo de calendário no formato ICS.
+- Notificações nativas do Windows com entrega persistente e sem duplicidade.
+- Tarefa agendada configurável para avisar mesmo com a janela principal fechada.
+- Migração idempotente dos bancos SQLite criados nas versões anteriores.
+- Modo WAL, tempo de espera e proteção para acesso simultâneo do aplicativo e notificador.
+- Três formas objetivas de definir a condição: cálculo por Tamb + ΔT, Ts informado e
+  Personalizado.
+- Quantidade de amostras no cadastro, nos resumos, nos avisos e na exportação.
+- Correção auditável dos dados antes, durante ou depois da execução.
+- Exclusão permanente somente para cadastros ainda não iniciados, com confirmação.
+- Linha visual das etapas do ensaio e registro global renomeado para `Atividades`.
+- Escolha do arquivo de destino ao exportar os resultados filtrados em CSV.
+- Cópia consistente do banco SQLite com escolha do local de destino.
+- Diagnóstico do notificador: banco monitorado, última verificação e notificação de teste.
+- Pausa e retomada independentes da câmara climática e da secagem, com motivo obrigatório.
+- Congelamento do progresso e recálculo automático de todos os prazos afetados pelo tempo parado.
+- Barra compacta de progresso por ensaio ativo no Dashboard.
+- Agenda mensal interna com retirada nominal, limite máximo e projeção durante pausas.
+- Correção auditável da data e hora de entrada na câmara.
+- Temas claro e escuro com preferência local persistida.
+- Botão temporário de avanço de etapa, disponível somente com variável explícita de validação.
+- Quantidade de amostras pode ser apagada e substituída sem prender o valor inicial `1`.
+- Digitação de datas e horas aplica automaticamente as máscaras `DD/MM/AAAA` e `HH:MM`, com
+  limite de tamanho e validação antes de confirmar.
+
+### Alterado
+
+- Ações humanas são registradas como `Não identificado` até a implementação do login.
+- Dashboard passa a mostrar somente pendentes, pausados e em andamento; finalizados e cancelados
+  permanecem na tela Ensaios.
+- Empacotamento passa a gerar o aplicativo e o notificador na versão 0.4.0.
+- Horários passam a usar nomes operacionais: `Entrada registrada`, `Retirada recomendada`,
+  `Último prazo permitido` e `Retirada registrada`.
+- A tarefa agendada chama diretamente um executável sem console ou `pythonw.exe`, sem abrir
+  CMD/PowerShell a cada verificação.
+- Valores inexistentes nos cadastros simplificados deixam de aparecer como Ts, EPL ou opção
+  fictícios.
+- Os antigos modos de critério do plano e configuração direta são apresentados como
+  `Personalizado`; temperatura e umidade personalizadas ficam limitadas de 0 a 100.
+- Avisos de um ensaio pausado deixam de ser entregues até a retomada e o reagendamento.
+
+### Corrigido
+
+- Falha ao cancelar causada pela ausência do callback `_on_cancel` em `TestDetailsView`.
+- Desalinhamento dos resumos técnicos na dashboard quando cliente ou condição possuem textos
+  de tamanhos diferentes.
+- Reagendamento de notificações após uma correção de dados sem violar a chave única do SQLite.
+
 ### Planejado
 
-- Persistência do fluxo de câmara e secagem.
-- Histórico auditável de alterações.
+- Cadastro com e-mail, nome de usuário, nome, sobrenome, senha e confirmação de senha.
+- Login por usuário ou e-mail, sessão persistente opcional e saída da conta.
+- Tutorial inicial e ajuda resumida para cada função.
+- Perfis e identificação do responsável.
+- Integração autorizada com calendário e e-mail.
 
 ## [0.3.0] - 2026-07-22
 

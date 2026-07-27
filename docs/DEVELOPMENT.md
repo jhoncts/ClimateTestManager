@@ -28,6 +28,16 @@ pip install -e ".[dev]"
 flet run src/main.py
 ```
 
+Para exibir temporariamente o botão **Teste: avançar etapa** durante a validação da v0.4.0:
+
+```powershell
+$env:CLIMATETEST_TEST_CONTROLS = "1"
+flet run src/main.py
+```
+
+Sem essa variável, o botão não aparece. A ferramenta ignora a espera nominal, mas registra a ação
+na auditoria; nunca deve ser usada com ensaios reais.
+
 ## 4. Testar
 
 ```powershell
@@ -71,4 +81,35 @@ Faça commits pequenos e coerentes. O prefixo indica a intenção:
 ```
 
 O PyInstaller não faz compilação cruzada. O `.exe` final deve ser gerado no Windows onde será
-usado ou em outra máquina Windows compatível.
+usado ou em outra máquina Windows compatível. A v0.4.0 gera `ClimateTestManager.exe` e
+`ClimateTestNotifier.exe`.
+
+## 8. Testar o agente de notificações
+
+Use somente um banco de demonstração fora do repositório:
+
+```powershell
+$env:CLIMATETEST_DATA_DIR = "C:\Scripts\ClimateTestManager\dados-teste-v0.4.0"
+python src\notifier.py --data-directory $env:CLIMATETEST_DATA_DIR
+```
+
+A ativação permanente é feita pela tela **Configurações** ou, de forma equivalente:
+
+```powershell
+.\scripts\install_notifier_task.ps1 -DataDirectory $env:CLIMATETEST_DATA_DIR
+```
+
+Depois da instalação, confirme que a ação não chama PowerShell:
+
+```powershell
+(Get-ScheduledTask -TaskName "ClimateTestManager-Notifications").Actions |
+    Select-Object Execute, Arguments
+```
+
+O campo `Execute` deve apontar para `ClimateTestNotifier.exe` ou `pythonw.exe`.
+
+Para remover apenas a tarefa, preservando ensaios e histórico:
+
+```powershell
+.\scripts\uninstall_notifier_task.ps1
+```

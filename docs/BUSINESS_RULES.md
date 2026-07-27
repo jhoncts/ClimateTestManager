@@ -13,14 +13,31 @@ deve ser persistido no ensaio e a origem desse valor deve constar no evento inic
 
 ## Dados do cadastro
 
-- A determinação da condição climática utiliza o EPL; a Marcação Ex não é solicitada.
+- A Marcação Ex não é solicitada.
 - O processo é um identificador obrigatório de conteúdo livre, limitado a 10 caracteres na tela.
+- A quantidade de amostras é obrigatória e deve ser um inteiro maior que zero.
 - Tamb e Delta T aceitam somente conteúdo numérico, com vírgula como separador visual.
 - Um ponto digitado como separador decimal deve ser convertido imediatamente para vírgula.
 - As permanências devem exibir horas, dias nominais e o limite superior incluindo a tolerância.
 
 Os valores calculados deverão ser armazenados como fotografia da regra usada no cadastro.
 Uma atualização futura da norma não deverá alterar retroativamente ensaios já registrados.
+
+### Origem da condição
+
+O cadastro apresenta somente três formas de definição:
+
+| Origem | Dados necessários | Resultado |
+| --- | --- | --- |
+| Calculada por Tamb + ΔT | EPL, Tamb, ΔT e opção | Calcula Ts e consulta a Tabela 17 |
+| Ts informado | EPL, Ts e opção | Consulta a Tabela 17 sem exigir Tamb ou ΔT |
+| Personalizado | Temperatura, umidade, duração e secagem opcional | Não exige Ts, EPL ou opção quando esses dados não existem |
+
+No modo personalizado, temperatura e umidade aceitam somente números entre `0` e `100`,
+inclusive. A duração é um inteiro positivo em horas e não possui limite máximo definido pela
+aplicação. O seletor **O plano exige secagem** determina se a segunda etapa deve ser informada.
+Valores legados chamados `Critério do plano` ou `Configuração direta` são migrados para
+`Personalizado` sem apagar a configuração já armazenada.
 
 ## Grupos de EPL
 
@@ -84,4 +101,60 @@ Condição descreve o prazo da próxima ação necessária:
 
 - No prazo
 - Vence hoje
+- Em tolerância
 - Atrasado
+
+O término nominal abre a janela operacional de retirada. A condição permanece `Em tolerância`
+até o horário máximo, inclusive. Somente após ultrapassar o limite nominal + 30 h o ensaio passa
+a `Atrasado`.
+
+## Fluxo operacional
+
+- A câmara pode ser iniciada no horário atual ou em um horário real informado manualmente.
+- A secagem não pode começar antes do término nominal da câmara.
+- Quando houver secagem, seus prazos são calculados pelo início real dessa etapa.
+- Ensaios sem secagem podem ser finalizados após o término nominal da câmara.
+- O cancelamento exige motivo e preserva todos os eventos anteriores.
+- Cadastros aguardando podem ser excluídos permanentemente após confirmação.
+- Depois que a câmara é iniciada, o ensaio não pode ser apagado; uma desistência deve ser
+  cancelada com motivo.
+- Dados cadastrais podem ser corrigidos com justificativa. Mudanças térmicas recalculam os
+  prazos da etapa ativa e preservam os valores anteriores no registro de atividades.
+- Uma correção posterior não pode criar uma etapa de secagem incompatível com o fluxo que já foi
+  concluído.
+- Até existir login, ações humanas recebem o ator `Não identificado`; o nome do usuário do Windows
+  não é usado como identidade do responsável.
+- A entrada registrada da câmara pode ser corrigida com nova data/hora e motivo obrigatório.
+  O sistema recalcula os prazos e preserva os dois valores na auditoria.
+
+## Pausa e retomada dos equipamentos
+
+- Câmara climática e secagem possuem controles globais independentes no Dashboard.
+- Pausar exige motivo e afeta todos os ensaios que estiverem naquele equipamento no instante.
+- A barra de progresso usa somente tempo efetivamente cumprido; o período parado é descontado.
+- Durante uma pausa, o progresso fica congelado e os avisos do ensaio não são entregues.
+- A retomada encerra o intervalo e desloca os prazos nominal e máximo pelo tempo exato parado.
+- Um equipamento pausado não aceita início, avanço ou finalização de etapa.
+- Cadastros ainda aguardando não são alterados pela pausa, mas também não podem iniciar a câmara
+  enquanto ela estiver indisponível.
+- Cancelar um ensaio pausado continua permitido e preserva o motivo da parada e do cancelamento.
+
+## Dashboard e agenda
+
+- O Dashboard mostra somente `Aguardando`, `Na Câmara`, `Em Secagem` e os ensaios pausados nessas
+  etapas. Finalizados e cancelados permanecem na tela **Ensaios**.
+- Cada linha ativa usa uma barra compacta de progresso da etapa atual.
+- A Agenda interna apresenta retirada nominal e limite máximo dos ensaios ativos em visão mensal.
+- Durante uma pausa, a agenda mostra projeções que acompanham o tempo parado; ao retomar, os
+  horários recalculados tornam-se definitivos.
+- O arquivo `.ics` continua disponível como exportação manual de um ensaio iniciado.
+
+## Avisos
+
+- Ao iniciar uma etapa, são agendados avisos para o término nominal e para o limite máximo.
+- Cada aviso possui uma chave persistida para não ser exibido duas vezes.
+- O agente local pode executar com a janela principal fechada.
+- A tarefa agendada chama diretamente `ClimateTestNotifier.exe` ou `pythonw.exe`; ela não abre
+  PowerShell ou CMD durante as verificações periódicas.
+- O computador precisa estar ligado e com uma sessão do Windows iniciada.
+- E-mail e calendário automáticos dependem do futuro login e de consentimento seguro da conta.

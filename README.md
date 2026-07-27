@@ -6,26 +6,52 @@ Aplicação desktop para controle de ensaios de resistência climática realizad
 O projeto nasce para substituir uma planilha operacional por um software local, auditável e
 preparado para gerar um executável do Windows sem abrir navegador ou terminal.
 
-> Status: versão 0.3.0 em desenvolvimento. O cadastro de ensaios, o cálculo interativo da
-> Tabela 17 e a persistência local já estão funcionais. O início da câmara, os prazos e o
-> histórico visual serão desenvolvidos nas próximas etapas.
+> Status: versão 0.4.0 em desenvolvimento. Cadastro, cálculo da Tabela 17, controle de câmara e
+> secagem, prazos, histórico e notificações locais já estão funcionais. Ainda não deve ser usada
+> como sistema oficial do laboratório.
 
 ## Funcionalidades disponíveis
 
 - Cadastro de ensaios climáticos com validação dos campos obrigatórios.
+- Cadastro por três formas: Tamb + ΔT, Ts informado ou condição personalizada.
+- Quantidade de amostras acompanhada em todas as etapas.
 - Cálculo de `Ts = Tamb + ΔT`.
 - Consulta automática das condições da Tabela 17.
 - Escolha entre as opções A e B quando ambas forem permitidas.
 - Normalização das entradas decimais para vírgula e bloqueio de caracteres não numéricos.
 - Apresentação das permanências em horas, dias nominais e limite com tolerância.
 - Gravação local do ensaio, da condição normativa e do primeiro evento de auditoria.
-- Dashboard conectado aos ensaios cadastrados.
+- Dashboard restrito aos ensaios pendentes, pausados e em andamento, com progresso compacto.
+- Início da câmara no horário atual ou em data/hora informada manualmente.
+- Cálculo separado da saída nominal e do limite máximo com tolerância de `+30 h`.
+- Condição `Em tolerância` entre a saída nominal e o limite máximo; atraso somente após o limite.
+- Início da secagem pelo horário real de retirada da câmara e recálculo dos respectivos prazos.
+- Pausa global e independente da câmara climática e da secagem, com congelamento da contagem,
+  motivo obrigatório e deslocamento automático dos prazos na retomada.
+- Correção auditável da entrada registrada da câmara.
+- Finalização e cancelamento com motivo obrigatório.
+- Correção auditável dos dados e exclusão somente de cadastros não iniciados.
+- Lista pesquisável com filtro de situação e tela completa de detalhes.
+- Caminho visual do ensaio e registro global de atividades.
+- Agenda mensal interna para retirada nominal e limite máximo dos ensaios ativos.
+- Exportação dos resultados filtrados em CSV com escolha de local e arquivo de agenda `.ics`.
+- Avisos nativos do Windows executados silenciosamente a cada 5 minutos, mesmo com a janela
+  principal fechada.
+- Tela de Configurações com teste de notificação, última verificação, pasta dos dados e cópia de
+  segurança do banco.
+- Temas claro e escuro com preferência preservada no computador.
+- Migração automática e não destrutiva de bancos criados pela v0.3.0.
 
 ## Próximas funcionalidades
 
-- Controle das etapas de câmara e secagem.
-- Situação operacional e condição de prazo separadas.
-- Histórico auditável de alterações.
+- Cadastro com e-mail, nome de usuário único, nome, sobrenome, senha e confirmação de senha.
+- Login pelo nome de usuário ou e-mail, opção **Manter conectado**, sessão persistente após
+  reiniciar o computador e ação **Sair da conta**. Senhas não serão armazenadas em texto puro.
+- Tutorial inicial curto e uma área de ajuda com instruções resumidas para cada função.
+- Identificação real do responsável por cada ação.
+- Preferências individuais de idioma, formatos e antecedência dos avisos.
+- Integração autorizada com Microsoft 365 para calendário e e-mail.
+- Política formal de backup, restauração e retenção para uso operacional.
 
 ## Tecnologias
 
@@ -109,13 +135,29 @@ O empacotamento deve ser executado no próprio Windows:
 ```
 
 O resultado será criado em `dist/ClimateTestManager.exe`. O comando usa `flet pack`, a
-integração oficial do Flet com o PyInstaller, sem habilitar o console de depuração.
+integração oficial do Flet com o PyInstaller, sem habilitar o console de depuração. O mesmo
+script também cria `dist/ClimateTestNotifier.exe`, responsável pelos avisos em segundo plano.
+
+## Avisos em segundo plano
+
+Na tela **Configurações**, selecione **Ativar avisos**. O sistema cria uma tarefa do Windows que
+verifica os prazos a cada 5 minutos. A janela principal pode permanecer fechada, mas o computador
+deve estar ligado e a sessão do Windows iniciada. A tarefa chama diretamente o notificador sem
+abrir uma janela de CMD ou PowerShell.
+
+O banco SQLite ativo deve permanecer no disco local. O OneDrive pode receber backups fechados e
+verificados, mas não deve sincronizar o arquivo de banco enquanto ele está aberto.
+
+Os arquivos `.ics` não inserem eventos silenciosamente em uma conta: o usuário confirma a
+importação no calendário escolhido. A integração automática com calendário e e-mail será feita
+somente após o módulo de login, por autorização segura (OAuth), sem armazenar senhas de e-mail.
 
 ## Documentação
 
 - [Regras de negócio](docs/BUSINESS_RULES.md)
 - [Arquitetura](docs/ARCHITECTURE.md)
 - [Guia de desenvolvimento](docs/DEVELOPMENT.md)
+- [Validação manual da v0.4.0](docs/MANUAL_TEST_V040.md)
 - [Histórico de versões](CHANGELOG.md)
 
 ## Aviso normativo

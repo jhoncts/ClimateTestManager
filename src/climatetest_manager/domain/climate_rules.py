@@ -41,9 +41,9 @@ class PhaseCondition:
 class ClimateCondition:
     """Resultado completo de uma consulta à regra normativa."""
 
-    epl: EPL
+    epl: EPL | None
     service_temperature_c: Decimal
-    option: TestOption
+    option: TestOption | None
     chamber: PhaseCondition
     drying: PhaseCondition | None
     rule_id: str

@@ -5,7 +5,8 @@ from datetime import datetime
 from decimal import Decimal
 
 from climatetest_manager.domain.climate_rules import PhaseCondition
-from climatetest_manager.services.scheduling import schedule_phase
+from climatetest_manager.domain.enums import DeadlineCondition
+from climatetest_manager.services.scheduling import classify_deadline, schedule_phase
 
 
 class SchedulePhaseTests(unittest.TestCase):
@@ -17,6 +18,27 @@ class SchedulePhaseTests(unittest.TestCase):
 
         self.assertEqual(schedule.nominal_end_at, datetime(2026, 8, 18, 8, 0))
         self.assertEqual(schedule.maximum_end_at, datetime(2026, 8, 19, 14, 0))
+
+    def test_classifies_nominal_window_as_tolerance_and_only_delays_after_maximum(self) -> None:
+        nominal = datetime(2026, 8, 18, 8, 0)
+        maximum = datetime(2026, 8, 19, 14, 0)
+
+        self.assertEqual(
+            classify_deadline(datetime(2026, 8, 18, 7, 0), nominal, maximum),
+            DeadlineCondition.DUE_TODAY,
+        )
+        self.assertEqual(
+            classify_deadline(nominal, nominal, maximum),
+            DeadlineCondition.IN_TOLERANCE,
+        )
+        self.assertEqual(
+            classify_deadline(maximum, nominal, maximum),
+            DeadlineCondition.IN_TOLERANCE,
+        )
+        self.assertEqual(
+            classify_deadline(datetime(2026, 8, 19, 14, 1), nominal, maximum),
+            DeadlineCondition.OVERDUE,
+        )
 
 
 if __name__ == "__main__":

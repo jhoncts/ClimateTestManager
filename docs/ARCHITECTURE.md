@@ -59,10 +59,63 @@ da regra. A criação da nova tabela é compatível com bancos vazios da versão
 ### Fluxo do cadastro
 
 1. A tela coleta e valida os dados do operador.
-2. O domínio calcula Ts e resolve a condição normativa.
-3. O serviço monta o ensaio, a fotografia da regra e o evento de auditoria.
-4. O repositório grava o conjunto em uma única transação SQLite.
-5. O dashboard consulta os dados persistidos por meio do serviço.
+2. O serviço registra a origem escolhida: cálculo por Tamb + ΔT, Ts informado ou Personalizado.
+3. Quando houver Ts exato, o domínio resolve a condição normativa; no modo Personalizado, o
+   sistema preserva a configuração efetivamente informada sem criar valores fictícios.
+4. O serviço monta o ensaio, a fotografia da regra e o evento de auditoria.
+5. O repositório grava o conjunto em uma única transação SQLite.
+6. O dashboard consulta os dados persistidos por meio do serviço.
+
+### Fluxo operacional
+
+1. O serviço valida a transição a partir da situação atual.
+2. O horário real inicia a etapa e gera os prazos nominal e máximo.
+3. A operação, os horários e o evento de auditoria são gravados na mesma transação.
+4. Os avisos da etapa são persistidos com chaves únicas.
+5. O dashboard calcula a condição de prazo no instante da consulta.
+
+O relógio é injetável nos serviços para que fronteiras como saída nominal e limite máximo sejam
+testadas de forma determinística.
+
+### Pausas por equipamento
+
+`resource_pauses` registra cada indisponibilidade da câmara climática ou da secagem.
+`climate_test_pauses` fotografa quais ensaios estavam no recurso naquele instante. A pausa e todos
+os vínculos são criados em uma transação; a retomada encerra os intervalos, desloca prazos e
+reagenda avisos na mesma transação.
+
+A situação principal continua indicando a etapa (`Na Câmara` ou `Em Secagem`). O estado `Pausado`
+é derivado do vínculo aberto, evitando perder qual equipamento e qual etapa devem ser retomados.
+O progresso desconta a interseção de todos os intervalos de pausa com a etapa.
+
+O notificador exclui ensaios com pausa aberta da consulta de avisos vencidos. Assim, um prazo
+antigo não dispara durante manutenção; na retomada, as datas persistidas são atualizadas.
+
+### Dashboard, agenda e tema
+
+O dashboard consome uma projeção do serviço que já exclui finalizados e cancelados e inclui
+progresso, pausa e próximo prazo. A Agenda usa os mesmos prazos ativos para montar uma visão mensal,
+sem manter um segundo calendário ou duplicar dados.
+
+As cores ficam centralizadas em `AppColors`. A preferência claro/escuro é salva em
+`preferences.json`, na mesma pasta de dados, e aplicada antes de reconstruir os controles Flet.
+
+### Agente de notificações
+
+`src/notifier.py` é um ponto de entrada independente. A tarefa agendada do Windows chama
+diretamente `ClimateTestNotifier.exe` ou `pythonw.exe` a cada 5 minutos, sem iniciar PowerShell ou
+CMD. Ele abre o banco, entrega somente avisos vencidos e ainda não enviados, registra o resultado
+em `notifier_run_state` e termina. Portanto, não existe um segundo processo mantendo o banco aberto
+o tempo todo.
+
+O contrato `NotificationProvider` prepara novos canais. A v0.4.0 implementa somente o toast local;
+e-mail e calendário automático exigirão login e autorização OAuth.
+
+### Evolução do SQLite
+
+Antes de `create_all()`, uma migração idempotente acrescenta colunas ausentes aos bancos antigos.
+O SQLite usa WAL e `busy_timeout` para coordenar as transações curtas da janela principal e do
+notificador. O arquivo ativo permanece local; backups fechados podem ser copiados ao OneDrive.
 
 ### Compatibilidade do campo Marcação Ex
 
@@ -73,7 +126,9 @@ migrações versionadas, evitando exigir que o usuário apague ou recrie o banco
 
 ## Próximas evoluções
 
-- Serviços de início, transferência para secagem e encerramento.
-- Migrações Alembic versionadas.
-- Relógio injetável para testes determinísticos de prazos.
-- Notificações locais enquanto a aplicação estiver em execução.
+- Cadastro, login por usuário ou e-mail, sessão persistente opcional, saída da conta, perfis e
+  autorização de ações. A persistência guardará uma sessão revogável, nunca a senha em texto puro.
+- Tutorial inicial e ajuda contextual resumida para as operações do sistema.
+- Migrações Alembic versionadas para mudanças estruturais mais complexas.
+- Canais Microsoft 365 de e-mail e calendário por OAuth.
+- Política de backup automático com teste periódico de restauração.

@@ -29,6 +29,18 @@ class TestOption(StrEnum):
     B = "B"
 
 
+class ConditionInputMode(StrEnum):
+    """Origem dos dados usados para definir a condição do ensaio."""
+
+    CALCULATED = "calculated"
+    DIRECT_TS = "direct_ts"
+    # Mantidos somente para abrir com segurança cadastros feitos durante o
+    # desenvolvimento da v0.4.0. Novos cadastros usam DIRECT_CONFIGURATION.
+    PLAN_CRITERION = "plan_criterion"
+    DIRECT_CONFIGURATION = "direct_configuration"
+    PLAN_DEFINED = "plan_defined"
+
+
 class TestSituation(StrEnum):
     """Etapa operacional atual do ensaio."""
 
@@ -44,4 +56,20 @@ class DeadlineCondition(StrEnum):
 
     ON_TIME = "No prazo"
     DUE_TODAY = "Vence hoje"
+    IN_TOLERANCE = "Em tolerância"
     OVERDUE = "Atrasado"
+
+
+class EquipmentResource(StrEnum):
+    """Recursos físicos que podem ficar indisponíveis para todos os ensaios."""
+
+    CLIMATE_CHAMBER = "climate_chamber"
+    DRYING = "drying"
+
+    @property
+    def label(self) -> str:
+        """Nome curto apresentado ao operador."""
+
+        if self is EquipmentResource.CLIMATE_CHAMBER:
+            return "Câmara climática"
+        return "Secagem"
