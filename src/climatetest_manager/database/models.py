@@ -5,12 +5,21 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from climatetest_manager.database.base import Base
 from climatetest_manager.domain.climate_rules import NORMATIVE_RULE_VERSION
-from climatetest_manager.domain.enums import TestSituation
+from climatetest_manager.domain.enums import ConditionInputMode, TestSituation
 
 
 def utc_now() -> datetime:
@@ -34,6 +43,12 @@ class ClimateTestRecord(Base):
     delta_t_max_k: Mapped[Decimal] = mapped_column(Numeric(8, 2))
     service_temperature_c: Mapped[Decimal] = mapped_column(Numeric(8, 2))
     selected_option: Mapped[str | None] = mapped_column(String(1), nullable=True)
+    sample_quantity: Mapped[int] = mapped_column(Integer, default=1)
+    input_mode: Mapped[str] = mapped_column(
+        String(24),
+        default=ConditionInputMode.CALCULATED.value,
+    )
+    ts_reference: Mapped[str | None] = mapped_column(String(100), nullable=True)
     situation: Mapped[str] = mapped_column(String(24), default=TestSituation.WAITING.value)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     normative_rule_version: Mapped[str] = mapped_column(String(40), default=NORMATIVE_RULE_VERSION)
@@ -41,6 +56,17 @@ class ClimateTestRecord(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now, onupdate=utc_now
     )
+    chamber_started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    chamber_nominal_end_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    chamber_maximum_end_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    chamber_ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    drying_started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    drying_nominal_end_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    drying_maximum_end_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    drying_ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    cancellation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     audit_events: Mapped[list[AuditEvent]] = relationship(
         back_populates="climate_test",
@@ -50,6 +76,14 @@ class ClimateTestRecord(Base):
         back_populates="climate_test",
         cascade="all, delete-orphan",
         uselist=False,
+    )
+    notifications: Mapped[list[NotificationEvent]] = relationship(
+        back_populates="climate_test",
+        cascade="all, delete-orphan",
+    )
+    pause_intervals: Mapped[list[ClimateTestPauseRecord]] = relationship(
+        back_populates="climate_test",
+        cascade="all, delete-orphan",
     )
 
 
@@ -102,3 +136,84 @@ class AuditEvent(Base):
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
 
     climate_test: Mapped[ClimateTestRecord] = relationship(back_populates="audit_events")
+
+
+class NotificationEvent(Base):
+    """Aviso persistente para evitar duplicidade entre execuções em segundo plano."""
+
+    __tablename__ = "notification_events"
+    __table_args__ = (
+        UniqueConstraint("climate_test_id", "event_key", name="uq_notification_test_event"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    climate_test_id: Mapped[int] = mapped_column(
+        ForeignKey("climate_tests.id", ondelete="CASCADE"), index=True
+    )
+    event_key: Mapped[str] = mapped_column(String(80))
+    title: Mapped[str] = mapped_column(String(200))
+    message: Mapped[str] = mapped_column(Text)
+    scheduled_for_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    climate_test: Mapped[ClimateTestRecord] = relationship(back_populates="notifications")
+
+
+class NotifierRunState(Base):
+    """Última verificação realizada pelo agente de notificações."""
+
+    __tablename__ = "notifier_run_state"
+
+    id: Mapped[int] = mapped_column(primary_key=True, default=1)
+    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    delivered_count: Mapped[int] = mapped_column(Integer, default=0)
+    failed_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class ResourcePauseRecord(Base):
+    """Período em que um equipamento ficou indisponível para o laboratório."""
+
+    __tablename__ = "resource_pauses"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    resource: Mapped[str] = mapped_column(String(32), index=True)
+    reason: Mapped[str] = mapped_column(Text)
+    paused_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    resumed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    affected_tests: Mapped[list[ClimateTestPauseRecord]] = relationship(
+        back_populates="resource_pause",
+        cascade="all, delete-orphan",
+    )
+
+
+class ClimateTestPauseRecord(Base):
+    """Vincula uma parada do equipamento aos ensaios afetados naquele instante."""
+
+    __tablename__ = "climate_test_pauses"
+    __table_args__ = (
+        UniqueConstraint(
+            "climate_test_id",
+            "resource_pause_id",
+            name="uq_test_resource_pause",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    climate_test_id: Mapped[int] = mapped_column(
+        ForeignKey("climate_tests.id", ondelete="CASCADE"),
+        index=True,
+    )
+    resource_pause_id: Mapped[int] = mapped_column(
+        ForeignKey("resource_pauses.id", ondelete="CASCADE"),
+        index=True,
+    )
+    phase: Mapped[str] = mapped_column(String(32))
+    paused_at: Mapped[datetime] = mapped_column(DateTime)
+    resumed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    climate_test: Mapped[ClimateTestRecord] = relationship(back_populates="pause_intervals")
+    resource_pause: Mapped[ResourcePauseRecord] = relationship(back_populates="affected_tests")

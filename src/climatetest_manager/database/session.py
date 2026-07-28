@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from climatetest_manager.config import get_database_path
 from climatetest_manager.database.base import Base
+from climatetest_manager.database.migrations import SCHEMA_VERSION, migrate_database
 
 
 def create_database_engine(database_path: Path | None = None) -> Engine:
@@ -14,12 +15,17 @@ def create_database_engine(database_path: Path | None = None) -> Engine:
 
     resolved_path = (database_path or get_database_path()).expanduser().resolve()
     resolved_path.parent.mkdir(parents=True, exist_ok=True)
-    engine = create_engine(f"sqlite:///{resolved_path.as_posix()}")
+    engine = create_engine(
+        f"sqlite:///{resolved_path.as_posix()}",
+        connect_args={"timeout": 30},
+    )
 
     @event.listens_for(engine, "connect")
     def enable_foreign_keys(dbapi_connection: object, _connection_record: object) -> None:
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA busy_timeout=30000")
         cursor.close()
 
     return engine
@@ -38,5 +44,8 @@ def initialize_database(database_path: Path | None = None) -> Engine:
     from climatetest_manager.database import models  # noqa: F401
 
     engine = create_database_engine(database_path)
+    migrate_database(engine)
     Base.metadata.create_all(engine)
+    with engine.begin() as connection:
+        connection.exec_driver_sql(f"PRAGMA user_version={SCHEMA_VERSION}")
     return engine

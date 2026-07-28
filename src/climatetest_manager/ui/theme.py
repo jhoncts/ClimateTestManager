@@ -1,8 +1,8 @@
-"""Paleta visual centralizada da aplicação."""
+"""Paleta visual centralizada com modos claro e escuro."""
 
 
 class AppColors:
-    """Cores semânticas para manter consistência entre as telas."""
+    """Cores semânticas atualizadas antes de cada reconstrução da interface."""
 
     PRIMARY = "#0F766E"
     PRIMARY_LIGHT = "#CCFBF1"
@@ -23,3 +23,48 @@ class AppColors:
     DRYING = "#7C3AED"
     DRYING_LIGHT = "#EDE9FE"
     WHITE = "#FFFFFF"
+
+    @classmethod
+    def apply_mode(cls, mode: str) -> None:
+        """Aplica uma paleta completa para que cartões também acompanhem o tema."""
+
+        if mode == "dark":
+            cls.PRIMARY = "#2DD4BF"
+            cls.PRIMARY_LIGHT = "#134E4A"
+            cls.PAGE_BACKGROUND = "#0F172A"
+            cls.NAV_BACKGROUND = "#111827"
+            cls.NAV_SELECTED = "#134E4A"
+            cls.NAV_TEXT = "#CBD5E1"
+            cls.SURFACE = "#1E293B"
+            cls.TEXT_PRIMARY = "#F8FAFC"
+            cls.TEXT_SECONDARY = "#94A3B8"
+            cls.DIVIDER = "#334155"
+            cls.WARNING = "#FBBF24"
+            cls.WARNING_LIGHT = "#4A3412"
+            cls.DANGER = "#F87171"
+            cls.DANGER_LIGHT = "#4C1D24"
+            cls.INFO = "#60A5FA"
+            cls.INFO_LIGHT = "#1E3A5F"
+            cls.DRYING = "#C4B5FD"
+            cls.DRYING_LIGHT = "#352B5B"
+            cls.WHITE = "#FFFFFF"
+            return
+        cls.PRIMARY = "#0F766E"
+        cls.PRIMARY_LIGHT = "#CCFBF1"
+        cls.PAGE_BACKGROUND = "#F4F7F9"
+        cls.NAV_BACKGROUND = "#FFFFFF"
+        cls.NAV_SELECTED = "#E6FFFB"
+        cls.NAV_TEXT = "#475569"
+        cls.SURFACE = "#FFFFFF"
+        cls.TEXT_PRIMARY = "#0F172A"
+        cls.TEXT_SECONDARY = "#64748B"
+        cls.DIVIDER = "#E2E8F0"
+        cls.WARNING = "#D97706"
+        cls.WARNING_LIGHT = "#FEF3C7"
+        cls.DANGER = "#DC2626"
+        cls.DANGER_LIGHT = "#FEE2E2"
+        cls.INFO = "#2563EB"
+        cls.INFO_LIGHT = "#DBEAFE"
+        cls.DRYING = "#7C3AED"
+        cls.DRYING_LIGHT = "#EDE9FE"
+        cls.WHITE = "#FFFFFF"

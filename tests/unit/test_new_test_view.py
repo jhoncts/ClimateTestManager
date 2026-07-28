@@ -2,6 +2,7 @@
 
 import unittest
 
+from climatetest_manager.domain.enums import ConditionInputMode
 from climatetest_manager.services.climate_tests import CreateClimateTestCommand
 from climatetest_manager.ui.views.new_test import NewTestView
 
@@ -69,6 +70,29 @@ class NewTestViewTests(unittest.TestCase):
         self.assertEqual(view.process_number.counter, "")
         self.assertFalse(hasattr(view, "ex_marking"))
 
+    def test_sample_quantity_can_be_cleared_and_replaced(self) -> None:
+        view = NewTestView(on_cancel=lambda: None, on_save=lambda _command: None)
+
+        self.assertEqual(view.sample_quantity.value, "1")
+        view.sample_quantity.value = ""
+        view._on_sample_quantity_change()
+        self.assertEqual(view.sample_quantity.value, "")
+
+        view.sample_quantity.value = "2"
+        view._on_sample_quantity_change()
+        self.assertEqual(view.sample_quantity.value, "2")
+
+    def test_sample_quantity_removes_non_numeric_content(
+        self,
+    ) -> None:
+        view = NewTestView(on_cancel=lambda: None, on_save=lambda _command: None)
+        view.sample_quantity.value = "1a2"
+
+        view._on_sample_quantity_change()
+
+        self.assertEqual(view.sample_quantity.value, "12")
+        self.assertIsNone(view.sample_quantity.input_filter)
+
     def test_submit_passes_filled_command_to_callback(self) -> None:
         received: list[CreateClimateTestCommand] = []
         view = NewTestView(on_cancel=lambda: None, on_save=received.append)
@@ -84,6 +108,51 @@ class NewTestViewTests(unittest.TestCase):
 
         self.assertEqual(len(received), 1)
         self.assertEqual(received[0].selected_option, "A")
+
+    def test_submit_preserves_direct_configuration_mode(self) -> None:
+        received: list[CreateClimateTestCommand] = []
+        view = NewTestView(on_cancel=lambda: None, on_save=received.append)
+        view.mode_group.value = ConditionInputMode.DIRECT_CONFIGURATION.value
+        view._on_mode_change()
+        view.client.value = "Cliente"
+        view.process_number.value = "26128.1"
+        view.product.value = "Produto"
+        view.epl.value = None
+        view.manual_chamber_temperature.value = "80"
+        view.manual_chamber_humidity.value = "90"
+        view.manual_chamber_duration.value = "672"
+        view._recalculate()
+
+        view._submit()
+
+        self.assertEqual(len(received), 1)
+        self.assertEqual(
+            received[0].input_mode,
+            ConditionInputMode.DIRECT_CONFIGURATION.value,
+        )
+        self.assertEqual(received[0].selected_option, "")
+        self.assertEqual(received[0].manual_chamber_humidity_percent, "90")
+
+    def test_offers_only_three_condition_definition_modes(self) -> None:
+        view = NewTestView(on_cancel=lambda: None, on_save=lambda _command: None)
+
+        radios = view.mode_group.content.controls
+
+        self.assertEqual(len(radios), 3)
+        self.assertEqual(radios[-1].label, "Personalizado")
+
+    def test_custom_mode_accepts_long_duration_but_rejects_temperature_over_100(self) -> None:
+        view = NewTestView(on_cancel=lambda: None, on_save=lambda _command: None)
+        view.mode_group.value = ConditionInputMode.DIRECT_CONFIGURATION.value
+        view._on_mode_change()
+        view.manual_chamber_temperature.value = "101"
+        view.manual_chamber_humidity.value = "90"
+        view.manual_chamber_duration.value = "100000"
+
+        view._recalculate()
+
+        self.assertTrue(view.save_button.disabled)
+        self.assertIn("0 e 100", view.option_help.value)
 
 
 if __name__ == "__main__":

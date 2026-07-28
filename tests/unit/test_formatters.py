@@ -3,11 +3,16 @@
 import unittest
 from decimal import Decimal
 
+from climatetest_manager.domain.enums import ConditionInputMode
 from climatetest_manager.ui.formatters import (
+    format_condition_source,
     format_decimal,
     format_duration_detail,
     format_hours_as_days,
+    format_thermal_summary,
+    normalize_date_input,
     normalize_decimal_input,
+    normalize_time_input,
 )
 
 
@@ -25,6 +30,19 @@ class FormatterTests(unittest.TestCase):
         )
         self.assertEqual(normalize_decimal_input("1,2,3"), "1,23")
 
+    def test_applies_and_limits_brazilian_date_mask(self) -> None:
+        self.assertEqual(normalize_date_input("06072026"), "06/07/2026")
+        self.assertEqual(normalize_date_input("06/07/2026"), "06/07/2026")
+        self.assertEqual(normalize_date_input("060"), "06/0")
+        self.assertEqual(normalize_date_input("060720261234"), "06/07/2026")
+        self.assertEqual(normalize_date_input(""), "")
+
+    def test_applies_and_limits_time_mask(self) -> None:
+        self.assertEqual(normalize_time_input("1430"), "14:30")
+        self.assertEqual(normalize_time_input("14:30"), "14:30")
+        self.assertEqual(normalize_time_input("143099"), "14:30")
+        self.assertEqual(normalize_time_input(""), "")
+
     def test_formats_hours_as_days(self) -> None:
         self.assertEqual(format_hours_as_days(24), "1 dia")
         self.assertEqual(format_hours_as_days(504), "21 dias")
@@ -39,6 +57,22 @@ class FormatterTests(unittest.TestCase):
     def test_rejects_negative_duration(self) -> None:
         with self.assertRaisesRegex(ValueError, "negativa"):
             format_hours_as_days(-1)
+
+    def test_simplified_modes_do_not_display_fictitious_zero_ts(self) -> None:
+        summary = format_thermal_summary(
+            input_mode=ConditionInputMode.DIRECT_CONFIGURATION.value,
+            epl="",
+            service_temperature_c=Decimal("0"),
+            ts_reference=None,
+            selected_option="-",
+        )
+
+        self.assertEqual(summary, "Condição personalizada")
+        self.assertNotIn("Ts 0", summary)
+        self.assertEqual(
+            format_condition_source(ConditionInputMode.PLAN_CRITERION.value),
+            "Personalizado",
+        )
 
 
 if __name__ == "__main__":
