@@ -145,7 +145,7 @@ class DatabasePathTests(unittest.TestCase):
 
     def test_storage_setup_persists_local_database_and_onedrive_backup(self) -> None:
         with TemporaryDirectory() as temporary_directory:
-            root = Path(temporary_directory)
+            root = Path(temporary_directory).resolve()
             default_directory = root / "default"
             settings_path = root / "config" / "storage.json"
             data_directory = root / "dados"
