@@ -84,6 +84,31 @@ def format_datetime(value: datetime | None) -> str:
     return value.strftime("%d/%m/%Y %H:%M") if value else "—"
 
 
+_WEEKDAYS_PT_BR = (
+    "segunda-feira",
+    "terça-feira",
+    "quarta-feira",
+    "quinta-feira",
+    "sexta-feira",
+    "sábado",
+    "domingo",
+)
+
+
+def format_weekday(value: datetime | None) -> str:
+    """Apresenta o dia da semana sem depender da localidade instalada no Windows."""
+
+    return _WEEKDAYS_PT_BR[value.weekday()] if value else "—"
+
+
+def format_operational_date(value: datetime | None) -> tuple[str, str, str]:
+    """Separa dia da semana, data e hora para cartões operacionais destacados."""
+
+    if value is None:
+        return "—", "—", "—"
+    return format_weekday(value), value.strftime("%d/%m/%Y"), value.strftime("%H:%M")
+
+
 def parse_local_datetime(date_text: str, time_text: str) -> datetime:
     """Converte data e hora informadas manualmente em um instante local."""
 

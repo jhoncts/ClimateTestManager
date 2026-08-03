@@ -28,7 +28,7 @@ pip install -e ".[dev]"
 flet run src/main.py
 ```
 
-Para exibir temporariamente o botão **Teste: avançar etapa** durante a validação da v0.4.0:
+Para exibir temporariamente o botão **Teste: avançar etapa** durante a validação:
 
 ```powershell
 $env:CLIMATETEST_TEST_CONTROLS = "1"
@@ -81,19 +81,21 @@ Faça commits pequenos e coerentes. O prefixo indica a intenção:
 ```
 
 O PyInstaller não faz compilação cruzada. O `.exe` final deve ser gerado no Windows onde será
-usado ou em outra máquina Windows compatível. A v0.4.0 gera `ClimateTestManager.exe` e
-`ClimateTestNotifier.exe`.
+usado ou em outra máquina Windows compatível. A v0.5.0 gera uma pasta de distribuição e o arquivo
+`dist\ClimateTestManager-v0.5.0-windows.zip`.
 
 ## 8. Testar o agente de notificações
 
 Use somente um banco de demonstração fora do repositório:
 
 ```powershell
-$env:CLIMATETEST_DATA_DIR = "C:\Scripts\ClimateTestManager\dados-teste-v0.4.0"
+$env:CLIMATETEST_DATA_DIR = "C:\Scripts\ClimateTestManager\dados-teste-v0.5.0"
 python src\notifier.py --data-directory $env:CLIMATETEST_DATA_DIR
 ```
 
-A ativação permanente é feita pela tela **Configurações** ou, de forma equivalente:
+A ativação permanente é feita preferencialmente pela tela **Configurações**. O aplicativo chama
+`schtasks.exe` diretamente e não abre PowerShell ou CMD nas verificações. Durante o
+desenvolvimento, a alternativa manual continua disponível:
 
 ```powershell
 .\scripts\install_notifier_task.ps1 -DataDirectory $env:CLIMATETEST_DATA_DIR

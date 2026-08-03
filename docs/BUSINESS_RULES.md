@@ -15,7 +15,8 @@ deve ser persistido no ensaio e a origem desse valor deve constar no evento inic
 
 - A Marcação Ex não é solicitada.
 - O processo é um identificador obrigatório de conteúdo livre, limitado a 10 caracteres na tela.
-- A quantidade de amostras é obrigatória e deve ser um inteiro maior que zero.
+- A quantidade de amostras é obrigatória, deve ser um inteiro entre `1` e `99` e não aceita zero
+  à esquerda na tela.
 - Tamb e Delta T aceitam somente conteúdo numérico, com vírgula como separador visual.
 - Um ponto digitado como separador decimal deve ser convertido imediatamente para vírgula.
 - As permanências devem exibir horas, dias nominais e o limite superior incluindo a tolerância.
@@ -122,10 +123,27 @@ a `Atrasado`.
   prazos da etapa ativa e preservam os valores anteriores no registro de atividades.
 - Uma correção posterior não pode criar uma etapa de secagem incompatível com o fluxo que já foi
   concluído.
-- Até existir login, ações humanas recebem o ator `Não identificado`; o nome do usuário do Windows
-  não é usado como identidade do responsável.
-- A entrada registrada da câmara pode ser corrigida com nova data/hora e motivo obrigatório.
-  O sistema recalcula os prazos e preserva os dois valores na auditoria.
+- Toda ação humana da v0.5.0 recebe o nome completo e o usuário da conta autenticada.
+- Eventos importados de versões anteriores permanecem com o ator `Não identificado`; essa
+  informação histórica não deve ser reescrita.
+- Entrada e saída da câmara climática e entrada e saída da câmara seca são quatro registros
+  independentes. Cada horário já registrado pode ser corrigido com nova data/hora e motivo.
+- A escolha do registro deve apresentar explicitamente a etapa e o tipo de movimento; corrigir a
+  entrada da câmara seca nunca pode alterar a entrada da câmara climática.
+- A ordem cronológica deve permanecer: entrada climática, saída climática, entrada seca e saída
+  seca. Uma correção que inverta essa sequência é recusada.
+- Corrigir uma entrada recalcula o prazo nominal e máximo da etapa correspondente. Corrigir uma
+  saída ajusta apenas o registro real; se o ensaio estiver finalizado, a saída final também
+  atualiza o horário de conclusão.
+- Toda correção preserva valor anterior, valor novo, motivo, responsável e horário na auditoria.
+- Justificativas operacionais usam alternativas predefinidas. A opção `Outros` libera um campo de
+  texto com no máximo 180 caracteres; texto livre ilimitado não é aceito pelo serviço.
+- Antes de confirmar a entrada atual ou manual, o sistema apresenta entrada, retirada nominal e
+  limite com tolerância em cartões separados, com dia da semana, data e hora.
+- Quando a retirada nominal ou o limite cair no sábado ou domingo, o diálogo destaca **FIM DE
+  SEMANA** e orienta a conferir a disponibilidade da equipe antes de registrar a entrada.
+- Um cadastro novo ainda não salvo permanece como rascunho enquanto o usuário navega para outra
+  tela na mesma execução do aplicativo.
 
 ## Pausa e retomada dos equipamentos
 
@@ -143,18 +161,81 @@ a `Atrasado`.
 
 - O Dashboard mostra somente `Aguardando`, `Na Câmara`, `Em Secagem` e os ensaios pausados nessas
   etapas. Finalizados e cancelados permanecem na tela **Ensaios**.
+- Os quatro indicadores do Dashboard filtram a própria lista ao serem clicados; um segundo clique
+  remove o filtro.
 - Cada linha ativa usa uma barra compacta de progresso da etapa atual.
 - A Agenda interna apresenta retirada nominal e limite máximo dos ensaios ativos em visão mensal.
 - Durante uma pausa, a agenda mostra projeções que acompanham o tempo parado; ao retomar, os
   horários recalculados tornam-se definitivos.
-- O arquivo `.ics` continua disponível como exportação manual de um ensaio iniciado.
+- A Agenda interna é a referência operacional; a interface não envia eventos a calendários
+  externos.
 
 ## Avisos
 
-- Ao iniciar uma etapa, são agendados avisos para o término nominal e para o limite máximo.
-- Cada aviso possui uma chave persistida para não ser exibido duas vezes.
+- Ao iniciar uma etapa, são agendados avisos para duas horas antes do término nominal e para o
+  limite máximo, quando a condição passa a `Atrasado`.
+- Cada aviso e cada canal possuem marcações persistidas para não serem entregues duas vezes.
+- Quando o SMTP está habilitado, o e-mail é enviado a todas as contas ativas e contém cliente,
+  produto, processo e quantidade de amostras.
 - O agente local pode executar com a janela principal fechada.
 - A tarefa agendada chama diretamente `ClimateTestNotifier.exe` ou `pythonw.exe`; ela não abre
   PowerShell ou CMD durante as verificações periódicas.
 - O computador precisa estar ligado e com uma sessão do Windows iniciada.
-- E-mail e calendário automáticos dependem do futuro login e de consentimento seguro da conta.
+- A configuração SMTP é restrita ao administrador. A senha fica protegida pelo Windows e não é
+  gravada em texto aberto.
+- A configuração e o Guia de uso apresentam modelos para Gmail, Microsoft 365 e outro provedor,
+  além do fluxo para salvar, testar o envio e ativar o agente em segundo plano.
+- O teste SMTP envia aos usuários ativos e também ao remetente configurado, mostra os
+  destinatários aceitos e o identificador da mensagem. A cópia ao remetente existe somente para
+  diagnóstico; os avisos automáticos continuam destinados às contas ativas.
+
+## Usuários e segurança
+
+- O banco sem usuários abre somente a configuração do primeiro acesso.
+- A primeira conta é obrigatoriamente `Administrador`.
+- O login aceita nome de usuário ou e-mail sem diferenciar letras maiúsculas e minúsculas.
+- Usuários e e-mails são únicos.
+- A senha possui no mínimo oito caracteres, pelo menos uma letra e um número.
+- Senhas são armazenadas somente como PBKDF2-HMAC-SHA256 com salt individual.
+- `Administrador` cria, corrige, ativa, desativa e redefine senhas de contas.
+- `Operador` usa todas as funções técnicas, mas não administra usuários.
+- O sistema sempre mantém pelo menos um administrador ativo.
+- A v0.5.0 não diferencia um administrador principal dos demais administradores. A transferência
+  formal dessa condição está planejada para uma versão futura.
+- Um usuário não pode desativar a própria conta.
+- A opção **Manter conectado** cria uma sessão revogável por 30 dias.
+- Alteração ou redefinição de senha e desativação revogam as sessões existentes.
+- O primeiro acesso apresenta uma central curta de ajuda. O conteúdo permanece acessível em
+  **Guia de uso**, organizado por tarefas, e as telas usam balões `?` para explicações rápidas.
+- A foto do perfil é opcional, limitada a 2 MB e aceita PNG, JPG ou WEBP.
+
+## Backup
+
+- Antes de criar o primeiro administrador, o responsável escolhe a pasta local do banco e pode
+  indicar uma pasta externa para as cópias automáticas.
+- O banco SQLite ativo permanece em disco local e não deve ser sincronizado aberto pelo OneDrive.
+- OneDrive, Dropbox, Google Drive, iCloud e pastas de rede são recusados como local do banco
+  ativo.
+- Na abertura, o sistema tenta criar o backup diário antes da migração e garante uma cópia após
+  inicializar um banco novo.
+- A retenção automática conserva as 30 cópias diárias mais recentes em cada destino.
+- Quando configurado, o OneDrive recebe uma segunda cópia diária consistente; o notificador
+  também executa essa verificação quando a janela principal está fechada.
+- Somente administradores podem alterar pela interface a pasta das cópias automáticas.
+- O botão de backup manual gera uma cópia SQLite consistente e permite escolher o OneDrive.
+- Cada backup automático precisa ser reaberto em modo somente leitura, aprovado por
+  `quick_check` e `foreign_key_check` e acompanhado por manifesto SHA-256.
+- Se a cópia diária estiver corrompida, ela é substituída por uma nova cópia consistente; o banco
+  ativo não é substituído nessa operação.
+- O banco ativo precisa passar por `quick_check` antes de migrações; em caso de falha, a abertura
+  é bloqueada e o usuário deve restaurar uma cópia verificada.
+
+## Falhas do sistema
+
+- Qualquer usuário autenticado pode registrar categoria, impacto, descrição e ação imediata.
+- O relato e a ação imediata originais não podem ser substituídos durante o encerramento.
+- Somente Administrador pode encerrar uma falha, registrando ação corretiva, responsável e data.
+- Uma falha com possível impacto em ensaio ou resultado precisa ser tratada também pelo
+  procedimento de trabalho não conforme do laboratório; o registro no software não decide a
+  aceitabilidade do resultado.
+- Uma cópia só deve ser restaurada com o aplicativo e o notificador fechados.

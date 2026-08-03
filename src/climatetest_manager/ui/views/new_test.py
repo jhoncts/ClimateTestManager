@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from contextlib import suppress
+from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 
 import flet as ft
@@ -26,6 +27,7 @@ from climatetest_manager.services.climate_tests import (
     CreateClimateTestCommand,
     UpdateClimateTestCommand,
 )
+from climatetest_manager.ui.components import ReasonSelector, section_heading
 from climatetest_manager.ui.formatters import (
     format_decimal,
     format_duration_detail,
@@ -36,6 +38,13 @@ from climatetest_manager.ui.theme import AppColors
 
 def _number_text(value: str) -> str:
     return value.strip().replace(",", ".")
+
+
+@dataclass(frozen=True, slots=True)
+class NewTestDraft:
+    """Valores temporários mantidos enquanto o usuário consulta outra tela."""
+
+    values: dict[str, object]
 
 
 def _field(
@@ -65,24 +74,35 @@ def _condition_item(
     title: str,
     value: ft.Text,
     detail: ft.Text | None = None,
+    *,
+    col: dict[str, int] | None = None,
 ) -> ft.Container:
+    value.no_wrap = False
     text_controls: list[ft.Control] = [
         ft.Text(title, size=11, color=AppColors.TEXT_SECONDARY),
         value,
     ]
     if detail is not None:
+        detail.no_wrap = False
         text_controls.append(detail)
 
     return ft.Container(
-        expand=True,
-        border_radius=12,
-        bgcolor=AppColors.PAGE_BACKGROUND,
-        padding=14,
+        col=col or {"xs": 12, "sm": 6},
+        padding=ft.Padding.symmetric(horizontal=4, vertical=7),
         content=ft.Row(
             spacing=10,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
             controls=[
-                ft.Icon(icon, size=20, color=AppColors.PRIMARY),
+                ft.Container(
+                    width=34,
+                    height=34,
+                    border_radius=10,
+                    bgcolor=AppColors.SURFACE,
+                    alignment=ft.Alignment.CENTER,
+                    content=ft.Icon(icon, size=18, color=AppColors.PRIMARY),
+                ),
                 ft.Column(
+                    expand=True,
                     spacing=2,
                     controls=text_controls,
                 ),
@@ -100,6 +120,7 @@ class NewTestView:
         on_cancel: Callable[[], None],
         on_save: Callable[[CreateClimateTestCommand | UpdateClimateTestCommand], None],
         details: ClimateTestDetails | None = None,
+        draft: NewTestDraft | None = None,
     ) -> None:
         self._on_cancel = on_cancel
         self._on_save = on_save
@@ -107,8 +128,10 @@ class NewTestView:
         self._condition: ClimateCondition | None = None
         self.mode_group = ft.RadioGroup(
             value=ConditionInputMode.CALCULATED.value,
-            content=ft.Column(
-                spacing=4,
+            content=ft.Row(
+                spacing=24,
+                run_spacing=4,
+                wrap=True,
                 controls=[
                     ft.Radio(
                         value=ConditionInputMode.CALCULATED.value,
@@ -127,20 +150,28 @@ class NewTestView:
             on_change=self._on_mode_change,
         )
 
-        self.client = _field("Cliente *", hint="Nome ou razão social")
+        self.client = _field(
+            "Cliente *",
+            hint="Nome ou razão social",
+            max_length=120,
+        )
         self.process_number = _field("Processo *", hint="Ex.: 26123.1", max_length=10)
-        self.product = _field("Produto *", hint="Ex.: Luminária Ex")
+        self.product = _field(
+            "Produto *",
+            hint="Ex.: Luminária Ex",
+            max_length=160,
+        )
         self.sample_quantity = _field(
             "Quantidade de amostras *",
             hint="Ex.: 2",
-            max_length=4,
+            max_length=2,
         )
         self.sample_quantity.value = "1"
         self.sample_quantity.keyboard_type = ft.KeyboardType.NUMBER
         self.sample_quantity.on_change = self._on_sample_quantity_change
         for field in (self.client, self.process_number, self.product):
             field.expand = True
-        self.sample_quantity.width = 220
+        self.sample_quantity.expand = True
         self.epl = ft.Dropdown(
             label="EPL",
             hint_text="Selecione",
@@ -152,9 +183,21 @@ class NewTestView:
             on_select=self._recalculate,
             expand=True,
         )
-        self.tamb = _field("Tamb máxima (°C)", hint="Em branco: adota +40")
-        self.delta_t = _field("Delta T máximo (K) *", hint="Ex.: 35")
-        self.service_temperature = _field("Ts informado (°C) *", hint="Ex.: 75")
+        self.tamb = _field(
+            "Tamb máxima (°C)",
+            hint="Em branco: adota +40",
+            max_length=10,
+        )
+        self.delta_t = _field(
+            "Delta T máximo (K) *",
+            hint="Ex.: 35",
+            max_length=10,
+        )
+        self.service_temperature = _field(
+            "Ts informado (°C) *",
+            hint="Ex.: 75",
+            max_length=10,
+        )
         self.ts_reference = _field(
             "Critério descrito no plano *",
             hint="Ex.: Ts > 70 °C — EPL Gb",
@@ -163,14 +206,17 @@ class NewTestView:
         self.manual_chamber_temperature = _field(
             "Temperatura personalizada (°C) *",
             hint="Ex.: 90",
+            max_length=10,
         )
         self.manual_chamber_duration = _field(
             "Permanência na câmara (h) *",
             hint="Ex.: 504",
+            max_length=6,
         )
         self.manual_chamber_humidity = _field(
             "Umidade personalizada (% UR) *",
             hint="Ex.: 90",
+            max_length=10,
         )
         self.manual_chamber_humidity.value = format_decimal(HUMIDITY_PERCENT)
         self.manual_drying_required = ft.Switch(
@@ -181,10 +227,12 @@ class NewTestView:
         self.manual_drying_temperature = _field(
             "Temperatura da secagem (0 a 100 °C) *",
             hint="Ex.: 95",
+            max_length=10,
         )
         self.manual_drying_duration = _field(
             "Permanência na secagem (h) *",
             hint="Ex.: 336",
+            max_length=6,
         )
         self.ts_reference.on_change = self._recalculate
         self.tamb.keyboard_type = ft.KeyboardType.NUMBER
@@ -227,11 +275,20 @@ class NewTestView:
             size=11,
             color=AppColors.TEXT_SECONDARY,
         )
-        self.notes = _field("Observações", hint="Informações adicionais", multiline=True)
-        self.change_reason = _field(
-            "Motivo da alteração *",
-            hint="Explique por que os dados estão sendo corrigidos",
+        self.notes = _field(
+            "Observações",
+            hint="Informações adicionais",
             multiline=True,
+            max_length=500,
+        )
+        self.change_reason_selector = ReasonSelector(
+            (
+                "Correção cadastral",
+                "Revisão do plano de ensaio",
+                "Solicitação do cliente",
+                "Correção após conferência",
+            ),
+            other_hint="Resuma por que os dados estão sendo corrigidos",
         )
 
         self.option_b = ft.Radio(value="B", label="Opção B", disabled=True)
@@ -254,21 +311,41 @@ class NewTestView:
             content=ft.Column(
                 spacing=8,
                 controls=[
-                    ft.Row(spacing=14, controls=[self.tamb, self.delta_t]),
+                    ft.ResponsiveRow(
+                        spacing=14,
+                        run_spacing=12,
+                        controls=[
+                            ft.Container(
+                                col={"xs": 12, "sm": 6},
+                                content=self.tamb,
+                            ),
+                            ft.Container(
+                                col={"xs": 12, "sm": 6},
+                                content=self.delta_t,
+                            ),
+                        ],
+                    ),
                     self.tamb_assumption,
                 ],
             )
         )
         self.direct_ts_fields = ft.Container(
             visible=False,
-            content=ft.Row(spacing=14, controls=[self.service_temperature]),
+            content=self.service_temperature,
         )
-        self.manual_drying_fields = ft.Row(
+        self.manual_drying_fields = ft.ResponsiveRow(
             visible=False,
             spacing=14,
+            run_spacing=12,
             controls=[
-                self.manual_drying_temperature,
-                self.manual_drying_duration,
+                ft.Container(
+                    col={"xs": 12, "sm": 6},
+                    content=self.manual_drying_temperature,
+                ),
+                ft.Container(
+                    col={"xs": 12, "sm": 6},
+                    content=self.manual_drying_duration,
+                ),
             ],
         )
         self.manual_condition_fields = ft.Container(
@@ -283,12 +360,22 @@ class NewTestView:
                         size=11,
                         color=AppColors.TEXT_SECONDARY,
                     ),
-                    ft.Row(
+                    ft.ResponsiveRow(
                         spacing=14,
+                        run_spacing=12,
                         controls=[
-                            self.manual_chamber_temperature,
-                            self.manual_chamber_humidity,
-                            self.manual_chamber_duration,
+                            ft.Container(
+                                col={"xs": 12, "sm": 6, "lg": 4},
+                                content=self.manual_chamber_temperature,
+                            ),
+                            ft.Container(
+                                col={"xs": 12, "sm": 6, "lg": 4},
+                                content=self.manual_chamber_humidity,
+                            ),
+                            ft.Container(
+                                col={"xs": 12, "sm": 6, "lg": 4},
+                                content=self.manual_chamber_duration,
+                            ),
                         ],
                     ),
                     self.manual_drying_required,
@@ -333,84 +420,365 @@ class NewTestView:
             bgcolor=AppColors.PRIMARY,
             color=AppColors.WHITE,
             disabled=True,
+            tooltip="Validar os dados e cadastrar o ensaio",
             on_click=self._submit,
         )
         self.root = self._build()
+        self._refresh_targets = (
+            self.calculated_fields,
+            self.direct_ts_fields,
+            self.manual_condition_fields,
+            self.manual_drying_fields,
+            self.option_panel,
+            self.result_panel,
+            self.error_banner,
+            self.save_button,
+            self.epl,
+            self.tamb_assumption,
+        )
         if details is not None:
             self._load_details(details)
+        elif draft is not None:
+            self.restore_draft(draft)
 
     def _build_result_panel(self) -> ft.Container:
-        return ft.Container(
-            bgcolor=AppColors.SURFACE,
-            border_radius=16,
-            padding=22,
+        self.ts_value.color = AppColors.WHITE
+        chamber_card = ft.Container(
+            col={"xs": 12, "lg": 7},
+            border_radius=14,
+            bgcolor=AppColors.PRIMARY_LIGHT,
+            border=ft.Border.all(1, AppColors.DIVIDER),
+            padding=16,
             content=ft.Column(
-                spacing=14,
+                spacing=12,
+                horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
                 controls=[
                     ft.Row(
-                        alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        spacing=9,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
                         controls=[
-                            ft.Text(
-                                "Condição do ensaio",
-                                size=17,
-                                weight=ft.FontWeight.BOLD,
-                                color=AppColors.TEXT_PRIMARY,
+                            ft.Container(
+                                width=36,
+                                height=36,
+                                border_radius=11,
+                                bgcolor=AppColors.PRIMARY,
+                                alignment=ft.Alignment.CENTER,
+                                content=ft.Icon(
+                                    ft.Icons.WATER_DROP_OUTLINED,
+                                    color=AppColors.WHITE,
+                                    size=19,
+                                ),
                             ),
-                            self.ts_value,
+                            ft.Column(
+                                spacing=1,
+                                controls=[
+                                    ft.Text(
+                                        "Câmara úmida",
+                                        size=14,
+                                        weight=ft.FontWeight.BOLD,
+                                        color=AppColors.TEXT_PRIMARY,
+                                    ),
+                                    ft.Text(
+                                        "Condição principal do ensaio",
+                                        size=10,
+                                        color=AppColors.TEXT_SECONDARY,
+                                    ),
+                                ],
+                            ),
                         ],
                     ),
-                    ft.Text(
-                        "Câmara úmida",
-                        size=13,
-                        weight=ft.FontWeight.BOLD,
-                        color=AppColors.PRIMARY,
-                    ),
-                    ft.Row(
-                        spacing=10,
+                    ft.ResponsiveRow(
+                        spacing=6,
+                        run_spacing=4,
                         controls=[
                             _condition_item(
-                                ft.Icons.THERMOSTAT, "Temperatura", self.chamber_temperature
+                                ft.Icons.THERMOSTAT,
+                                "Temperatura",
+                                self.chamber_temperature,
                             ),
-                            _condition_item(ft.Icons.WATER_DROP, "Umidade", self.chamber_humidity),
+                            _condition_item(
+                                ft.Icons.WATER_DROP,
+                                "Umidade",
+                                self.chamber_humidity,
+                            ),
                             _condition_item(
                                 ft.Icons.SCHEDULE,
                                 "Permanência",
                                 self.chamber_duration,
                                 self.chamber_duration_detail,
+                                col={"xs": 12},
                             ),
                         ],
                     ),
-                    ft.Divider(height=1, color=AppColors.DIVIDER),
-                    ft.Text(
-                        "Secagem",
-                        size=13,
-                        weight=ft.FontWeight.BOLD,
-                        color=AppColors.DRYING,
-                    ),
+                ],
+            ),
+        )
+        drying_card = ft.Container(
+            col={"xs": 12, "lg": 5},
+            border_radius=14,
+            bgcolor=AppColors.DRYING_LIGHT,
+            border=ft.Border.all(1, AppColors.DIVIDER),
+            padding=16,
+            content=ft.Column(
+                spacing=12,
+                horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+                controls=[
                     ft.Row(
-                        spacing=10,
+                        spacing=9,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        controls=[
+                            ft.Container(
+                                width=36,
+                                height=36,
+                                border_radius=11,
+                                bgcolor=AppColors.DRYING,
+                                alignment=ft.Alignment.CENTER,
+                                content=ft.Icon(
+                                    ft.Icons.AIR,
+                                    color=AppColors.WHITE,
+                                    size=19,
+                                ),
+                            ),
+                            ft.Column(
+                                spacing=1,
+                                controls=[
+                                    ft.Text(
+                                        "Secagem",
+                                        size=14,
+                                        weight=ft.FontWeight.BOLD,
+                                        color=AppColors.TEXT_PRIMARY,
+                                    ),
+                                    ft.Text(
+                                        "Etapa posterior, quando aplicável",
+                                        size=10,
+                                        color=AppColors.TEXT_SECONDARY,
+                                    ),
+                                ],
+                            ),
+                        ],
+                    ),
+                    ft.ResponsiveRow(
+                        spacing=6,
+                        run_spacing=4,
                         controls=[
                             _condition_item(
-                                ft.Icons.THERMOSTAT, "Temperatura", self.drying_temperature
+                                ft.Icons.THERMOSTAT,
+                                "Temperatura",
+                                self.drying_temperature,
+                                col={"xs": 12, "sm": 6},
                             ),
                             _condition_item(
                                 ft.Icons.AIR,
                                 "Permanência",
                                 self.drying_duration,
                                 self.drying_duration_detail,
+                                col={"xs": 12, "sm": 6},
                             ),
                         ],
+                    ),
+                ],
+            ),
+        )
+        return ft.Container(
+            bgcolor=AppColors.SURFACE,
+            border_radius=16,
+            border=ft.Border.all(1, AppColors.DIVIDER),
+            padding=22,
+            content=ft.Column(
+                spacing=16,
+                horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+                controls=[
+                    ft.ResponsiveRow(
+                        spacing=14,
+                        run_spacing=12,
+                        controls=[
+                            ft.Container(
+                                col={"xs": 12, "sm": 8},
+                                content=ft.Column(
+                                    spacing=2,
+                                    controls=[
+                                        ft.Text(
+                                            "Prévia da condição",
+                                            size=17,
+                                            weight=ft.FontWeight.BOLD,
+                                            color=AppColors.TEXT_PRIMARY,
+                                        ),
+                                        ft.Text(
+                                            "Resultado calculado antes do salvamento.",
+                                            size=11,
+                                            color=AppColors.TEXT_SECONDARY,
+                                        ),
+                                    ],
+                                ),
+                            ),
+                            ft.Container(
+                                col={"xs": 12, "sm": 4},
+                                alignment=ft.Alignment.CENTER_RIGHT,
+                                content=ft.Container(
+                                    border_radius=12,
+                                    bgcolor=AppColors.PRIMARY,
+                                    padding=ft.Padding.symmetric(
+                                        horizontal=16,
+                                        vertical=10,
+                                    ),
+                                    content=self.ts_value,
+                                ),
+                            ),
+                        ],
+                    ),
+                    ft.ResponsiveRow(
+                        spacing=10,
+                        run_spacing=10,
+                        controls=[chamber_card, drying_card],
                     ),
                     self.rule_reference,
                 ],
             ),
         )
 
+    def _identity_panel(self) -> ft.Container:
+        return ft.Container(
+            bgcolor=AppColors.SURFACE,
+            border_radius=16,
+            border=ft.Border.all(1, AppColors.DIVIDER),
+            padding=22,
+            content=ft.Column(
+                spacing=16,
+                horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+                controls=[
+                    section_heading(
+                        "Identificação",
+                        "Informe cliente, processo, produto e a quantidade física "
+                        "de amostras deste ensaio.",
+                    ),
+                    ft.ResponsiveRow(
+                        spacing=14,
+                        run_spacing=12,
+                        controls=[
+                            ft.Container(
+                                col={"xs": 12, "md": 8, "lg": 12},
+                                content=self.client,
+                            ),
+                            ft.Container(
+                                col={"xs": 12, "md": 4, "lg": 12},
+                                content=self.process_number,
+                            ),
+                            ft.Container(
+                                col={"xs": 12, "md": 8, "lg": 12},
+                                content=self.product,
+                            ),
+                            ft.Container(
+                                col={"xs": 12, "md": 4, "lg": 12},
+                                content=self.sample_quantity,
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        )
+
+    def _notes_panel(self) -> ft.Container:
+        return ft.Container(
+            bgcolor=AppColors.SURFACE,
+            border_radius=16,
+            border=ft.Border.all(1, AppColors.DIVIDER),
+            padding=22,
+            content=ft.Column(
+                spacing=12,
+                horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+                controls=[
+                    ft.Text(
+                        "Informações complementares",
+                        size=15,
+                        weight=ft.FontWeight.BOLD,
+                        color=AppColors.TEXT_PRIMARY,
+                    ),
+                    ft.ResponsiveRow(
+                        controls=[
+                            ft.Container(
+                                col={"xs": 12},
+                                content=self.notes,
+                            )
+                        ]
+                    ),
+                ],
+            ),
+        )
+
+    def _thermal_panel(self) -> ft.Container:
+        return ft.Container(
+            bgcolor=AppColors.SURFACE,
+            border_radius=16,
+            border=ft.Border.all(1, AppColors.DIVIDER),
+            padding=22,
+            content=ft.Column(
+                spacing=16,
+                horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+                controls=[
+                    section_heading(
+                        "Configuração térmica",
+                        "Escolha a origem da condição. O sistema calcula e mostra "
+                        "o resultado antes de permitir o salvamento.",
+                    ),
+                    ft.Container(
+                        bgcolor=AppColors.PAGE_BACKGROUND,
+                        border_radius=12,
+                        border=ft.Border.all(1, AppColors.DIVIDER),
+                        padding=14,
+                        content=ft.Column(
+                            spacing=7,
+                            controls=[
+                                ft.Text(
+                                    "Como a condição será definida?",
+                                    size=13,
+                                    weight=ft.FontWeight.BOLD,
+                                ),
+                                self.mode_group,
+                                ft.Text(
+                                    "Use exatamente a origem registrada no plano "
+                                    "ou informada pelo cliente.",
+                                    size=11,
+                                    color=AppColors.TEXT_SECONDARY,
+                                ),
+                            ],
+                        ),
+                    ),
+                    self.epl,
+                    self.calculated_fields,
+                    self.direct_ts_fields,
+                    self.manual_condition_fields,
+                    self.option_panel,
+                ],
+            ),
+        )
+
     def _build(self) -> ft.Column:
+        left_column_controls: list[ft.Control] = [
+            self._identity_panel(),
+            self._notes_panel(),
+        ]
+        if self._details:
+            left_column_controls.append(
+                ft.Container(
+                    bgcolor=AppColors.SURFACE,
+                    border_radius=16,
+                    border=ft.Border.all(1, AppColors.DIVIDER),
+                    padding=22,
+                    content=ft.ResponsiveRow(
+                        controls=[
+                            ft.Container(
+                                col={"xs": 12},
+                                content=self.change_reason_selector.control,
+                            )
+                        ]
+                    ),
+                )
+            )
         return ft.Column(
             expand=True,
             scroll=ft.ScrollMode.AUTO,
             spacing=20,
+            horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
             controls=[
                 ft.Column(
                     spacing=3,
@@ -453,82 +821,41 @@ class NewTestView:
                     else []
                 ),
                 self.error_banner,
-                ft.Container(
-                    bgcolor=AppColors.SURFACE,
-                    border_radius=16,
-                    padding=22,
-                    content=ft.Column(
-                        spacing=16,
-                        controls=[
-                            ft.Text(
-                                "Identificação",
-                                size=17,
-                                weight=ft.FontWeight.BOLD,
-                                color=AppColors.TEXT_PRIMARY,
+                ft.ResponsiveRow(
+                    spacing=16,
+                    run_spacing=16,
+                    vertical_alignment=ft.CrossAxisAlignment.START,
+                    controls=[
+                        ft.Container(
+                            col={"xs": 12, "lg": 5},
+                            content=ft.Column(
+                                spacing=16,
+                                horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+                                controls=left_column_controls,
                             ),
-                            ft.Row(spacing=14, controls=[self.client, self.process_number]),
-                            ft.Row(spacing=14, controls=[self.product, self.sample_quantity]),
-                            ft.Text(
-                                "Dados térmicos",
-                                size=17,
-                                weight=ft.FontWeight.BOLD,
-                                color=AppColors.TEXT_PRIMARY,
-                            ),
-                            ft.Container(
-                                bgcolor=AppColors.PAGE_BACKGROUND,
-                                border_radius=12,
-                                padding=14,
-                                content=ft.Column(
-                                    spacing=6,
-                                    controls=[
-                                        ft.Text(
-                                            "Como a condição será definida?",
-                                            size=13,
-                                            weight=ft.FontWeight.BOLD,
-                                        ),
-                                        self.mode_group,
-                                        ft.Text(
-                                            "Escolha a origem realmente registrada no plano "
-                                            "ou informada pelo cliente.",
-                                            size=11,
-                                            color=AppColors.TEXT_SECONDARY,
-                                        ),
-                                    ],
-                                ),
-                            ),
-                            ft.Row(spacing=14, controls=[self.epl]),
-                            self.calculated_fields,
-                            self.direct_ts_fields,
-                            self.manual_condition_fields,
-                            self.option_panel,
-                        ],
-                    ),
+                        ),
+                        ft.Container(
+                            col={"xs": 12, "lg": 7},
+                            content=self._thermal_panel(),
+                        ),
+                    ],
                 ),
                 self.result_panel,
                 ft.Container(
-                    bgcolor=AppColors.SURFACE,
-                    border_radius=16,
-                    padding=22,
-                    content=self.notes,
-                ),
-                *(
-                    [
-                        ft.Container(
-                            bgcolor=AppColors.SURFACE,
-                            border_radius=16,
-                            padding=22,
-                            content=self.change_reason,
-                        )
-                    ]
-                    if self._details
-                    else []
-                ),
-                ft.Row(
-                    alignment=ft.MainAxisAlignment.END,
-                    controls=[
-                        ft.Button(content="Cancelar", on_click=lambda _event: self._on_cancel()),
-                        self.save_button,
-                    ],
+                    padding=ft.Padding.only(right=4),
+                    content=ft.Row(
+                        alignment=ft.MainAxisAlignment.END,
+                        wrap=True,
+                        run_spacing=10,
+                        controls=[
+                            ft.Button(
+                                content="Cancelar",
+                                tooltip="Descartar o rascunho e voltar ao Dashboard",
+                                on_click=lambda _event: self._on_cancel(),
+                            ),
+                            self.save_button,
+                        ],
+                    ),
                 ),
                 ft.Container(height=8),
             ],
@@ -539,7 +866,12 @@ class NewTestView:
             spacing=10,
             controls=[
                 ft.Icon(ft.Icons.ERROR_OUTLINE, color=AppColors.DANGER, size=20),
-                ft.Text(message, size=13, color=AppColors.TEXT_PRIMARY),
+                ft.Text(
+                    message,
+                    expand=True,
+                    size=13,
+                    color=AppColors.TEXT_PRIMARY,
+                ),
             ],
         )
         self.error_banner.bgcolor = AppColors.DANGER_LIGHT
@@ -586,14 +918,73 @@ class NewTestView:
         self.notes.value = details.notes or ""
         self._on_mode_change()
 
+    def snapshot_draft(self) -> NewTestDraft:
+        """Captura o formulário sem gravar um ensaio incompleto no banco."""
+
+        fields = {
+            "client": self.client.value,
+            "process_number": self.process_number.value,
+            "product": self.product.value,
+            "sample_quantity": self.sample_quantity.value,
+            "epl": self.epl.value,
+            "tamb": self.tamb.value,
+            "delta_t": self.delta_t.value,
+            "service_temperature": self.service_temperature.value,
+            "ts_reference": self.ts_reference.value,
+            "manual_chamber_temperature": self.manual_chamber_temperature.value,
+            "manual_chamber_humidity": self.manual_chamber_humidity.value,
+            "manual_chamber_duration": self.manual_chamber_duration.value,
+            "manual_drying_required": bool(self.manual_drying_required.value),
+            "manual_drying_temperature": self.manual_drying_temperature.value,
+            "manual_drying_duration": self.manual_drying_duration.value,
+            "notes": self.notes.value,
+            "mode": self.mode_group.value,
+            "option": self.option_group.value,
+        }
+        return NewTestDraft(fields)
+
+    def restore_draft(self, draft: NewTestDraft) -> None:
+        """Restaura os valores após a navegação para Agenda ou outra tela."""
+
+        values = draft.values
+        for name in (
+            "client",
+            "process_number",
+            "product",
+            "sample_quantity",
+            "tamb",
+            "delta_t",
+            "service_temperature",
+            "ts_reference",
+            "manual_chamber_temperature",
+            "manual_chamber_humidity",
+            "manual_chamber_duration",
+            "manual_drying_temperature",
+            "manual_drying_duration",
+            "notes",
+        ):
+            control = getattr(self, name)
+            value = values.get(name)
+            if isinstance(value, str):
+                control.value = value
+        epl = values.get("epl")
+        self.epl.value = epl if isinstance(epl, str) and epl else None
+        mode = values.get("mode")
+        if isinstance(mode, str):
+            self.mode_group.value = mode
+        option = values.get("option")
+        self.option_group.value = option if isinstance(option, str) else None
+        self.manual_drying_required.value = bool(values.get("manual_drying_required", False))
+        self._on_mode_change()
+
     def _refresh(self) -> None:
-        """Atualiza a tela quando o controle já pertence a uma página Flet."""
+        """Atualiza somente a condição, preservando a posição real da rolagem."""
 
         try:
-            _page = self.root.page
+            page = self.root.page
         except RuntimeError:
             return
-        self.root.update()
+        page.update(*self._refresh_targets)
 
     def _on_tamb_change(self, _event: object | None = None) -> None:
         self.tamb.value = normalize_decimal_input(self.tamb.value, allow_negative=True)
@@ -604,9 +995,10 @@ class NewTestView:
         self._recalculate()
 
     def _on_sample_quantity_change(self, _event: object | None = None) -> None:
-        normalized = "".join(
+        digits = "".join(
             character for character in self.sample_quantity.value if character.isdigit()
         )
+        normalized = digits.lstrip("0")[:2]
         if normalized == self.sample_quantity.value:
             return
         self.sample_quantity.value = normalized
@@ -877,14 +1269,13 @@ class NewTestView:
             "manual_drying_duration_hours": self.manual_drying_duration.value,
         }
         if self._details is not None:
-            if not self.change_reason.value.strip():
-                self.change_reason.error = "Informe o motivo da alteração."
+            if not self.change_reason_selector.validate(message="Selecione o motivo da alteração."):
                 self._show_error("O motivo é obrigatório para preservar a rastreabilidade.")
                 self._refresh()
                 return
             command: CreateClimateTestCommand | UpdateClimateTestCommand = UpdateClimateTestCommand(
                 **common_values,
-                reason=self.change_reason.value,
+                reason=self.change_reason_selector.value(),
             )
         else:
             command = CreateClimateTestCommand(**common_values)
@@ -899,10 +1290,11 @@ def build_new_test_view(
     *,
     on_cancel: Callable[[], None],
     on_save: Callable[[CreateClimateTestCommand], None],
+    draft: NewTestDraft | None = None,
 ) -> ft.Column:
     """Cria uma nova instância limpa do formulário."""
 
-    return NewTestView(on_cancel=on_cancel, on_save=on_save).root
+    return NewTestView(on_cancel=on_cancel, on_save=on_save, draft=draft).root
 
 
 def build_edit_test_view(

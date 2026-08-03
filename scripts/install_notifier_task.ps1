@@ -5,7 +5,8 @@ param(
 $ErrorActionPreference = "Stop"
 $taskName = "ClimateTestManager-Notifications"
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$packagedNotifier = Join-Path $projectRoot "dist\ClimateTestNotifier.exe"
+$releaseNotifier = Join-Path $projectRoot "dist\ClimateTestManager-v0.5.0\ClimateTestNotifier.exe"
+$legacyPackagedNotifier = Join-Path $projectRoot "dist\ClimateTestNotifier.exe"
 $developmentPython = Join-Path $projectRoot ".venv\Scripts\pythonw.exe"
 $developmentEntry = Join-Path $projectRoot "src\notifier.py"
 
@@ -13,8 +14,11 @@ if ($DataDirectory -and $DataDirectory -match "OneDrive") {
     throw "O banco SQLite ativo nao deve ficar dentro do OneDrive. Use o OneDrive somente para backups."
 }
 
-if (Test-Path -LiteralPath $packagedNotifier) {
-    $taskCommand = "`"$packagedNotifier`""
+if (Test-Path -LiteralPath $releaseNotifier) {
+    $taskCommand = "`"$releaseNotifier`""
+}
+elseif (Test-Path -LiteralPath $legacyPackagedNotifier) {
+    $taskCommand = "`"$legacyPackagedNotifier`""
 }
 elseif (
     (Test-Path -LiteralPath $developmentPython) -and

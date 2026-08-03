@@ -13,6 +13,19 @@ from climatetest_manager.database.session import create_session_factory, initial
 
 
 class DatabaseTests(unittest.TestCase):
+    def test_refuses_to_open_a_corrupted_database(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            database_path = Path(temporary_directory) / "corrupted.db"
+            database_path.write_bytes(b"nao e um banco sqlite")
+
+            with self.assertRaisesRegex(RuntimeError, "verificação de integridade"):
+                initialize_database(database_path)
+
+            # No Windows, a remoção falha se a tentativa de abertura tiver
+            # deixado uma conexão SQLite pendente.
+            database_path.unlink()
+            self.assertFalse(database_path.exists())
+
     def test_initializes_schema_and_persists_audit_event(self) -> None:
         with TemporaryDirectory() as temporary_directory:
             database_path = Path(temporary_directory) / "test.db"
@@ -30,8 +43,21 @@ class DatabaseTests(unittest.TestCase):
                         "notifier_run_state",
                         "resource_pauses",
                         "climate_test_pauses",
+                        "users",
+                        "user_sessions",
+                        "security_audit_events",
+                        "system_incidents",
                     },
                 )
+                self.assertIn(
+                    "profile_photo_b64",
+                    {column["name"] for column in inspect(engine).get_columns("users")},
+                )
+                notification_columns = {
+                    column["name"] for column in inspect(engine).get_columns("notification_events")
+                }
+                self.assertIn("desktop_sent_at", notification_columns)
+                self.assertIn("email_sent_at", notification_columns)
 
                 climate_test = ClimateTestRecord(
                     client="Cliente de teste",

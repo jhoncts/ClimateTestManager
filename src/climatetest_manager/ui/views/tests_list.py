@@ -57,6 +57,8 @@ class TestsListView:
         self.search = ft.TextField(
             hint_text="Pesquisar cliente, processo ou produto",
             prefix_icon=ft.Icons.SEARCH,
+            max_length=160,
+            counter="",
             border_radius=10,
             border_color=AppColors.DIVIDER,
             bgcolor=AppColors.SURFACE,
@@ -72,7 +74,6 @@ class TestsListView:
             border_color=AppColors.DIVIDER,
             bgcolor=AppColors.SURFACE,
             on_select=self._refresh,
-            width=220,
         )
         self.results = ft.Column(spacing=10)
         self.result_count = ft.Text("", size=11, color=AppColors.TEXT_SECONDARY)
@@ -83,6 +84,8 @@ class TestsListView:
             controls=[
                 ft.Row(
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    wrap=True,
+                    run_spacing=10,
                     controls=[
                         ft.Column(
                             spacing=3,
@@ -101,6 +104,8 @@ class TestsListView:
                             ],
                         ),
                         ft.Row(
+                            wrap=True,
+                            run_spacing=8,
                             controls=[
                                 ft.Button(
                                     content="Exportar resultados (CSV)",
@@ -114,11 +119,24 @@ class TestsListView:
                                     color=AppColors.WHITE,
                                     on_click=lambda _event: on_new_test(),
                                 ),
-                            ]
+                            ],
                         ),
                     ],
                 ),
-                ft.Row(spacing=12, controls=[self.search, self.filter]),
+                ft.ResponsiveRow(
+                    spacing=12,
+                    run_spacing=10,
+                    controls=[
+                        ft.Container(
+                            col={"xs": 12, "md": 8},
+                            content=self.search,
+                        ),
+                        ft.Container(
+                            col={"xs": 12, "md": 4},
+                            content=self.filter,
+                        ),
+                    ],
+                ),
                 self.result_count,
                 self.results,
             ],
@@ -179,22 +197,24 @@ class TestsListView:
             border_radius=14,
             padding=16,
             on_click=lambda _event, test_id=item.id: self._on_select(test_id),
-            content=ft.Row(
-                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            content=ft.ResponsiveRow(
+                spacing=14,
+                run_spacing=10,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 controls=[
                     ft.Container(
-                        expand=4,
+                        col={"xs": 12, "md": 5},
                         content=ft.Column(
                             spacing=3,
                             controls=[
                                 ft.Text(
-                                    f"#{item.id} • {item.client}",
+                                    f"{item.client} / {item.process_number}",
                                     size=14,
                                     weight=ft.FontWeight.BOLD,
                                     color=AppColors.TEXT_PRIMARY,
                                 ),
                                 ft.Text(
-                                    f"{item.process_number} • {item.product}",
+                                    f"Ensaio #{item.id} • {item.product}",
                                     size=12,
                                     color=AppColors.TEXT_SECONDARY,
                                 ),
@@ -202,7 +222,7 @@ class TestsListView:
                         ),
                     ),
                     ft.Container(
-                        expand=3,
+                        col={"xs": 12, "md": 4},
                         alignment=ft.Alignment.CENTER_LEFT,
                         content=ft.Column(
                             spacing=2,
@@ -228,10 +248,10 @@ class TestsListView:
                         ),
                     ),
                     ft.Container(
-                        width=210,
+                        col={"xs": 12, "md": 3},
                         alignment=ft.Alignment.CENTER_RIGHT,
                         content=ft.Column(
-                            horizontal_alignment=ft.CrossAxisAlignment.END,
+                            horizontal_alignment=ft.CrossAxisAlignment.START,
                             spacing=4,
                             controls=[
                                 _badge(

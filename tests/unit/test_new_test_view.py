@@ -2,6 +2,8 @@
 
 import unittest
 
+import flet as ft
+
 from climatetest_manager.domain.enums import ConditionInputMode
 from climatetest_manager.services.climate_tests import CreateClimateTestCommand
 from climatetest_manager.ui.views.new_test import NewTestView
@@ -92,6 +94,33 @@ class NewTestViewTests(unittest.TestCase):
 
         self.assertEqual(view.sample_quantity.value, "12")
         self.assertIsNone(view.sample_quantity.input_filter)
+        self.assertEqual(view.sample_quantity.max_length, 2)
+
+    def test_sample_quantity_removes_leading_zero(self) -> None:
+        view = NewTestView(on_cancel=lambda: None, on_save=lambda _command: None)
+        view.sample_quantity.value = "01"
+
+        view._on_sample_quantity_change()
+
+        self.assertEqual(view.sample_quantity.value, "1")
+
+    def test_draft_restores_form_after_navigation(self) -> None:
+        view = NewTestView(on_cancel=lambda: None, on_save=lambda _command: None)
+        view.client.value = "Cliente temporário"
+        view.process_number.value = "26123.9"
+        view.product.value = "Produto temporário"
+        view.sample_quantity.value = "4"
+
+        restored = NewTestView(
+            on_cancel=lambda: None,
+            on_save=lambda _command: None,
+            draft=view.snapshot_draft(),
+        )
+
+        self.assertEqual(restored.client.value, "Cliente temporário")
+        self.assertEqual(restored.process_number.value, "26123.9")
+        self.assertEqual(restored.product.value, "Produto temporário")
+        self.assertEqual(restored.sample_quantity.value, "4")
 
     def test_submit_passes_filled_command_to_callback(self) -> None:
         received: list[CreateClimateTestCommand] = []
@@ -140,6 +169,44 @@ class NewTestViewTests(unittest.TestCase):
 
         self.assertEqual(len(radios), 3)
         self.assertEqual(radios[-1].label, "Personalizado")
+        self.assertIsInstance(view.mode_group.content, ft.Row)
+        self.assertTrue(view.mode_group.content.wrap)
+
+    def test_uses_full_width_and_balanced_preview_cards(self) -> None:
+        view = NewTestView(on_cancel=lambda: None, on_save=lambda _command: None)
+
+        self.assertEqual(
+            view.root.horizontal_alignment,
+            ft.CrossAxisAlignment.STRETCH,
+        )
+        self.assertIsNotNone(view.result_panel.border)
+        result_layouts = [
+            control
+            for control in view.result_panel.content.controls
+            if isinstance(control, ft.ResponsiveRow)
+        ]
+        phase_layout = result_layouts[-1]
+        self.assertEqual(len(phase_layout.controls), 2)
+        self.assertEqual(phase_layout.controls[0].col["lg"], 7)
+        self.assertEqual(phase_layout.controls[1].col["lg"], 5)
+
+    def test_permanence_detail_wraps_instead_of_using_ellipsis(self) -> None:
+        view = NewTestView(on_cancel=lambda: None, on_save=lambda _command: None)
+        view.epl.value = "Gb"
+        view.tamb.value = "40"
+        view.delta_t.value = "35"
+        view._recalculate()
+
+        self.assertFalse(view.chamber_duration_detail.no_wrap)
+        self.assertIsNone(view.chamber_duration_detail.max_lines)
+        self.assertNotEqual(
+            view.chamber_duration_detail.overflow,
+            ft.TextOverflow.ELLIPSIS,
+        )
+        self.assertEqual(
+            view.chamber_duration_detail.value,
+            "14 dias nominais • limite: 15 dias e 6 horas",
+        )
 
     def test_custom_mode_accepts_long_duration_but_rejects_temperature_over_100(self) -> None:
         view = NewTestView(on_cancel=lambda: None, on_save=lambda _command: None)

@@ -2,7 +2,7 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import exists, func, select
 from sqlalchemy.orm import Session, joinedload, selectinload, sessionmaker
@@ -14,6 +14,7 @@ from climatetest_manager.database.models import (
     NotificationEvent,
     NotifierRunState,
     ResourcePauseRecord,
+    SystemIncidentRecord,
 )
 from climatetest_manager.domain.enums import EquipmentResource, TestSituation
 
@@ -45,6 +46,8 @@ class DueNotification:
     id: int
     title: str
     message: str
+    desktop_sent_at: datetime | None = None
+    email_sent_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +82,23 @@ class ResourcePauseState:
     paused_at: datetime
     reason: str
     affected_count: int
+
+
+@dataclass(frozen=True, slots=True)
+class SystemIncidentSummary:
+    """Falha do sistema pronta para consulta sem expor o modelo persistente."""
+
+    id: int
+    category: str
+    severity: str
+    description: str
+    immediate_action: str
+    status: str
+    reported_by: str
+    reported_at: datetime
+    corrective_action: str | None
+    resolved_by: str | None
+    resolved_at: datetime | None
 
 
 class ClimateTestRepository:
@@ -294,9 +314,37 @@ class ClimateTestRepository:
                 .order_by(NotificationEvent.scheduled_for_at, NotificationEvent.id)
             )
             return [
-                DueNotification(item.id, item.title, item.message)
+                DueNotification(
+                    item.id,
+                    item.title,
+                    item.message,
+                    item.desktop_sent_at,
+                    item.email_sent_at,
+                )
                 for item in session.scalars(statement)
             ]
+
+    def mark_notification_channel_sent(
+        self,
+        notification_id: int,
+        *,
+        channel: str,
+        sent_at: datetime,
+    ) -> None:
+        """Marca um canal sem provocar repetição do outro em uma nova tentativa."""
+
+        with self._session_factory() as session:
+            event = session.get(NotificationEvent, notification_id)
+            if event is None:
+                return
+            if channel == "desktop":
+                event.desktop_sent_at = sent_at
+            elif channel == "email":
+                event.email_sent_at = sent_at
+            else:
+                raise ValueError("Canal de notificação inválido.")
+            event.error_message = None
+            session.commit()
 
     def mark_notification_sent(
         self,
@@ -312,6 +360,8 @@ class ClimateTestRepository:
             if event is None:
                 return
             event.sent_at = sent_at
+            if sent_at is not None and event.desktop_sent_at is None:
+                event.desktop_sent_at = sent_at
             event.error_message = error_message
             session.commit()
 
@@ -371,4 +421,79 @@ class ClimateTestRepository:
                     reason=event.reason,
                 )
                 for event, record in session.execute(statement)
+            ]
+
+    def report_system_incident(
+        self,
+        *,
+        category: str,
+        severity: str,
+        description: str,
+        immediate_action: str,
+        reported_by: str,
+    ) -> int:
+        """Registra a falha e a contenção inicial sem alterar registros anteriores."""
+
+        record = SystemIncidentRecord(
+            category=category,
+            severity=severity,
+            description=description,
+            immediate_action=immediate_action,
+            reported_by=reported_by,
+        )
+        with self._session_factory() as session:
+            session.add(record)
+            session.commit()
+            return record.id
+
+    def resolve_system_incident(
+        self,
+        incident_id: int,
+        *,
+        corrective_action: str,
+        resolved_by: str,
+        resolved_at: datetime | None = None,
+    ) -> None:
+        """Encerra uma falha mantendo a descrição e a ação imediata originais."""
+
+        with self._session_factory() as session:
+            record = session.get(SystemIncidentRecord, incident_id)
+            if record is None:
+                raise LookupError(f"Falha do sistema #{incident_id} não encontrada.")
+            if record.status == "resolved":
+                raise ValueError("Esta falha já foi encerrada.")
+            record.status = "resolved"
+            record.corrective_action = corrective_action
+            record.resolved_by = resolved_by
+            record.resolved_at = resolved_at or datetime.now(UTC)
+            session.commit()
+
+    def list_system_incidents(self, *, limit: int = 20) -> list[SystemIncidentSummary]:
+        """Lista primeiro as falhas abertas e depois as mais recentes."""
+
+        with self._session_factory() as session:
+            statement = (
+                select(SystemIncidentRecord)
+                .order_by(
+                    (SystemIncidentRecord.status == "resolved").asc(),
+                    SystemIncidentRecord.reported_at.desc(),
+                    SystemIncidentRecord.id.desc(),
+                )
+                .limit(limit)
+            )
+            return [
+                SystemIncidentSummary(
+                    id=record.id,
+                    category=record.category,
+                    severity=record.severity,
+                    description=record.description,
+                    immediate_action=record.immediate_action,
+                    status=record.status,
+                    reported_by=record.reported_by,
+                    reported_at=record.reported_at,
+                    corrective_action=record.corrective_action,
+                    resolved_by=record.resolved_by,
+                    resolved_at=record.resolved_at,
+                )
+                for record in session.scalars(statement)
             ]

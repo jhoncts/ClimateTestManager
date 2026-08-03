@@ -10,7 +10,12 @@ from sqlalchemy import select
 
 from climatetest_manager.database.models import ClimateTestRecord
 from climatetest_manager.database.session import create_session_factory, initialize_database
-from climatetest_manager.domain.enums import ConditionInputMode, EquipmentResource
+from climatetest_manager.domain.audit import MAX_REASON_LENGTH
+from climatetest_manager.domain.enums import (
+    ConditionInputMode,
+    EquipmentResource,
+    OperationalTimestamp,
+)
 from climatetest_manager.repositories.climate_tests import ClimateTestRepository
 from climatetest_manager.services.climate_tests import (
     ClimateTestService,
@@ -85,6 +90,12 @@ class ClimateTestServiceTests(unittest.TestCase):
     def test_rejects_missing_required_field(self) -> None:
         with self.assertRaisesRegex(ClimateTestValidationError, "Cliente"):
             self.service.create(_command(client="  "))
+
+    def test_sample_quantity_is_limited_to_two_digits(self) -> None:
+        with self.assertRaisesRegex(ClimateTestValidationError, "entre 1 e 99"):
+            self.service.create(_command(sample_quantity="100"))
+        with self.assertRaisesRegex(ClimateTestValidationError, "maior que zero"):
+            self.service.create(_command(sample_quantity="0"))
 
     def test_dashboard_starts_without_active_tests(self) -> None:
         self.service.create(_command())
@@ -353,11 +364,87 @@ class ClimateTestServiceTests(unittest.TestCase):
             details.chamber_nominal_end_at,
             corrected_start + timedelta(hours=504),
         )
-        self.assertEqual(details.audit_events[-1].action, "Entrada da câmara corrigida")
+        self.assertEqual(
+            details.audit_events[-1].action,
+            "Entrada da câmara climática corrigida",
+        )
         self.assertEqual(
             details.audit_events[-1].reason,
             "Registro lançado duas horas depois",
         )
+
+    def test_corrects_all_four_operational_timestamps_independently(self) -> None:
+        test_id = self.service.create(_command(process_number="26133.2"))
+        chamber_start = datetime(2026, 5, 27, 10, 0)
+        wrong_drying_start = datetime(2026, 7, 1, 12, 0)
+        self.service.start_chamber(test_id, chamber_start)
+        self.service.start_drying(test_id, wrong_drying_start)
+        self.service.finish(test_id, datetime(2026, 7, 22, 8, 0))
+
+        corrected_chamber_start = datetime(2026, 5, 27, 9, 0)
+        corrected_chamber_end = datetime(2026, 6, 17, 10, 0)
+        corrected_drying_start = datetime(2026, 6, 17, 12, 0)
+        corrected_drying_end = datetime(2026, 7, 1, 12, 0)
+        corrections = (
+            (OperationalTimestamp.CHAMBER_STARTED, corrected_chamber_start),
+            (OperationalTimestamp.CHAMBER_ENDED, corrected_chamber_end),
+            (OperationalTimestamp.DRYING_STARTED, corrected_drying_start),
+            (OperationalTimestamp.DRYING_ENDED, corrected_drying_end),
+        )
+        for timestamp, value in corrections:
+            self.service.change_operational_timestamp(
+                test_id,
+                timestamp,
+                value,
+                "Correção após conferência documental",
+            )
+
+        details = self.service.get_details(test_id)
+        self.assertEqual(details.chamber_started_at, corrected_chamber_start)
+        self.assertEqual(details.chamber_ended_at, corrected_chamber_end)
+        self.assertEqual(details.drying_started_at, corrected_drying_start)
+        self.assertEqual(details.drying_ended_at, corrected_drying_end)
+        self.assertEqual(
+            details.drying_nominal_end_at,
+            corrected_drying_start + timedelta(hours=336),
+        )
+        self.assertEqual(details.finished_at, corrected_drying_end)
+        self.assertEqual(
+            [event.action for event in details.audit_events[-4:]],
+            [
+                "Entrada da câmara climática corrigida",
+                "Saída da câmara climática corrigida",
+                "Entrada da câmara seca corrigida",
+                "Saída da câmara seca corrigida",
+            ],
+        )
+
+    def test_rejects_timestamp_correction_that_breaks_stage_order(self) -> None:
+        test_id = self.service.create(_command(process_number="26133.3"))
+        chamber_start = datetime(2026, 5, 27, 10, 0)
+        drying_start = datetime(2026, 7, 1, 12, 0)
+        self.service.start_chamber(test_id, chamber_start)
+        self.service.start_drying(test_id, drying_start)
+
+        with self.assertRaisesRegex(
+            ClimateTestValidationError,
+            "não pode ser anterior à saída",
+        ):
+            self.service.change_operational_timestamp(
+                test_id,
+                OperationalTimestamp.CHAMBER_ENDED,
+                datetime(2026, 7, 1, 13, 0),
+                "Erro de digitação",
+            )
+
+    def test_limits_audit_reasons_to_a_brief_description(self) -> None:
+        test_id = self.service.create(_command(process_number="26133.4"))
+
+        with self.assertRaisesRegex(
+            ClimateTestValidationError,
+            f"no máximo {MAX_REASON_LENGTH}",
+        ):
+            self.service.cancel(test_id, "x" * (MAX_REASON_LENGTH + 1))
 
     def test_custom_temperature_and_humidity_must_be_between_zero_and_100(self) -> None:
         command = CreateClimateTestCommand(

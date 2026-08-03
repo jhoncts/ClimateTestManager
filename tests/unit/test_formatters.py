@@ -1,6 +1,7 @@
 """Testes das convenções de apresentação da interface."""
 
 import unittest
+from datetime import datetime
 from decimal import Decimal
 
 from climatetest_manager.domain.enums import ConditionInputMode
@@ -9,7 +10,9 @@ from climatetest_manager.ui.formatters import (
     format_decimal,
     format_duration_detail,
     format_hours_as_days,
+    format_operational_date,
     format_thermal_summary,
+    format_weekday,
     normalize_date_input,
     normalize_decimal_input,
     normalize_time_input,
@@ -52,6 +55,17 @@ class FormatterTests(unittest.TestCase):
         self.assertEqual(
             format_duration_detail(504, 30),
             "21 dias nominais • limite: 22 dias e 6 horas",
+        )
+
+    def test_formats_weekday_without_using_windows_locale(self) -> None:
+        monday = datetime(2026, 8, 3, 9, 24)
+        sunday = datetime(2026, 8, 9, 15, 30)
+
+        self.assertEqual(format_weekday(monday), "segunda-feira")
+        self.assertEqual(format_weekday(sunday), "domingo")
+        self.assertEqual(
+            format_operational_date(monday),
+            ("segunda-feira", "03/08/2026", "09:24"),
         )
 
     def test_rejects_negative_duration(self) -> None:

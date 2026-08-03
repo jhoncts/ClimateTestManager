@@ -154,6 +154,8 @@ class NotificationEvent(Base):
     title: Mapped[str] = mapped_column(String(200))
     message: Mapped[str] = mapped_column(Text)
     scheduled_for_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    desktop_sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    email_sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -217,3 +219,95 @@ class ClimateTestPauseRecord(Base):
 
     climate_test: Mapped[ClimateTestRecord] = relationship(back_populates="pause_intervals")
     resource_pause: Mapped[ResourcePauseRecord] = relationship(back_populates="affected_tests")
+
+
+class UserRecord(Base):
+    """Conta local usada para autenticação e identificação das operações."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(String(40))
+    normalized_username: Mapped[str] = mapped_column(String(40), unique=True, index=True)
+    email: Mapped[str] = mapped_column(String(254))
+    normalized_email: Mapped[str] = mapped_column(String(254), unique=True, index=True)
+    first_name: Mapped[str] = mapped_column(String(80))
+    last_name: Mapped[str] = mapped_column(String(120))
+    password_hash: Mapped[str] = mapped_column(String(300))
+    profile_photo_b64: Mapped[str | None] = mapped_column(Text, nullable=True)
+    role: Mapped[str] = mapped_column(String(24), default="operator")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    onboarding_completed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=utc_now,
+        onupdate=utc_now,
+    )
+
+    sessions: Mapped[list[UserSessionRecord]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+    )
+
+
+class UserSessionRecord(Base):
+    """Sessão local revogável; somente o resumo criptográfico do token é salvo."""
+
+    __tablename__ = "user_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    user: Mapped[UserRecord] = relationship(back_populates="sessions")
+
+
+class SecurityAuditEvent(Base):
+    """Trilha de segurança separada dos eventos técnicos de cada ensaio."""
+
+    __tablename__ = "security_audit_events"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    actor_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    actor_label: Mapped[str] = mapped_column(String(180))
+    action: Mapped[str] = mapped_column(String(100))
+    target_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    details: Mapped[str | None] = mapped_column(Text, nullable=True)
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class SystemIncidentRecord(Base):
+    """Falha do sistema e tratamento adotado, preservados para auditoria."""
+
+    __tablename__ = "system_incidents"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    category: Mapped[str] = mapped_column(String(80), index=True)
+    severity: Mapped[str] = mapped_column(String(24), index=True)
+    description: Mapped[str] = mapped_column(Text)
+    immediate_action: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(24), default="open", index=True)
+    reported_by: Mapped[str] = mapped_column(String(180))
+    reported_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    corrective_action: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resolved_by: Mapped[str | None] = mapped_column(String(180), nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

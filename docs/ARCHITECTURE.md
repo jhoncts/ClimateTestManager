@@ -37,15 +37,23 @@ pacote realmente instalado.
 
 ### Banco fora da pasta do programa
 
-Em produção, o SQLite será criado na pasta de dados do usuário. No Windows, o caminho esperado é
-semelhante a:
+Antes da primeira inicialização do SQLite, o responsável confirma uma pasta local. O caminho
+padrão sugerido no Windows é semelhante a:
 
 ```text
 %LOCALAPPDATA%\ClimateTestManager\climatetest_manager.db
 ```
 
 Isso evita problemas de permissão em `Program Files` e impede que uma atualização do executável
-apague os dados do laboratório.
+apague os dados do laboratório. A decisão fica em `storage.json`, na pasta de configuração do
+usuário, para que o aplicativo e o notificador encontrem o mesmo banco. A variável
+`CLIMATETEST_DATA_DIR` continua tendo prioridade somente para desenvolvimento e validações
+isoladas.
+
+O assistente rejeita OneDrive, Dropbox, Google Drive, iCloud e caminhos de rede como local do
+banco aberto. Se um banco da versão anterior existir no local padrão e o responsável escolher
+outra pasta local vazia, a API de backup do SQLite cria uma cópia consistente sem apagar a
+origem.
 
 ### Fotografia da regra normativa
 
@@ -108,14 +116,72 @@ CMD. Ele abre o banco, entrega somente avisos vencidos e ainda não enviados, re
 em `notifier_run_state` e termina. Portanto, não existe um segundo processo mantendo o banco aberto
 o tempo todo.
 
-O contrato `NotificationProvider` prepara novos canais. A v0.4.0 implementa somente o toast local;
-e-mail e calendário automático exigirão login e autorização OAuth.
+O contrato `NotificationProvider` atende separadamente o toast local e o SMTP. As colunas
+`desktop_sent_at` e `email_sent_at` tornam os canais idempotentes: uma falha no SMTP não repete um
+toast já entregue. Os destinatários são os e-mails das contas ativas.
+
+A configuração SMTP é restrita ao administrador. Os campos não sensíveis ficam em
+`preferences.json`; a senha é protegida pela DPAPI do Windows e vinculada à conta que realizou a
+configuração. A senha protegida é prioritária; `CLIMATETEST_SMTP_PASSWORD` serve somente como
+alternativa de teste quando ainda não existe credencial salva. Senhas de app do Gmail são
+normalizadas sem os espaços usados apenas para apresentação. A interface oferece modelos de
+provedor e reutiliza o mesmo tutorial no diálogo de configuração e no Guia de uso; o envio
+continua centralizado no agente local. O envelope informa explicitamente remetente e
+destinatários, analisa recusas devolvidas por `send_message` e adiciona `Date` e `Message-ID`. O
+teste inclui o remetente como cópia diagnóstica e mostra um comprovante de aceitação; os eventos
+automáticos permanecem restritos aos e-mails das contas ativas.
+
+As correções de horários convergem para `change_operational_timestamp`. O caso de uso recebe um
+dos quatro identificadores controlados, valida a ordem entre as etapas, recalcula somente o prazo
+dependente de uma entrada e grava os valores anterior e novo na auditoria. A interface não envia
+um rótulo ambíguo como “entrada da câmara”.
+
+No pacote do Windows, o aplicativo resolve `ClimateTestNotifier.exe` ao lado do executável
+principal e cria a tarefa diretamente com `schtasks.exe`. Em desenvolvimento, aceita o notificador
+gerado em `dist` ou `pythonw.exe`. A ativação não depende de PowerShell nem da árvore do código.
 
 ### Evolução do SQLite
 
 Antes de `create_all()`, uma migração idempotente acrescenta colunas ausentes aos bancos antigos.
 O SQLite usa WAL e `busy_timeout` para coordenar as transações curtas da janela principal e do
-notificador. O arquivo ativo permanece local; backups fechados podem ser copiados ao OneDrive.
+notificador. O arquivo ativo permanece local; somente backups fechados podem ser copiados ao
+OneDrive.
+
+Na abertura, a API nativa de backup do SQLite cria no máximo uma cópia por dia em `backups`. Para
+um banco existente, a tentativa acontece antes da migração; para um banco novo, após a criação.
+Somente as 30 cópias automáticas mais recentes são mantidas. Quando existe uma pasta externa
+configurada, a mesma API cria ali uma segunda cópia diária consistente, também com retenção de 30
+arquivos. O notificador executa essa verificação diária mesmo quando a janela principal está
+fechada. Depois de gravar a cópia, o serviço abre o arquivo em modo somente leitura, executa
+`PRAGMA quick_check` e `PRAGMA foreign_key_check`, calcula SHA-256 e grava um manifesto JSON ao
+lado do `.db`. Uma cópia diária inválida é recriada a partir do banco ativo. O banco ativo também
+passa por `quick_check` antes de qualquer migração e não é aberto quando a verificação falha. O
+backup manual continua permitindo que o usuário escolha outro destino.
+
+### Falhas do sistema
+
+`system_incidents` preserva categoria, impacto, descrição, ação imediata, autor e data do relato.
+Qualquer usuário autenticado pode registrar uma falha. Somente um Administrador pode encerrá-la,
+acrescentando ação corretiva, responsável e data sem substituir a descrição original. O registro
+apoia a avaliação prevista em 7.10, 7.11.3(e) e 8.7 da ABNT NBR ISO/IEC 17025:2017; a decisão sobre
+resultados afetados continua pertencendo ao procedimento de trabalho não conforme do laboratório.
+
+### Autenticação e autorização local
+
+`AuthenticationService` concentra validação de identidade, senha, sessão e perfis. A UI nunca
+consulta diretamente o hash da senha. `UserRepository` persiste:
+
+- `users`: identidade, perfil, status, conclusão do primeiro acesso e foto opcional;
+- `user_sessions`: somente SHA-256 do token opaco, validade e revogação;
+- `security_audit_events`: eventos de login e administração de contas.
+
+As senhas usam PBKDF2-HMAC-SHA256, salt aleatório por conta e 600 mil iterações. O primeiro
+usuário é administrador. A sessão comum dura até 12 horas; **Manter conectado** usa 30 dias.
+Alteração de senha, redefinição ou desativação revoga as sessões anteriores.
+
+`ClimateTestService` recebe um `actor_provider`. Assim, o nome do usuário é resolvido no instante
+de cada transação e gravado junto da ação técnica, sem introduzir dependência da autenticação nas
+regras normativas.
 
 ### Compatibilidade do campo Marcação Ex
 
@@ -126,9 +192,8 @@ migrações versionadas, evitando exigir que o usuário apague ou recrie o banco
 
 ## Próximas evoluções
 
-- Cadastro, login por usuário ou e-mail, sessão persistente opcional, saída da conta, perfis e
-  autorização de ações. A persistência guardará uma sessão revogável, nunca a senha em texto puro.
-- Tutorial inicial e ajuda contextual resumida para as operações do sistema.
 - Migrações Alembic versionadas para mudanças estruturais mais complexas.
-- Canais Microsoft 365 de e-mail e calendário por OAuth.
-- Política de backup automático com teste periódico de restauração.
+- Assistente de restauração com teste periódico das cópias.
+- Transferência auditável da condição de administrador principal. Na v0.5.0 todos os
+  administradores ativos têm as mesmas permissões e o sistema apenas protege a existência de ao
+  menos um administrador.
