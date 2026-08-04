@@ -14,6 +14,7 @@ from climatetest_manager.database.models import (
     NotificationEvent,
     ResourcePauseRecord,
 )
+from climatetest_manager.domain.audit import MAX_REASON_LENGTH
 from climatetest_manager.domain.climate_rules import (
     DEFAULT_TAMB_MAX_C,
     DURATION_POSITIVE_TOLERANCE_HOURS,
@@ -30,6 +31,7 @@ from climatetest_manager.domain.enums import (
     ConditionInputMode,
     DeadlineCondition,
     EquipmentResource,
+    OperationalTimestamp,
     TestOption,
     TestSituation,
 )
@@ -232,6 +234,17 @@ def _required(value: str, *, label: str) -> str:
     return normalized
 
 
+def _brief_reason(value: str, *, label: str) -> str:
+    """Valida justificativas curtas usadas no histórico técnico."""
+
+    normalized = _required(value, label=label)
+    if len(normalized) > MAX_REASON_LENGTH:
+        raise ClimateTestValidationError(
+            f"{label} deve ter no máximo {MAX_REASON_LENGTH} caracteres."
+        )
+    return normalized
+
+
 def _numeric_text(value: str) -> str:
     """Aceita a vírgula decimal usada habitualmente no Brasil."""
 
@@ -243,6 +256,13 @@ def _positive_integer(value: str, *, label: str) -> int:
     if not normalized.isdigit() or int(normalized) < 1:
         raise ClimateTestValidationError(f"{label} deve ser um número inteiro maior que zero.")
     return int(normalized)
+
+
+def _sample_quantity(value: str) -> int:
+    quantity = _positive_integer(value, label="Quantidade de amostras")
+    if quantity > 99:
+        raise ClimateTestValidationError("Quantidade de amostras deve estar entre 1 e 99.")
+    return quantity
 
 
 def _decimal_input(value: str, *, label: str) -> Decimal:
@@ -567,21 +587,23 @@ def _schedule_notifications(
     definitions = [
         (
             f"{phase_key}-nominal",
-            f"Retirar amostra da {phase_label}",
+            f"Retirada da {phase_label} em 2 horas",
             (
-                f"Ensaio #{record.id} — processo {record.process_number} — "
-                f"{record.sample_quantity} amostra(s). "
-                "O período nominal terminou e a janela de tolerância foi iniciada."
+                f"Cliente: {record.client} | Produto: {record.product} | "
+                f"Processo: {record.process_number} | "
+                f"Amostras: {record.sample_quantity}. "
+                f"A retirada nominal da {phase_label} ocorrerá em 2 horas."
             ),
-            nominal_end_at,
+            nominal_end_at - timedelta(hours=2),
         ),
         (
             f"{phase_key}-maximum",
-            f"Limite da {phase_label} atingido",
+            f"Ensaio atrasado — {phase_label}",
             (
-                f"Ensaio #{record.id} — processo {record.process_number} — "
-                f"{record.sample_quantity} amostra(s). "
-                "O limite máximo com tolerância de +30 h foi atingido."
+                f"Cliente: {record.client} | Produto: {record.product} | "
+                f"Processo: {record.process_number} | "
+                f"Amostras: {record.sample_quantity}. "
+                f"O limite máximo da {phase_label} foi atingido e o ensaio está atrasado."
             ),
             maximum_end_at,
         ),
@@ -602,6 +624,8 @@ def _schedule_notifications(
         event.title = title
         event.message = message
         event.scheduled_for_at = scheduled_for_at
+        event.desktop_sent_at = None
+        event.email_sent_at = None
         event.sent_at = None
         event.error_message = None
 
@@ -671,9 +695,17 @@ class ClimateTestService:
         repository: ClimateTestRepository,
         *,
         now_provider: Callable[[], datetime] = datetime.now,
+        actor_provider: Callable[[], str] = lambda: UNIDENTIFIED_ACTOR,
     ) -> None:
         self._repository = repository
         self._now_provider = now_provider
+        self._actor_provider = actor_provider
+
+    def _actor(self) -> str:
+        """Resolve o usuário no instante da ação para manter a auditoria correta."""
+
+        actor = self._actor_provider().strip()
+        return actor or UNIDENTIFIED_ACTOR
 
     def _ensure_resource_available(self, resource: EquipmentResource) -> None:
         status = self._repository.get_active_resource_pause(resource)
@@ -689,10 +721,7 @@ class ClimateTestService:
         client = _required(command.client, label="Cliente")
         process_number = _required(command.process_number, label="Processo")
         product = _required(command.product, label="Produto")
-        sample_quantity = _positive_integer(
-            command.sample_quantity,
-            label="Quantidade de amostras",
-        )
+        sample_quantity = _sample_quantity(command.sample_quantity)
         resolved = _resolve_condition_input(command)
         condition = resolved.condition
         climate_test = ClimateTestRecord(
@@ -723,6 +752,7 @@ class ClimateTestService:
                 f"amostras={sample_quantity}"
             ),
             reason="Cadastro inicial",
+            actor=self._actor(),
         )
         return self._repository.add(climate_test)
 
@@ -732,11 +762,8 @@ class ClimateTestService:
         client = _required(command.client, label="Cliente")
         process_number = _required(command.process_number, label="Processo")
         product = _required(command.product, label="Produto")
-        sample_quantity = _positive_integer(
-            command.sample_quantity,
-            label="Quantidade de amostras",
-        )
-        reason = _required(command.reason, label="Motivo da alteração")
+        sample_quantity = _sample_quantity(command.sample_quantity)
+        reason = _brief_reason(command.reason, label="Motivo da alteração")
         resolved = _resolve_condition_input(command)
         condition = resolved.condition
 
@@ -850,6 +877,7 @@ class ClimateTestService:
                 "Dados do ensaio corrigidos",
                 new_value=_record_summary(record),
                 reason=reason,
+                actor=self._actor(),
             )
             record.audit_events[-1].old_value = old_value
 
@@ -903,6 +931,7 @@ class ClimateTestService:
                 "Câmara iniciada",
                 new_value=f"Entrada: {effective_start.isoformat(sep=' ', timespec='minutes')}",
                 reason="Início operacional",
+                actor=self._actor(),
             )
 
         self._repository.mutate(test_id, operation)
@@ -957,6 +986,7 @@ class ClimateTestService:
                 "Secagem iniciada",
                 new_value=f"Entrada: {effective_start.isoformat(sep=' ', timespec='minutes')}",
                 reason="Retirada da câmara e início da secagem",
+                actor=self._actor(),
             )
 
         self._repository.mutate(test_id, operation)
@@ -1002,6 +1032,7 @@ class ClimateTestService:
                 "Ensaio finalizado",
                 new_value=f"Saída: {effective_end.isoformat(sep=' ', timespec='minutes')}",
                 reason="Conclusão operacional",
+                actor=self._actor(),
             )
 
         self._repository.mutate(test_id, operation)
@@ -1009,7 +1040,7 @@ class ClimateTestService:
     def cancel(self, test_id: int, reason: str) -> None:
         """Cancela um ensaio não concluído e exige justificativa auditável."""
 
-        normalized_reason = _required(reason, label="Motivo do cancelamento")
+        normalized_reason = _brief_reason(reason, label="Motivo do cancelamento")
         cancelled_at = self._now_provider().replace(microsecond=0)
 
         def operation(record: ClimateTestRecord) -> None:
@@ -1027,6 +1058,7 @@ class ClimateTestService:
                 "Ensaio cancelado",
                 new_value=TestSituation.CANCELLED.value,
                 reason=normalized_reason,
+                actor=self._actor(),
             )
 
         self._repository.mutate(test_id, operation)
@@ -1037,49 +1069,140 @@ class ClimateTestService:
         started_at: datetime,
         reason: str,
     ) -> None:
-        """Corrige a entrada da câmara e recalcula os prazos com auditoria."""
+        """Compatibilidade com integrações que corrigiam somente a primeira entrada."""
 
+        self.change_operational_timestamp(
+            test_id,
+            OperationalTimestamp.CHAMBER_STARTED,
+            started_at,
+            reason,
+        )
+
+    def change_operational_timestamp(
+        self,
+        test_id: int,
+        timestamp: str | OperationalTimestamp,
+        value: datetime,
+        reason: str,
+    ) -> None:
+        """Corrige uma entrada ou saída real sem confundir as duas câmaras."""
+
+        try:
+            resolved_timestamp = OperationalTimestamp(timestamp)
+        except ValueError as error:
+            raise ClimateTestValidationError("Selecione um horário operacional válido.") from error
         now = self._now_provider().replace(microsecond=0)
-        effective_start = _validate_action_time(started_at, now)
-        normalized_reason = _required(reason, label="Motivo da alteração")
+        effective_value = _validate_action_time(value, now)
+        normalized_reason = _brief_reason(reason, label="Motivo da alteração")
 
         def operation(record: ClimateTestRecord) -> None:
-            if record.chamber_started_at is None or record.condition_snapshot is None:
-                raise ClimateTestValidationError("A entrada da câmara ainda não foi registrada.")
-            if record.chamber_ended_at is not None and effective_start > record.chamber_ended_at:
-                raise ClimateTestValidationError(
-                    "A entrada da câmara não pode ser posterior à retirada registrada."
-                )
-            old_start = record.chamber_started_at
             snapshot = record.condition_snapshot
-            nominal = (
-                effective_start
-                + timedelta(hours=snapshot.chamber_duration_hours)
-                + _completed_pause_duration(
-                    record,
-                    phase=TestSituation.IN_CHAMBER.value,
-                    started_at=effective_start,
+            if snapshot is None:
+                raise ClimateTestValidationError(
+                    "A condição normativa do ensaio não foi encontrada."
                 )
-            )
-            maximum = nominal + timedelta(hours=snapshot.chamber_duration_positive_tolerance_hours)
-            record.chamber_started_at = effective_start
-            record.chamber_nominal_end_at = nominal
-            record.chamber_maximum_end_at = maximum
-            if record.situation == TestSituation.IN_CHAMBER.value:
-                _schedule_notifications(
-                    record,
-                    phase_key="chamber",
-                    phase_label="câmara",
-                    nominal_end_at=nominal,
-                    maximum_end_at=maximum,
+            old_value = getattr(record, resolved_timestamp.value)
+            if old_value is None:
+                raise ClimateTestValidationError(
+                    f"{resolved_timestamp.label} ainda não foi registrada."
                 )
+
+            candidate = {
+                OperationalTimestamp.CHAMBER_STARTED: record.chamber_started_at,
+                OperationalTimestamp.CHAMBER_ENDED: record.chamber_ended_at,
+                OperationalTimestamp.DRYING_STARTED: record.drying_started_at,
+                OperationalTimestamp.DRYING_ENDED: record.drying_ended_at,
+            }
+            candidate[resolved_timestamp] = effective_value
+            chamber_start = candidate[OperationalTimestamp.CHAMBER_STARTED]
+            chamber_end = candidate[OperationalTimestamp.CHAMBER_ENDED]
+            drying_start = candidate[OperationalTimestamp.DRYING_STARTED]
+            drying_end = candidate[OperationalTimestamp.DRYING_ENDED]
+
+            if (
+                chamber_start is not None
+                and chamber_end is not None
+                and chamber_start > chamber_end
+            ):
+                raise ClimateTestValidationError(
+                    "A entrada da câmara climática deve ocorrer antes da saída."
+                )
+            if chamber_end is not None and drying_start is not None and chamber_end > drying_start:
+                raise ClimateTestValidationError(
+                    "A entrada na câmara seca não pode ser anterior à saída da câmara climática."
+                )
+            if drying_start is not None and drying_end is not None and drying_start > drying_end:
+                raise ClimateTestValidationError(
+                    "A entrada na câmara seca deve ocorrer antes da saída."
+                )
+
+            setattr(record, resolved_timestamp.value, effective_value)
+            if resolved_timestamp is OperationalTimestamp.CHAMBER_STARTED:
+                nominal = (
+                    effective_value
+                    + timedelta(hours=snapshot.chamber_duration_hours)
+                    + _completed_pause_duration(
+                        record,
+                        phase=TestSituation.IN_CHAMBER.value,
+                        started_at=effective_value,
+                    )
+                )
+                maximum = nominal + timedelta(
+                    hours=snapshot.chamber_duration_positive_tolerance_hours
+                )
+                record.chamber_nominal_end_at = nominal
+                record.chamber_maximum_end_at = maximum
+                if record.situation == TestSituation.IN_CHAMBER.value:
+                    _schedule_notifications(
+                        record,
+                        phase_key="chamber",
+                        phase_label="câmara",
+                        nominal_end_at=nominal,
+                        maximum_end_at=maximum,
+                    )
+            elif resolved_timestamp is OperationalTimestamp.DRYING_STARTED:
+                duration = snapshot.drying_duration_hours
+                if duration is None:
+                    raise ClimateTestValidationError("A duração da secagem não foi encontrada.")
+                nominal = (
+                    effective_value
+                    + timedelta(hours=duration)
+                    + _completed_pause_duration(
+                        record,
+                        phase=TestSituation.DRYING.value,
+                        started_at=effective_value,
+                    )
+                )
+                maximum = nominal + timedelta(
+                    hours=snapshot.drying_duration_positive_tolerance_hours or 0
+                )
+                record.drying_nominal_end_at = nominal
+                record.drying_maximum_end_at = maximum
+                if record.situation == TestSituation.DRYING.value:
+                    _schedule_notifications(
+                        record,
+                        phase_key="drying",
+                        phase_label="secagem",
+                        nominal_end_at=nominal,
+                        maximum_end_at=maximum,
+                    )
+            elif record.finished_at is not None and (
+                (
+                    resolved_timestamp is OperationalTimestamp.CHAMBER_ENDED
+                    and not snapshot.drying_required
+                )
+                or resolved_timestamp is OperationalTimestamp.DRYING_ENDED
+            ):
+                record.finished_at = effective_value
+
             _audit(
                 record,
-                "Entrada da câmara corrigida",
-                new_value=effective_start.isoformat(sep=" ", timespec="minutes"),
+                resolved_timestamp.audit_action,
+                new_value=effective_value.isoformat(sep=" ", timespec="minutes"),
                 reason=normalized_reason,
+                actor=self._actor(),
             )
-            record.audit_events[-1].old_value = old_start.isoformat(
+            record.audit_events[-1].old_value = old_value.isoformat(
                 sep=" ",
                 timespec="minutes",
             )
@@ -1093,7 +1216,7 @@ class ClimateTestService:
             resolved_resource = EquipmentResource(resource)
         except ValueError as error:
             raise ClimateTestValidationError("Equipamento inválido para pausa.") from error
-        normalized_reason = _required(reason, label="Motivo da pausa")
+        normalized_reason = _brief_reason(reason, label="Motivo da pausa")
         paused_at = self._now_provider().replace(microsecond=0)
         affected_count = 0
 
@@ -1120,6 +1243,7 @@ class ClimateTestService:
                     f"{resolved_resource.label} pausada",
                     new_value=paused_at.isoformat(sep=" ", timespec="minutes"),
                     reason=normalized_reason,
+                    actor=self._actor(),
                 )
             affected_count = len(records)
 
@@ -1189,6 +1313,7 @@ class ClimateTestService:
                     f"{resolved_resource.label} retomada",
                     new_value=(f"Pausa encerrada após {int(duration.total_seconds())} segundo(s)"),
                     reason=active_pause.reason,
+                    actor=self._actor(),
                 )
                 affected_count += 1
 
@@ -1284,6 +1409,7 @@ class ClimateTestService:
                 "Etapa avançada para teste",
                 new_value=f"{old_situation} → {target.situation}",
                 reason="Ferramenta temporária de validação da v0.4.0",
+                actor=self._actor(),
             )
 
         self._repository.mutate(test_id, operation)

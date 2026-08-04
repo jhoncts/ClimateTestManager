@@ -7,6 +7,145 @@ e o projeto utiliza versionamento semântico.
 
 ## [Não publicado]
 
+### Corrigido
+
+- O estado dos avisos em segundo plano agora considera se a tarefa do Windows está realmente
+  habilitada, inclusive quando a saída do Agendador declara UTF-16 com bytes em outra codificação
+  ou omite o valor padrão `Enabled=true`, evitando estados incorretos na interface.
+
+### Adicionado
+
+- Primeiro acesso guiado para criação obrigatória do administrador inicial.
+- Cadastro local de usuários com nome, sobrenome, usuário único, e-mail e perfil.
+- Perfis `Administrador` e `Operador`, com gerenciamento de contas restrito ao administrador.
+- Login por nome de usuário ou e-mail e opção de permanecer conectado por 30 dias.
+- Sessões locais revogáveis; apenas o resumo SHA-256 do token fica no banco.
+- Senhas protegidas com PBKDF2-HMAC-SHA256, salt individual e 600 mil iterações.
+- Alteração da própria senha, redefinição administrativa e encerramento das sessões anteriores.
+- Proteção contra desativação própria e remoção do último administrador ativo.
+- Identificação real do responsável em todas as atividades técnicas da v0.5.0.
+- Trilha separada para eventos de segurança e administração de contas.
+- Guia orientado a tarefas, com instruções para cadastrar, editar, cancelar, registrar horários,
+  pausar equipamentos e criar usuários.
+- Balões de ajuda contextual `?` nas áreas técnicas e operacionais.
+- Foto de perfil opcional em PNG, JPG ou WEBP, preservada junto com o banco e seus backups.
+- Rascunho temporário do novo ensaio enquanto o usuário consulta outra tela.
+- Filtros clicáveis nos indicadores do Dashboard.
+- Avisos por e-mail para todos os usuários ativos duas horas antes da retirada nominal e quando o
+  ensaio entra em atraso.
+- Crédito clicável `Created by Jhoncts`, com acesso ao perfil do GitHub.
+- Backup SQLite automático diário com retenção local das 30 cópias mais recentes.
+- Manual de validação da v0.5.0, cobrindo migração, acesso, perfis, auditoria e distribuição.
+- Faixas responsivas para navegação, margens, cartões, listas, formulários, imagens e ícones,
+  preservando a tela aberta durante o redimensionamento.
+- Motivos predefinidos para pausa, cancelamento e correções, com opção `Outros` limitada a 180
+  caracteres.
+- Tutorial de configuração SMTP disponível na própria janela e no Guia de uso.
+- Comprovante do teste SMTP com destinatários aceitos e identificador da mensagem.
+- Confirmações antes de sair da conta, descartar um novo ensaio, remover a foto, desativar os
+  avisos e avançar entre etapas operacionais.
+- Assistente inicial para o responsável escolher a pasta local dos dados e uma pasta externa de
+  backup antes da criação do primeiro administrador.
+- Segunda cópia diária automática em OneDrive ou outro destino externo configurado, mantendo 30
+  arquivos em cada local.
+- Destaque do dia da semana na entrada, retirada nominal e limite com tolerância, com alerta de
+  fim de semana para apoiar o planejamento da equipe.
+- Botão para recolher e expandir a barra lateral em telas largas, preservando ícones, dicas,
+  conteúdo e posição de rolagem.
+- Manifesto de cada backup automático com SHA-256, tamanho, versão do esquema, `quick_check` e
+  conferência de integridade referencial.
+- Registro auditável de falhas do sistema, contenção imediata e ação corretiva de encerramento.
+- Dossiê de conformidade com matriz da ABNT NBR ISO/IEC 17025:2017, protocolo de validação,
+  procedimento do sistema computadorizado e avaliação de riscos.
+- Identificação explícita, em Configurações, das normas e referências consideradas no projeto.
+
+### Alterado
+
+- Ações operacionais passam a exibir separadamente `Registrar com o horário atual` e
+  `Informar outro horário`.
+- Configurações passam a reunir conta, alteração de senha, guia e acesso à administração.
+- Login, primeiro acesso e diálogo de usuários recebem novo layout sem campos sobrepostos.
+- Transições de tela e barra de rolagem recebem tratamento visual mais leve.
+- Quantidade de amostras passa a aceitar somente valores de `1` a `99`, sem zero à esquerda.
+- A confirmação da entrada na câmara mostra entrada, retirada nominal e limite com tolerância.
+- A Agenda interna passa a ser a referência única; a ação de adicionar a calendários externos foi
+  removida da interface.
+- Ativação das notificações cria a tarefa diretamente com `schtasks.exe`, inclusive no pacote,
+  sem depender da pasta do projeto ou de um processo PowerShell.
+- Empacotamento gera uma pasta de distribuição e um ZIP versionado com aplicativo, notificador e
+  instruções.
+- Banco atualizado de forma não destrutiva para o esquema 11, preservando todos os ensaios da
+  v0.4.0.
+- Ações operacionais recebem hierarquia visual mais clara entre operação em tempo real e registro
+  posterior, com explicação do efeito na rastreabilidade.
+- Resumo do ensaio reorganizado com o `Ts` em destaque, equação térmica visível e informações
+  secundárias agrupadas por identificação, situação, prazo e progresso.
+- Formulário de ensaio reorganizado em colunas responsivas, com identificação, observações,
+  configuração térmica e prévia calculada em blocos visualmente distintos.
+- Condições da câmara e da secagem passam a reunir parâmetros e cronograma em cartões próprios,
+  lado a lado quando houver largura e empilhados em janelas menores.
+- Ações de horário atual e registro manual recebem cartões equivalentes; cancelamento e histórico
+  técnico passam a ocupar toda a largura útil.
+- Diálogos de criação e edição de usuários passam a usar uma grade compacta, cabeçalho contextual
+  e ação principal destacada.
+- Cabeçalho do ensaio passa a destacar `Cliente / processo`, mantendo `Ensaio #N` como informação
+  secundária.
+- Entrada e saída da câmara climática e da câmara seca passam a ser corrigidas separadamente, com
+  validação cronológica e recálculo apenas dos prazos dependentes de uma entrada.
+- Diálogos operacionais recebem cabeçalho, orientação, bordas, espaçamento e ações consistentes.
+- O teste de e-mail envia também uma cópia diagnóstica ao remetente, sem alterar os destinatários
+  dos avisos automáticos.
+- O banco SQLite ativo é recusado em OneDrive, outros sincronizadores e pastas de rede; somente
+  cópias consistentes e fechadas são enviadas ao destino externo.
+
+### Corrigido
+
+- Barra de rolagem sobrepondo a lateral do botão **Salvar ensaio**.
+- Botão temporário de avanço aparecendo sem callback funcional; agora ele só é exibido quando o
+  modo explícito de validação está ativo.
+- Perda dos dados digitados ao sair temporariamente da tela **Novo ensaio**.
+- Repetição do aviso de um canal quando o outro canal falha; cada entrega possui controle
+  independente.
+- Texto escuro e mensagens extrapolando os cartões da lateral de acesso.
+- Cartões e ações desalinhados ao reduzir ou ampliar a janela.
+- Blocos cinza no controle dos equipamentos, no registro de atividades, nos usuários, na Agenda
+  e nas ações do ensaio, causados por filhos expansíveis dentro de linhas com quebra automática.
+- Tela de detalhes exibindo somente o cabeçalho porque o alinhamento `STRETCH` tentava impor
+  altura infinita ao primeiro bloco responsivo dentro da área rolável.
+- Rolagem voltando ao topo quando pequenas oscilações de largura reconstruíam a moldura perto de
+  um breakpoint; a posição agora é preservada e as faixas possuem margem de estabilidade.
+- Textos dos botões **Pausar** e **Retomar** quebrando no meio das palavras em cartões estreitos.
+- Serrilhado na borda da foto de perfil e do símbolo do GitHub, com recorte antialias e
+  filtragem de maior qualidade.
+- Tipografia borrada durante redimensionamentos animados; a interface usa a fonte nativa Segoe UI
+  no Windows e não anima mais o tamanho de cartões ou da área principal.
+- Campos de observações, ações operacionais e histórico técnico ficando estreitos no canto
+  esquerdo mesmo quando havia espaço disponível.
+- Permanências, identificação e informações secundárias cortadas com reticências em cartões
+  estreitos; os textos importantes agora quebram linha e usam a largura disponível.
+- Flash ocasional e retorno ao topo causados por atualizações integrais do formulário e transições
+  de opacidade; somente os controles dinâmicos são atualizados e a troca de tela não anima.
+- Senha SMTP antiga definida no ambiente substituindo a senha protegida salva pela interface.
+  A credencial protegida agora é prioritária e senhas de app do Gmail têm os separadores visuais
+  removidos automaticamente.
+- Erro técnico de codificação ao autenticar uma credencial SMTP com acento; a interface agora
+  orienta a informar novamente o usuário ou a senha de app.
+- Falha de codificação antes da autenticação SMTP quando o nome do computador Windows continha
+  acento; o comando `EHLO` agora usa uma identificação local ASCII estável.
+- Teste de e-mail declarando sucesso sem mostrar os endereços utilizados ou analisar
+  destinatários recusados pelo servidor; o envelope SMTP agora é explícito e a aceitação fica
+  verificável na interface.
+
+### Segurança
+
+- Nenhuma senha de usuário ou senha SMTP é armazenada em texto aberto.
+- A senha SMTP é protegida pelo Windows e a configuração só pode ser alterada por administrador.
+- Mensagem de login não revela se o usuário/e-mail existe.
+- Identidades são comparadas sem diferenciar maiúsculas e minúsculas para impedir duplicidade.
+- Conta desativada perde suas sessões persistentes imediatamente.
+
+## [0.4.0] - 2026-07-28
+
 ### Adicionado
 
 - Controle operacional das etapas de câmara e secagem com horários reais.
@@ -63,14 +202,6 @@ e o projeto utiliza versionamento semântico.
 - Desalinhamento dos resumos técnicos na dashboard quando cliente ou condição possuem textos
   de tamanhos diferentes.
 - Reagendamento de notificações após uma correção de dados sem violar a chave única do SQLite.
-
-### Planejado
-
-- Cadastro com e-mail, nome de usuário, nome, sobrenome, senha e confirmação de senha.
-- Login por usuário ou e-mail, sessão persistente opcional e saída da conta.
-- Tutorial inicial e ajuda resumida para cada função.
-- Perfis e identificação do responsável.
-- Integração autorizada com calendário e e-mail.
 
 ## [0.3.0] - 2026-07-22
 

@@ -1,5 +1,6 @@
 """Criação do engine SQLite e inicialização do esquema local."""
 
+from contextlib import suppress
 from pathlib import Path
 
 from sqlalchemy import Engine, create_engine, event
@@ -23,10 +24,21 @@ def create_database_engine(database_path: Path | None = None) -> Engine:
     @event.listens_for(engine, "connect")
     def enable_foreign_keys(dbapi_connection: object, _connection_record: object) -> None:
         cursor = dbapi_connection.cursor()
-        cursor.execute("PRAGMA foreign_keys=ON")
-        cursor.execute("PRAGMA journal_mode=WAL")
-        cursor.execute("PRAGMA busy_timeout=30000")
-        cursor.close()
+        try:
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA busy_timeout=30000")
+        except Exception:
+            # Se um PRAGMA falhar (por exemplo, em um arquivo corrompido),
+            # a conexão ainda não pertence ao pool. Fechá-la explicitamente
+            # evita manter o arquivo bloqueado no Windows.
+            with suppress(Exception):
+                cursor.close()
+            with suppress(Exception):
+                dbapi_connection.close()
+            raise
+        else:
+            cursor.close()
 
     return engine
 
@@ -44,6 +56,21 @@ def initialize_database(database_path: Path | None = None) -> Engine:
     from climatetest_manager.database import models  # noqa: F401
 
     engine = create_database_engine(database_path)
+    try:
+        with engine.connect() as connection:
+            quick_check = connection.exec_driver_sql("PRAGMA quick_check").scalar()
+    except Exception as error:
+        engine.dispose()
+        raise RuntimeError(
+            "O banco de dados falhou na verificação de integridade e não será aberto. "
+            "Restaure uma cópia verificada antes de continuar."
+        ) from error
+    if str(quick_check).casefold() != "ok":
+        engine.dispose()
+        raise RuntimeError(
+            "O banco de dados falhou na verificação de integridade e não será aberto. "
+            "Restaure uma cópia verificada antes de continuar."
+        )
     migrate_database(engine)
     Base.metadata.create_all(engine)
     with engine.begin() as connection:

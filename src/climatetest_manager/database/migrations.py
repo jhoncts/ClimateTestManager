@@ -2,7 +2,7 @@
 
 from sqlalchemy import Engine, inspect, text
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 11
 
 OPERATIONAL_COLUMNS = {
     "chamber_started_at": "DATETIME",
@@ -21,28 +21,48 @@ OPERATIONAL_COLUMNS = {
     "ts_reference": "VARCHAR(100)",
 }
 
+NOTIFICATION_COLUMNS = {
+    "desktop_sent_at": "DATETIME",
+    "email_sent_at": "DATETIME",
+}
+
+USER_COLUMNS = {
+    "profile_photo_b64": "TEXT",
+}
+
 
 def migrate_database(engine: Engine) -> None:
     """Adiciona campos operacionais sem apagar ou recriar tabelas existentes."""
 
     inspector = inspect(engine)
-    if "climate_tests" not in inspector.get_table_names():
-        return
-
-    existing = {column["name"] for column in inspector.get_columns("climate_tests")}
+    table_names = set(inspector.get_table_names())
     with engine.begin() as connection:
-        for column_name, column_type in OPERATIONAL_COLUMNS.items():
-            if column_name not in existing:
-                connection.execute(
-                    text(f"ALTER TABLE climate_tests ADD COLUMN {column_name} {column_type}")
+        if "climate_tests" in table_names:
+            existing = {column["name"] for column in inspector.get_columns("climate_tests")}
+            for column_name, column_type in OPERATIONAL_COLUMNS.items():
+                if column_name not in existing:
+                    connection.execute(
+                        text(f"ALTER TABLE climate_tests ADD COLUMN {column_name} {column_type}")
+                    )
+            connection.execute(
+                text(
+                    """
+                    UPDATE climate_tests
+                    SET input_mode = 'direct_configuration'
+                    WHERE input_mode IN ('plan_defined', 'plan_criterion')
+                    """
                 )
-        connection.execute(
-            text(
-                """
-                UPDATE climate_tests
-                SET input_mode = 'direct_configuration'
-                WHERE input_mode IN ('plan_defined', 'plan_criterion')
-                """
             )
-        )
+        for table_name, columns in (
+            ("notification_events", NOTIFICATION_COLUMNS),
+            ("users", USER_COLUMNS),
+        ):
+            if table_name not in table_names:
+                continue
+            existing = {column["name"] for column in inspector.get_columns(table_name)}
+            for column_name, column_type in columns.items():
+                if column_name not in existing:
+                    connection.execute(
+                        text(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}")
+                    )
         connection.execute(text(f"PRAGMA user_version={SCHEMA_VERSION}"))

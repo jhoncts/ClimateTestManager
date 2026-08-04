@@ -1,5 +1,7 @@
 """Cartão reutilizável para indicadores do dashboard."""
 
+from collections.abc import Callable
+
 import flet as ft
 
 from climatetest_manager.ui.theme import AppColors
@@ -11,14 +13,26 @@ def metric_card(
     icon: ft.IconData,
     icon_color: str,
     icon_background: str,
+    *,
+    selected: bool = False,
+    on_click: Callable[[], None] | None = None,
 ) -> ft.Container:
     """Cria um cartão compacto de métrica."""
 
     return ft.Container(
-        expand=True,
+        col={"xs": 12, "sm": 6, "lg": 3},
         bgcolor=AppColors.SURFACE,
         border_radius=16,
+        border=ft.Border.all(2, icon_color) if selected else None,
         padding=20,
+        tooltip=(
+            "Clique novamente para remover o filtro"
+            if selected
+            else "Clique para filtrar os ensaios por este indicador"
+        )
+        if on_click
+        else None,
+        on_click=(lambda _event: on_click()) if on_click else None,
         content=ft.Row(
             alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
             controls=[

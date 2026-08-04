@@ -27,49 +27,70 @@ def build_history_view(
                 border_radius=14,
                 padding=15,
                 on_click=lambda _event, test_id=event.test_id: on_select(test_id),
-                content=ft.Row(
+                content=ft.ResponsiveRow(
                     spacing=14,
+                    run_spacing=10,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     controls=[
                         ft.Container(
-                            width=38,
-                            height=38,
-                            border_radius=12,
-                            bgcolor=AppColors.PRIMARY_LIGHT,
-                            alignment=ft.Alignment.CENTER,
-                            content=ft.Icon(ft.Icons.HISTORY, color=AppColors.PRIMARY, size=20),
+                            col={"xs": 12, "md": 8, "lg": 9},
+                            content=ft.Row(
+                                spacing=14,
+                                controls=[
+                                    ft.Container(
+                                        width=38,
+                                        height=38,
+                                        border_radius=12,
+                                        bgcolor=AppColors.PRIMARY_LIGHT,
+                                        alignment=ft.Alignment.CENTER,
+                                        content=ft.Icon(
+                                            ft.Icons.HISTORY,
+                                            color=AppColors.PRIMARY,
+                                            size=20,
+                                        ),
+                                    ),
+                                    ft.Column(
+                                        expand=True,
+                                        spacing=2,
+                                        controls=[
+                                            ft.Text(
+                                                event.action,
+                                                weight=ft.FontWeight.BOLD,
+                                                color=AppColors.TEXT_PRIMARY,
+                                            ),
+                                            ft.Text(
+                                                description,
+                                                size=12,
+                                                color=AppColors.TEXT_SECONDARY,
+                                            ),
+                                        ],
+                                    ),
+                                ],
+                            ),
                         ),
-                        ft.Column(
-                            expand=True,
-                            spacing=2,
-                            controls=[
-                                ft.Text(
-                                    event.action,
-                                    weight=ft.FontWeight.BOLD,
-                                    color=AppColors.TEXT_PRIMARY,
-                                ),
-                                ft.Text(
-                                    description,
-                                    size=12,
-                                    color=AppColors.TEXT_SECONDARY,
-                                ),
-                            ],
-                        ),
-                        ft.Column(
-                            horizontal_alignment=ft.CrossAxisAlignment.END,
-                            spacing=2,
-                            controls=[
-                                ft.Text(
-                                    f"#{event.test_id} • {event.process_number}",
-                                    size=12,
-                                    weight=ft.FontWeight.BOLD,
-                                ),
-                                ft.Text(event.client, size=11, color=AppColors.TEXT_SECONDARY),
-                                ft.Text(
-                                    f"{format_datetime(event.occurred_at)} • {event.actor}",
-                                    size=10,
-                                    color=AppColors.TEXT_SECONDARY,
-                                ),
-                            ],
+                        ft.Container(
+                            col={"xs": 12, "md": 4, "lg": 3},
+                            content=ft.Column(
+                                horizontal_alignment=ft.CrossAxisAlignment.END,
+                                spacing=2,
+                                controls=[
+                                    ft.Text(
+                                        f"{event.client} / {event.process_number}",
+                                        size=12,
+                                        weight=ft.FontWeight.BOLD,
+                                    ),
+                                    ft.Text(
+                                        f"Ensaio #{event.test_id}",
+                                        size=11,
+                                        color=AppColors.TEXT_SECONDARY,
+                                    ),
+                                    ft.Text(
+                                        f"{format_datetime(event.occurred_at)} • {event.actor}",
+                                        size=10,
+                                        color=AppColors.TEXT_SECONDARY,
+                                    ),
+                                ],
+                            ),
                         ),
                     ],
                 ),
@@ -111,8 +132,9 @@ def build_history_view(
                 border_radius=12,
                 padding=14,
                 content=ft.Text(
-                    "Até a implementação do login, ações humanas são registradas como "
-                    "“Não identificado”.",
+                    "Cada ação exibe o nome e o usuário autenticado responsável. "
+                    "Registros importados de versões anteriores permanecem como "
+                    "“Não identificado” para preservar a informação original.",
                     size=12,
                     color=AppColors.TEXT_PRIMARY,
                 ),

@@ -73,3 +73,36 @@ class EquipmentResource(StrEnum):
         if self is EquipmentResource.CLIMATE_CHAMBER:
             return "Câmara climática"
         return "Secagem"
+
+
+class OperationalTimestamp(StrEnum):
+    """Marcações reais que podem ser corrigidas com rastreabilidade."""
+
+    CHAMBER_STARTED = "chamber_started_at"
+    CHAMBER_ENDED = "chamber_ended_at"
+    DRYING_STARTED = "drying_started_at"
+    DRYING_ENDED = "drying_ended_at"
+
+    @property
+    def label(self) -> str:
+        """Nome inequívoco exibido antes da edição."""
+
+        labels = {
+            OperationalTimestamp.CHAMBER_STARTED: "Entrada — Câmara climática",
+            OperationalTimestamp.CHAMBER_ENDED: "Saída — Câmara climática",
+            OperationalTimestamp.DRYING_STARTED: "Entrada — Câmara seca",
+            OperationalTimestamp.DRYING_ENDED: "Saída — Câmara seca",
+        }
+        return labels[self]
+
+    @property
+    def audit_action(self) -> str:
+        """Ação curta gravada no registro técnico."""
+
+        actions = {
+            OperationalTimestamp.CHAMBER_STARTED: "Entrada da câmara climática corrigida",
+            OperationalTimestamp.CHAMBER_ENDED: "Saída da câmara climática corrigida",
+            OperationalTimestamp.DRYING_STARTED: "Entrada da câmara seca corrigida",
+            OperationalTimestamp.DRYING_ENDED: "Saída da câmara seca corrigida",
+        }
+        return actions[self]

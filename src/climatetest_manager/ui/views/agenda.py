@@ -234,52 +234,65 @@ class AgendaView:
             bgcolor=AppColors.PAGE_BACKGROUND,
             padding=12,
             on_click=lambda _event: self._on_select(event.test_id),
-            content=ft.Row(
-                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            content=ft.ResponsiveRow(
+                spacing=10,
+                run_spacing=8,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 controls=[
-                    ft.Row(
-                        spacing=10,
-                        expand=True,
-                        controls=[
-                            ft.Icon(ft.Icons.EVENT, color=color, size=20),
-                            ft.Column(
-                                spacing=2,
-                                expand=True,
-                                controls=[
-                                    ft.Text(
-                                        f"{event.kind} • {event.phase}",
-                                        weight=ft.FontWeight.BOLD,
-                                        color=AppColors.TEXT_PRIMARY,
-                                    ),
-                                    ft.Text(
-                                        f"Processo {event.process_number} • {event.client}",
-                                        size=11,
-                                        color=AppColors.TEXT_SECONDARY,
-                                    ),
-                                ],
-                            ),
-                        ],
+                    ft.Container(
+                        col={"xs": 12, "md": 8, "lg": 9},
+                        content=ft.Row(
+                            spacing=10,
+                            controls=[
+                                ft.Icon(ft.Icons.EVENT, color=color, size=20),
+                                ft.Column(
+                                    spacing=2,
+                                    expand=True,
+                                    controls=[
+                                        ft.Text(
+                                            f"{event.kind} • {event.phase}",
+                                            weight=ft.FontWeight.BOLD,
+                                            color=AppColors.TEXT_PRIMARY,
+                                        ),
+                                        ft.Text(
+                                            f"{event.client} / {event.process_number}",
+                                            size=11,
+                                            weight=ft.FontWeight.BOLD,
+                                            color=AppColors.TEXT_SECONDARY,
+                                        ),
+                                        ft.Text(
+                                            f"Ensaio #{event.test_id}",
+                                            size=10,
+                                            color=AppColors.TEXT_SECONDARY,
+                                        ),
+                                    ],
+                                ),
+                            ],
+                        ),
                     ),
-                    ft.Column(
-                        horizontal_alignment=ft.CrossAxisAlignment.END,
-                        controls=[
-                            ft.Text(
-                                format_datetime(event.occurs_at),
-                                weight=ft.FontWeight.BOLD,
-                                color=color,
-                            ),
-                            *(
-                                [
-                                    ft.Text(
-                                        "Projeção durante pausa",
-                                        size=9,
-                                        color=AppColors.WARNING,
-                                    )
-                                ]
-                                if event.is_paused
-                                else []
-                            ),
-                        ],
+                    ft.Container(
+                        col={"xs": 12, "md": 4, "lg": 3},
+                        content=ft.Column(
+                            horizontal_alignment=ft.CrossAxisAlignment.END,
+                            controls=[
+                                ft.Text(
+                                    format_datetime(event.occurs_at),
+                                    weight=ft.FontWeight.BOLD,
+                                    color=color,
+                                ),
+                                *(
+                                    [
+                                        ft.Text(
+                                            "Projeção durante pausa",
+                                            size=9,
+                                            color=AppColors.WARNING,
+                                        )
+                                    ]
+                                    if event.is_paused
+                                    else []
+                                ),
+                            ],
+                        ),
                     ),
                 ],
             ),

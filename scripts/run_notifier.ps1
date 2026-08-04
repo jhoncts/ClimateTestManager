@@ -9,12 +9,18 @@ if ($DataDirectory) {
     $env:CLIMATETEST_DATA_DIR = $DataDirectory
 }
 
-$packagedNotifier = Join-Path $projectRoot "dist\ClimateTestNotifier.exe"
+$releaseNotifier = Join-Path $projectRoot "dist\ClimateTestManager-v0.5.0\ClimateTestNotifier.exe"
+$legacyPackagedNotifier = Join-Path $projectRoot "dist\ClimateTestNotifier.exe"
 $developmentPython = Join-Path $projectRoot ".venv\Scripts\pythonw.exe"
 $developmentEntry = Join-Path $projectRoot "src\notifier.py"
 
-if (Test-Path -LiteralPath $packagedNotifier) {
-    & $packagedNotifier
+if (Test-Path -LiteralPath $releaseNotifier) {
+    & $releaseNotifier
+    exit $LASTEXITCODE
+}
+
+if (Test-Path -LiteralPath $legacyPackagedNotifier) {
+    & $legacyPackagedNotifier
     exit $LASTEXITCODE
 }
 

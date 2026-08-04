@@ -9,13 +9,27 @@ from climatetest_manager.services.climate_tests import (
     DashboardSummary,
     ResourceStatus,
 )
-from climatetest_manager.ui.components import metric_card
+from climatetest_manager.ui.components import (
+    ReasonSelector,
+    dialog_actions,
+    dialog_banner,
+    metric_card,
+    styled_dialog,
+)
 from climatetest_manager.ui.formatters import (
     format_condition_source,
     format_datetime,
     format_decimal,
 )
 from climatetest_manager.ui.theme import AppColors
+
+PAUSE_REASON_OPTIONS = (
+    "Manutenção preventiva ou corretiva",
+    "Falta de energia",
+    "Falha do equipamento",
+    "Calibração ou verificação",
+    "Indisponibilidade operacional",
+)
 
 
 def _empty_state(on_new_test: Callable[[], None]) -> ft.Container:
@@ -96,12 +110,13 @@ def _active_tests(
                 border_radius=14,
                 padding=16,
                 on_click=lambda _event, test_id=test.id: on_select(test_id),
-                content=ft.Row(
-                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                content=ft.ResponsiveRow(
+                    spacing=14,
+                    run_spacing=12,
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     controls=[
                         ft.Container(
-                            expand=4,
+                            col={"xs": 12, "md": 6, "lg": 4},
                             content=ft.Row(
                                 spacing=14,
                                 controls=[
@@ -122,19 +137,15 @@ def _active_tests(
                                         expand=True,
                                         controls=[
                                             ft.Text(
-                                                test.client,
+                                                f"{test.client} / {test.process_number}",
                                                 size=14,
                                                 weight=ft.FontWeight.BOLD,
                                                 color=AppColors.TEXT_PRIMARY,
-                                                max_lines=1,
-                                                overflow=ft.TextOverflow.ELLIPSIS,
                                             ),
                                             ft.Text(
-                                                f"{test.process_number} • {test.product}",
+                                                f"Ensaio #{test.id} • {test.product}",
                                                 size=12,
                                                 color=AppColors.TEXT_SECONDARY,
-                                                max_lines=1,
-                                                overflow=ft.TextOverflow.ELLIPSIS,
                                             ),
                                             ft.Text(
                                                 f"{test.sample_quantity} amostra(s) • "
@@ -148,7 +159,7 @@ def _active_tests(
                             ),
                         ),
                         ft.Container(
-                            expand=3,
+                            col={"xs": 12, "md": 6, "lg": 3},
                             content=ft.Column(
                                 spacing=3,
                                 controls=[
@@ -162,8 +173,6 @@ def _active_tests(
                                         phase_detail or "Sem detalhe",
                                         size=10,
                                         color=AppColors.TEXT_SECONDARY,
-                                        max_lines=2,
-                                        overflow=ft.TextOverflow.ELLIPSIS,
                                     ),
                                     ft.Text(
                                         "Câmara: "
@@ -176,7 +185,7 @@ def _active_tests(
                             ),
                         ),
                         ft.Container(
-                            width=230,
+                            col={"xs": 12, "md": 8, "lg": 3},
                             content=ft.Column(
                                 spacing=6,
                                 controls=[
@@ -198,7 +207,6 @@ def _active_tests(
                                     ),
                                     ft.ProgressBar(
                                         value=test.progress_percent,
-                                        width=230,
                                         height=8,
                                         color=status_color,
                                         bgcolor=AppColors.DIVIDER,
@@ -213,7 +221,7 @@ def _active_tests(
                             ),
                         ),
                         ft.Container(
-                            width=145,
+                            col={"xs": 12, "md": 4, "lg": 2},
                             alignment=ft.Alignment.CENTER,
                             bgcolor=status_background,
                             border_radius=20,
@@ -248,6 +256,20 @@ class DashboardView:
         on_resume_resource: Callable[[str], None],
     ) -> None:
         self._on_pause_resource = on_pause_resource
+        self._summary = summary
+        self._active_tests = active_tests
+        self._on_new_test = on_new_test
+        self._on_select = on_select
+        self._active_filter: str | None = None
+        self.metrics = ft.ResponsiveRow(spacing=16, run_spacing=16)
+        self.results_title = ft.Text(
+            "Ensaios ativos",
+            size=18,
+            weight=ft.FontWeight.BOLD,
+            color=AppColors.TEXT_PRIMARY,
+        )
+        self.results = ft.Container(content=_active_tests(active_tests, on_new_test, on_select))
+        self._refresh_filter(update=False)
         self.root = ft.Column(
             expand=True,
             scroll=ft.ScrollMode.AUTO,
@@ -256,6 +278,8 @@ class DashboardView:
                 ft.Row(
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    wrap=True,
+                    run_spacing=10,
                     controls=[
                         ft.Column(
                             spacing=3,
@@ -282,62 +306,110 @@ class DashboardView:
                         ),
                     ],
                 ),
-                ft.Row(
-                    spacing=16,
-                    controls=[
-                        metric_card(
-                            "Em andamento",
-                            summary.in_progress,
-                            ft.Icons.PLAY_ARROW,
-                            AppColors.PRIMARY,
-                            AppColors.PRIMARY_LIGHT,
-                        ),
-                        metric_card(
-                            "Pendentes de início",
-                            summary.waiting,
-                            ft.Icons.PENDING_ACTIONS,
-                            AppColors.INFO,
-                            AppColors.INFO_LIGHT,
-                        ),
-                        metric_card(
-                            "Pausados",
-                            summary.paused,
-                            ft.Icons.PAUSE_CIRCLE,
-                            AppColors.WARNING,
-                            AppColors.WARNING_LIGHT,
-                        ),
-                        metric_card(
-                            "Atrasados",
-                            summary.overdue,
-                            ft.Icons.WARNING,
-                            AppColors.DANGER,
-                            AppColors.DANGER_LIGHT,
-                        ),
-                    ],
-                ),
+                self.metrics,
                 ft.Text(
                     "Controle dos equipamentos",
                     size=18,
                     weight=ft.FontWeight.BOLD,
                     color=AppColors.TEXT_PRIMARY,
                 ),
-                ft.Row(
+                ft.ResponsiveRow(
                     spacing=14,
+                    run_spacing=14,
                     controls=[
                         self._resource_card(status, on_resume_resource)
                         for status in resource_statuses
                     ],
                 ),
-                ft.Text(
-                    "Ensaios ativos",
-                    size=18,
-                    weight=ft.FontWeight.BOLD,
-                    color=AppColors.TEXT_PRIMARY,
-                ),
-                _active_tests(active_tests, on_new_test, on_select),
+                self.results_title,
+                self.results,
                 ft.Container(height=8),
             ],
         )
+
+    def _metric_cards(self) -> list[ft.Control]:
+        definitions = [
+            (
+                "in_progress",
+                "Em andamento",
+                self._summary.in_progress,
+                ft.Icons.PLAY_ARROW,
+                AppColors.PRIMARY,
+                AppColors.PRIMARY_LIGHT,
+            ),
+            (
+                "waiting",
+                "Pendentes de início",
+                self._summary.waiting,
+                ft.Icons.PENDING_ACTIONS,
+                AppColors.INFO,
+                AppColors.INFO_LIGHT,
+            ),
+            (
+                "paused",
+                "Pausados",
+                self._summary.paused,
+                ft.Icons.PAUSE_CIRCLE,
+                AppColors.WARNING,
+                AppColors.WARNING_LIGHT,
+            ),
+            (
+                "overdue",
+                "Atrasados",
+                self._summary.overdue,
+                ft.Icons.WARNING,
+                AppColors.DANGER,
+                AppColors.DANGER_LIGHT,
+            ),
+        ]
+        return [
+            metric_card(
+                title,
+                value,
+                icon,
+                color,
+                background,
+                selected=self._active_filter == key,
+                on_click=lambda selected=key: self._select_filter(selected),
+            )
+            for key, title, value, icon, color, background in definitions
+        ]
+
+    def _select_filter(self, selected: str) -> None:
+        self._active_filter = None if self._active_filter == selected else selected
+        self._refresh_filter(update=True)
+
+    def _refresh_filter(self, *, update: bool) -> None:
+        selected = self._active_filter
+        filtered = self._active_tests
+        label = "Ensaios ativos"
+        if selected == "in_progress":
+            filtered = [
+                item
+                for item in filtered
+                if item.situation in {"Na Câmara", "Em Secagem"} and not item.is_paused
+            ]
+            label = "Filtro: em andamento"
+        elif selected == "waiting":
+            filtered = [item for item in filtered if item.situation == "Aguardando"]
+            label = "Filtro: pendentes de início"
+        elif selected == "paused":
+            filtered = [item for item in filtered if item.is_paused]
+            label = "Filtro: pausados"
+        elif selected == "overdue":
+            filtered = [item for item in filtered if item.deadline_condition == "Atrasado"]
+            label = "Filtro: atrasados"
+        self.metrics.controls = self._metric_cards()
+        self.results_title.value = label
+        self.results.content = _active_tests(
+            filtered,
+            self._on_new_test,
+            self._on_select,
+        )
+        if update:
+            self.metrics.update()
+            self.results_title.update()
+            self.results.update()
 
     def _resource_card(
         self,
@@ -355,16 +427,18 @@ class DashboardView:
         )
         button = (
             ft.Button(
-                content="Retomar",
+                content=ft.Text("Retomar", no_wrap=True, max_lines=1),
                 icon=ft.Icons.PLAY_ARROW,
+                width=124,
                 bgcolor=AppColors.PRIMARY,
                 color=AppColors.WHITE,
                 on_click=lambda _event: on_resume_resource(status.resource),
             )
             if status.is_paused
             else ft.Button(
-                content="Pausar",
+                content=ft.Text("Pausar", no_wrap=True, max_lines=1),
                 icon=ft.Icons.PAUSE,
+                width=124,
                 color=AppColors.WARNING,
                 on_click=lambda _event: self._show_pause_dialog(
                     status.resource,
@@ -373,108 +447,108 @@ class DashboardView:
             )
         )
         return ft.Container(
-            expand=True,
+            col={"xs": 12, "lg": 6},
             bgcolor=AppColors.SURFACE,
             border_radius=14,
             padding=16,
-            content=ft.Row(
-                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+            content=ft.ResponsiveRow(
+                spacing=12,
+                run_spacing=10,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 controls=[
-                    ft.Row(
-                        spacing=12,
-                        expand=True,
-                        controls=[
-                            ft.Container(
-                                width=42,
-                                height=42,
-                                border_radius=12,
-                                bgcolor=background,
-                                alignment=ft.Alignment.CENTER,
-                                content=ft.Icon(
-                                    ft.Icons.PAUSE_CIRCLE
-                                    if status.is_paused
-                                    else ft.Icons.CHECK_CIRCLE,
-                                    color=color,
-                                ),
-                            ),
-                            ft.Column(
-                                spacing=3,
-                                expand=True,
-                                controls=[
-                                    ft.Text(
-                                        status.label,
-                                        weight=ft.FontWeight.BOLD,
-                                        color=AppColors.TEXT_PRIMARY,
-                                    ),
-                                    ft.Text(
-                                        "Pausada" if status.is_paused else "Em operação",
-                                        size=11,
-                                        weight=ft.FontWeight.BOLD,
+                    ft.Container(
+                        col={"xs": 12, "md": 8},
+                        content=ft.Row(
+                            spacing=12,
+                            controls=[
+                                ft.Container(
+                                    width=42,
+                                    height=42,
+                                    border_radius=12,
+                                    bgcolor=background,
+                                    alignment=ft.Alignment.CENTER,
+                                    content=ft.Icon(
+                                        ft.Icons.PAUSE_CIRCLE
+                                        if status.is_paused
+                                        else ft.Icons.CHECK_CIRCLE,
                                         color=color,
                                     ),
-                                    ft.Text(
-                                        detail,
-                                        size=10,
-                                        color=AppColors.TEXT_SECONDARY,
-                                        max_lines=3,
-                                        overflow=ft.TextOverflow.ELLIPSIS,
-                                    ),
-                                ],
-                            ),
-                        ],
+                                ),
+                                ft.Column(
+                                    spacing=3,
+                                    expand=True,
+                                    controls=[
+                                        ft.Text(
+                                            status.label,
+                                            weight=ft.FontWeight.BOLD,
+                                            color=AppColors.TEXT_PRIMARY,
+                                        ),
+                                        ft.Text(
+                                            "Pausada" if status.is_paused else "Em operação",
+                                            size=11,
+                                            weight=ft.FontWeight.BOLD,
+                                            color=color,
+                                        ),
+                                        ft.Text(
+                                            detail,
+                                            size=10,
+                                            color=AppColors.TEXT_SECONDARY,
+                                        ),
+                                    ],
+                                ),
+                            ],
+                        ),
                     ),
-                    button,
+                    ft.Container(
+                        col={"xs": 12, "md": 4},
+                        alignment=ft.Alignment.CENTER_RIGHT,
+                        content=button,
+                    ),
                 ],
             ),
         )
 
     def _show_pause_dialog(self, resource: str, label: str) -> None:
-        reason = ft.TextField(
-            label="Motivo obrigatório",
-            hint_text="Ex.: câmara em manutenção",
-            multiline=True,
-            min_lines=2,
-            max_lines=3,
-            autofocus=True,
+        reason_selector = ReasonSelector(
+            PAUSE_REASON_OPTIONS,
+            other_hint="Resuma por que o equipamento será pausado",
         )
         page = self.root.page
 
         def confirm(_event: object | None = None) -> None:
-            normalized = reason.value.strip()
-            if not normalized:
-                reason.error = "Informe por que o equipamento será pausado."
-                reason.update()
+            if not reason_selector.validate(message="Selecione o motivo da pausa."):
                 return
             page.pop_dialog()
-            self._on_pause_resource(resource, normalized)
+            self._on_pause_resource(resource, reason_selector.value())
 
         page.show_dialog(
-            ft.AlertDialog(
-                modal=True,
-                title=ft.Text(f"Pausar {label.lower()}?"),
+            styled_dialog(
+                title=f"Pausar {label.lower()}?",
+                subtitle="A contagem será congelada para todos os ensaios afetados",
+                icon=ft.Icons.PAUSE_CIRCLE_OUTLINE,
+                danger=True,
                 content=ft.Column(
+                    width=560,
                     tight=True,
-                    spacing=10,
+                    spacing=14,
+                    horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
                     controls=[
-                        ft.Text(
-                            "Todos os ensaios atualmente nesse equipamento terão a "
-                            "contagem congelada até a retomada."
+                        dialog_banner(
+                            "Os prazos deixam de avançar até a retomada. Depois, o sistema "
+                            "desloca automaticamente as retiradas nominal e máxima.",
+                            icon=ft.Icons.TIMER_OFF_OUTLINED,
+                            warning=True,
                         ),
-                        reason,
+                        reason_selector.control,
                     ],
                 ),
-                actions=[
-                    ft.TextButton(
-                        content="Não",
-                        on_click=lambda _event: page.pop_dialog(),
-                    ),
-                    ft.TextButton(
-                        content="Sim, pausar",
-                        on_click=confirm,
-                        style=ft.ButtonStyle(color=AppColors.WARNING),
-                    ),
-                ],
-                actions_alignment=ft.MainAxisAlignment.END,
+                actions=dialog_actions(
+                    page=page,
+                    primary_label="Confirmar pausa",
+                    primary_icon=ft.Icons.PAUSE,
+                    on_confirm=confirm,
+                    danger=True,
+                ),
             )
         )
 
