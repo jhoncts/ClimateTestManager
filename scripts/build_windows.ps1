@@ -1,5 +1,5 @@
 $ErrorActionPreference = "Stop"
-$version = "0.6.1"
+$version = "0.6.2"
 $releaseDir = "dist\ClimateTestManager-v$version"
 $releaseZip = "dist\ClimateTestManager-v$version-windows.zip"
 $installerPath = "dist\ClimateTestManager-Server-Setup-v$version.exe"

@@ -4,7 +4,7 @@ on:
   pull_request:
   push:
     branches:
-      - "release/v0.6.1"
+      - "release/v0.6.2"
     tags:
       - "v*"
 
@@ -45,17 +45,61 @@ jobs:
         shell: pwsh
         run: .\scripts\build_windows.ps1
 
+      - name: Smoke test packaged server
+        shell: pwsh
+        run: |
+          $dataDir = Join-Path $env:RUNNER_TEMP "ClimateTestManagerSmokeData"
+          New-Item -ItemType Directory -Path $dataDir -Force | Out-Null
+          $serverExe = ".\dist\ClimateTestManager-v0.6.2\ClimateTestServer.exe"
+          $server = Start-Process `
+            -FilePath $serverExe `
+            -ArgumentList @(
+              "--host", "127.0.0.1",
+              "--port", "18550",
+              "--data-directory", "`"$dataDir`""
+            ) `
+            -PassThru
+          try {
+            $ready = $false
+            for ($attempt = 1; $attempt -le 45; $attempt++) {
+              if ($server.HasExited) {
+                throw "ClimateTestServer.exe encerrou antes de responder. ExitCode=$($server.ExitCode)"
+              }
+              try {
+                $response = Invoke-WebRequest `
+                  -Uri "http://127.0.0.1:18550/" `
+                  -UseBasicParsing `
+                  -TimeoutSec 2
+                if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 500) {
+                  $ready = $true
+                  break
+                }
+              }
+              catch {
+                Start-Sleep -Seconds 1
+              }
+            }
+            if (-not $ready) {
+              throw "ClimateTestServer.exe não respondeu ao smoke test na porta 18550."
+            }
+          }
+          finally {
+            if (-not $server.HasExited) {
+              Stop-Process -Id $server.Id -Force
+            }
+          }
+
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ClimateTestManager-v0.6.1-Windows
+          name: ClimateTestManager-v0.6.2-Windows
           if-no-files-found: error
           path: |
-            dist/ClimateTestManager-Server-Setup-v0.6.1.exe
-            dist/ClimateTestManager-v0.6.1-windows.zip
+            dist/ClimateTestManager-Server-Setup-v0.6.2.exe
+            dist/ClimateTestManager-v0.6.2-windows.zip
 
       - name: Publish GitHub release
-        if: github.ref == 'refs/heads/release/v0.6.1' || startsWith(github.ref, 'refs/tags/')
+        if: github.ref == 'refs/heads/release/v0.6.2' || startsWith(github.ref, 'refs/tags/')
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -63,11 +107,11 @@ jobs:
           $releaseTag = if ("${{ github.ref }}" -like "refs/tags/*") {
             "${{ github.ref_name }}"
           } else {
-            "v0.6.1"
+            "v0.6.2"
           }
           gh release create $releaseTag `
-            "dist/ClimateTestManager-Server-Setup-v0.6.1.exe" `
-            "dist/ClimateTestManager-v0.6.1-windows.zip" `
+            "dist/ClimateTestManager-Server-Setup-v0.6.2.exe" `
+            "dist/ClimateTestManager-v0.6.2-windows.zip" `
             --target "${{ github.sha }}" `
             --title "ClimateTest Manager $releaseTag" `
             --generate-notes
