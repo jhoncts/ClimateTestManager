@@ -1,8 +1,9 @@
 $ErrorActionPreference = "Stop"
-$version = "0.6.3"
+$version = "0.7.0"
 $releaseDir = "dist\ClimateTestManager-v$version"
 $releaseZip = "dist\ClimateTestManager-v$version-windows.zip"
 $installerPath = "dist\ClimateTestManager-Server-Setup-v$version.exe"
+$assetsStage = "build\release-assets"
 
 if (-not (Test-Path ".\.venv\Scripts\python.exe")) {
     throw "Ambiente virtual nao encontrado. Crie a .venv e instale o projeto antes de empacotar."
@@ -13,13 +14,29 @@ if (Test-Path -LiteralPath $releaseDir) {
 }
 New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
 
+if (Test-Path -LiteralPath $assetsStage) {
+    Remove-Item -LiteralPath $assetsStage -Recurse -Force
+}
+New-Item -ItemType Directory -Path $assetsStage -Force | Out-Null
+Copy-Item "src\assets\*" $assetsStage -Recurse -Force
+New-Item -ItemType Directory -Path (Join-Path $assetsStage "icons") -Force | Out-Null
+Copy-Item `
+    "src\assets\brand\climatetest-logo.png" `
+    (Join-Path $assetsStage "favicon.png") `
+    -Force
+Copy-Item `
+    "src\assets\brand\climatetest-logo.png" `
+    (Join-Path $assetsStage "icons\loading-animation.png") `
+    -Force
+
 .\.venv\Scripts\flet.exe pack src/client.py `
     --name ClimateTestManager `
     --icon "src\assets\brand\climatetest.ico" `
+    --add-data "$assetsStage;assets" `
     --product-name "ClimateTest Manager" `
     --product-version $version `
     --file-version "$version.0" `
-    --file-description "Acesso ao servidor do ClimateTest Manager" `
+    --file-description "Cliente desktop do ClimateTest Manager" `
     --company-name "ClimateTest Manager" `
     --copyright "Copyright (c) 2026 Jhon Cleiton" `
     --distpath $releaseDir `
@@ -30,7 +47,7 @@ New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
     --noconsole `
     --onefile `
     --icon "src\assets\brand\climatetest.ico" `
-    --add-data "src\assets;assets" `
+    --add-data "$assetsStage;assets" `
     --collect-all flet_web `
     --distpath $releaseDir `
     --clean `
@@ -41,7 +58,7 @@ New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
     --noconsole `
     --onefile `
     --icon "src\assets\brand\climatetest.ico" `
-    --add-data "src\assets;assets" `
+    --add-data "$assetsStage;assets" `
     --distpath $releaseDir `
     --clean `
     --noconfirm
