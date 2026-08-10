@@ -53,7 +53,7 @@ Name: "{autoprograms}\ClimateTest Manager - Diagnóstico"; Filename: "{sys}\expl
 Filename: "{app}\{#MyAppExeName}"; Description: "Abrir o ClimateTest Manager"; Flags: nowait postinstall skipifsilent; Check: ShouldLaunchApplication
 
 [UninstallRun]
-Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\uninstall_server_tasks.ps1"""; Flags: runhidden waituntilterminated; Check: IsServerModeInstall
+Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\uninstall_server_tasks.ps1"""; Flags: runhidden waituntilterminated; Check: IsServerModeInstall; RunOnceId: "ClimateTestManagerServerCleanup"
 
 [Code]
 var
@@ -157,9 +157,10 @@ var
   ExistingUrl: String;
   Role: String;
 begin
+  { Não expanda {app} aqui: InitializeWizard ocorre antes da seleção definitiva do diretório. }
   ExistingServerInstall :=
     FileExists(ExpandConstant('{commonappdata}\ClimateTestManager\Data\climatetest_manager.db')) or
-    FileExists(ExpandConstant('{app}\server-mode.marker'));
+    FileExists(ExpandConstant('{commonappdata}\ClimateTestManager\server-mode.marker'));
   ExistingUrl := ReadExistingServerUrl();
   Role := RequestedRole();
 
@@ -292,8 +293,10 @@ end;
 
 procedure WriteModeFiles();
 var
-  ServerMarker: String;
-  ClientMarker: String;
+  AppServerMarker: String;
+  AppClientMarker: String;
+  DataServerMarker: String;
+  DataClientMarker: String;
 begin
   ForceDirectories(ExpandConstant('{commonappdata}\ClimateTestManager'));
   SaveStringToFile(
@@ -302,17 +305,24 @@ begin
     False
   );
 
-  ServerMarker := ExpandConstant('{app}\server-mode.marker');
-  ClientMarker := ExpandConstant('{app}\client-mode.marker');
+  AppServerMarker := ExpandConstant('{app}\server-mode.marker');
+  AppClientMarker := ExpandConstant('{app}\client-mode.marker');
+  DataServerMarker := ExpandConstant('{commonappdata}\ClimateTestManager\server-mode.marker');
+  DataClientMarker := ExpandConstant('{commonappdata}\ClimateTestManager\client-mode.marker');
+
   if InstallAsServer then
   begin
-    DeleteFile(ClientMarker);
-    SaveStringToFile(ServerMarker, 'server', False);
+    DeleteFile(AppClientMarker);
+    DeleteFile(DataClientMarker);
+    SaveStringToFile(AppServerMarker, 'server', False);
+    SaveStringToFile(DataServerMarker, 'server', False);
   end
   else
   begin
-    DeleteFile(ServerMarker);
-    SaveStringToFile(ClientMarker, 'client', False);
+    DeleteFile(AppServerMarker);
+    DeleteFile(DataServerMarker);
+    SaveStringToFile(AppClientMarker, 'client', False);
+    SaveStringToFile(DataClientMarker, 'client', False);
   end;
 end;
 
@@ -379,7 +389,9 @@ end;
 
 function IsServerModeInstall(): Boolean;
 begin
-  Result := FileExists(ExpandConstant('{app}\server-mode.marker'));
+  Result :=
+    FileExists(ExpandConstant('{app}\server-mode.marker')) or
+    FileExists(ExpandConstant('{commonappdata}\ClimateTestManager\server-mode.marker'));
 end;
 
 procedure CurPageChanged(CurPageID: Integer);
