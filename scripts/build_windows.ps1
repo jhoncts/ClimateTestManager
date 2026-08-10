@@ -3,7 +3,7 @@ $version = "0.7.0"
 $releaseDir = "dist\ClimateTestManager-v$version"
 $releaseZip = "dist\ClimateTestManager-v$version-windows.zip"
 $installerPath = "dist\ClimateTestManager-Server-Setup-v$version.exe"
-$assetsStage = "build\release-assets"
+$assetsStage = ".release-assets"
 
 if (-not (Test-Path ".\.venv\Scripts\python.exe")) {
     throw "Ambiente virtual nao encontrado. Crie a .venv e instale o projeto antes de empacotar."
@@ -41,6 +41,9 @@ Copy-Item `
     --copyright "Copyright (c) 2026 Jhon Cleiton" `
     --distpath $releaseDir `
     --yes
+if ($LASTEXITCODE -ne 0) {
+    throw "Falha ao empacotar ClimateTestManager.exe."
+}
 
 .\.venv\Scripts\python.exe -m PyInstaller src/server.py `
     --name ClimateTestServer `
@@ -52,6 +55,9 @@ Copy-Item `
     --distpath $releaseDir `
     --clean `
     --noconfirm
+if ($LASTEXITCODE -ne 0) {
+    throw "Falha ao empacotar ClimateTestServer.exe."
+}
 
 .\.venv\Scripts\python.exe -m PyInstaller src/notifier.py `
     --name ClimateTestNotifier `
@@ -62,6 +68,9 @@ Copy-Item `
     --distpath $releaseDir `
     --clean `
     --noconfirm
+if ($LASTEXITCODE -ne 0) {
+    throw "Falha ao empacotar ClimateTestNotifier.exe."
+}
 
 Copy-Item "docs\MANUAL_TEST_V060.md" (Join-Path $releaseDir "LEIA-ME-PRIMEIRO.md")
 Copy-Item "src\assets\brand\climatetest.ico" (Join-Path $releaseDir "climatetest.ico")
@@ -105,6 +114,8 @@ if (-not (Test-Path -LiteralPath $installerPath)) {
 if (-not (Test-Path -LiteralPath $releaseZip)) {
     throw "O build terminou sem gerar $releaseZip."
 }
+
+Remove-Item -LiteralPath $assetsStage -Recurse -Force -ErrorAction SilentlyContinue
 
 Write-Host "Instalador criado em $installerPath"
 Write-Host "Pacote criado em $releaseZip"
