@@ -121,17 +121,12 @@ jobs:
               throw "A interface desktop real não concluiu a inicialização. A regressão da janela vazia ainda estaria presente."
             }
 
-            $windowTitled = $false
-            for ($attempt = 1; $attempt -le 20; $attempt++) {
-              $client.Refresh()
-              if ($client.MainWindowTitle -eq "ClimateTest Manager") {
-                $windowTitled = $true
-                break
-              }
-              Start-Sleep -Milliseconds 500
+            $marker = Get-Content -LiteralPath $readyFile -Raw
+            if ($marker -notmatch "ClimateTest Manager") {
+              throw "O cliente iniciou, mas não confirmou a montagem da interface ClimateTest Manager."
             }
-            if (-not $windowTitled) {
-              throw "A janela aberta não recebeu o título ClimateTest Manager. Título detectado: '$($client.MainWindowTitle)'"
+            if ($marker -notmatch [regex]::Escape("http://127.0.0.1:18550")) {
+              throw "A interface montada não confirmou o servidor usado no teste."
             }
           }
           finally {
@@ -234,6 +229,15 @@ jobs:
             if (-not $desktopReady) {
               throw "Estação instalada não montou a interface desktop real."
             }
+
+            $marker = Get-Content -LiteralPath $readyFile -Raw
+            if ($marker -notmatch "ClimateTest Manager") {
+              throw "A estação instalada não confirmou a montagem da interface ClimateTest Manager."
+            }
+            if ($marker -notmatch [regex]::Escape("http://127.0.0.1:18552")) {
+              throw "A estação instalada não usou o servidor persistido pelo instalador."
+            }
+
             if (-not $client.HasExited) {
               Stop-Process -Id $client.Id -Force -ErrorAction SilentlyContinue
               $client = $null
