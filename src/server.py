@@ -2,6 +2,7 @@
 
 import argparse
 import os
+import sys
 from pathlib import Path
 
 import flet as ft
@@ -18,7 +19,24 @@ def _arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _ensure_standard_streams() -> None:
+    """Garante streams válidos quando o executável foi empacotado com --noconsole.
+
+    No Windows, o PyInstaller pode definir sys.stdout/sys.stderr como None em executáveis
+    sem console. O Uvicorn consulta ``isatty()`` nesses streams durante a configuração do
+    logging; sem esta proteção o servidor encerra antes mesmo de abrir a porta HTTP.
+    """
+
+    if sys.stdin is None:
+        sys.stdin = open(os.devnull, encoding="utf-8")  # noqa: SIM115
+    if sys.stdout is None:
+        sys.stdout = open(os.devnull, "w", encoding="utf-8")  # noqa: SIM115
+    if sys.stderr is None:
+        sys.stderr = open(os.devnull, "w", encoding="utf-8")  # noqa: SIM115
+
+
 def run_server() -> None:
+    _ensure_standard_streams()
     arguments = _arguments()
     if arguments.data_directory:
         os.environ["CLIMATETEST_DATA_DIR"] = arguments.data_directory
