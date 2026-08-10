@@ -1,5 +1,5 @@
 #define MyAppName "ClimateTest Manager"
-#define MyAppVersion "0.6.3"
+#define MyAppVersion "0.7.0"
 #define MyAppPublisher "Jhon Cleiton"
 #define MyAppExeName "ClimateTestManager.exe"
 
@@ -35,14 +35,14 @@ Name: "{commonappdata}\ClimateTestManager\Logs"
 Name: "{commonappdata}\ClimateTestManager\Backups"
 
 [Files]
-Source: "..\dist\ClimateTestManager-v0.6.3\ClimateTestManager.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.6.3\ClimateTestServer.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.6.3\ClimateTestNotifier.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.6.3\climatetest.ico"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.6.3\LEIA-ME-PRIMEIRO.md"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.6.3\install_server_tasks.ps1"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.6.3\uninstall_server_tasks.ps1"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.6.3\documentacao-conformidade\*"; DestDir: "{app}\documentacao-conformidade"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\ClimateTestManager-v0.7.0\ClimateTestManager.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v0.7.0\ClimateTestServer.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v0.7.0\ClimateTestNotifier.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v0.7.0\climatetest.ico"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v0.7.0\LEIA-ME-PRIMEIRO.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v0.7.0\install_server_tasks.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v0.7.0\uninstall_server_tasks.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v0.7.0\documentacao-conformidade\*"; DestDir: "{app}\documentacao-conformidade"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--url http://localhost:8550"; IconFilename: "{app}\climatetest.ico"
@@ -50,7 +50,7 @@ Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Paramet
 Name: "{autoprograms}\ClimateTest Manager - Diagnóstico"; Filename: "{sys}\explorer.exe"; Parameters: """{commonappdata}\ClimateTestManager\Logs"""; IconFilename: "{app}\climatetest.ico"
 
 [Run]
-Filename: "{app}\{#MyAppExeName}"; Parameters: "--url http://localhost:8550"; Description: "Abrir o ClimateTest Manager"; Flags: nowait postinstall skipifsilent; Check: ServerReady
+Filename: "{app}\{#MyAppExeName}"; Parameters: "--url http://localhost:8550"; Description: "Abrir o ClimateTest Manager em sua janela"; Flags: nowait postinstall skipifsilent; Check: ServerReady
 
 [UninstallRun]
 Filename: "powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\uninstall_server_tasks.ps1"""; Flags: runhidden waituntilterminated
@@ -146,7 +146,7 @@ begin
       WizardForm.FinishedHeadingLabel.Caption := 'ClimateTest Manager pronto para uso';
       WizardForm.FinishedLabel.Caption :=
         'O servidor central foi instalado, iniciado e verificado com sucesso.' + #13#10 + #13#10 +
-        'Clique em Concluir para abrir o ClimateTest Manager.';
+        'Clique em Concluir para abrir a janela do ClimateTest Manager.';
     end
     else
     begin
