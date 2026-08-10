@@ -1,5 +1,5 @@
 #define MyAppName "ClimateTest Manager"
-#define MyAppVersion "0.6.2"
+#define MyAppVersion "0.6.3"
 #define MyAppPublisher "Jhon Cleiton"
 #define MyAppExeName "ClimateTestManager.exe"
 
@@ -35,14 +35,14 @@ Name: "{commonappdata}\ClimateTestManager\Logs"
 Name: "{commonappdata}\ClimateTestManager\Backups"
 
 [Files]
-Source: "..\dist\ClimateTestManager-v0.6.2\ClimateTestManager.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.6.2\ClimateTestServer.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.6.2\ClimateTestNotifier.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.6.2\climatetest.ico"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.6.2\LEIA-ME-PRIMEIRO.md"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.6.2\install_server_tasks.ps1"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.6.2\uninstall_server_tasks.ps1"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.6.2\documentacao-conformidade\*"; DestDir: "{app}\documentacao-conformidade"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\ClimateTestManager-v0.6.3\ClimateTestManager.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v0.6.3\ClimateTestServer.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v0.6.3\ClimateTestNotifier.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v0.6.3\climatetest.ico"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v0.6.3\LEIA-ME-PRIMEIRO.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v0.6.3\install_server_tasks.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v0.6.3\uninstall_server_tasks.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v0.6.3\documentacao-conformidade\*"; DestDir: "{app}\documentacao-conformidade"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--url http://localhost:8550"; IconFilename: "{app}\climatetest.ico"
@@ -63,6 +63,47 @@ var
 function ServerReady(): Boolean;
 begin
   Result := ServerConfigured;
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var
+  ResultCode: Integer;
+  PowerShellPath: String;
+  Params: String;
+begin
+  Result := '';
+  NeedsRestart := False;
+  WizardForm.StatusLabel.Caption := 'Preparando atualização e encerrando a versão anterior...';
+
+  PowerShellPath := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Params := '-NoProfile -ExecutionPolicy Bypass -Command "& {' +
+    ' $ErrorActionPreference = ''SilentlyContinue'';' +
+    ' $tasks = @(''ClimateTestManager-Server'',''ClimateTestManager-Background'',''ClimateTestManager-Notifications'');' +
+    ' foreach ($task in $tasks) {' +
+    '   Stop-ScheduledTask -TaskName $task -ErrorAction SilentlyContinue;' +
+    '   Disable-ScheduledTask -TaskName $task -ErrorAction SilentlyContinue | Out-Null;' +
+    ' };' +
+    ' & taskkill.exe /F /T /IM ClimateTestServer.exe 2>$null | Out-Null;' +
+    ' & taskkill.exe /F /T /IM ClimateTestNotifier.exe 2>$null | Out-Null;' +
+    ' & taskkill.exe /F /T /IM ClimateTestManager.exe 2>$null | Out-Null;' +
+    ' for ($i = 0; $i -lt 20; $i++) {' +
+    '   $running = Get-Process -Name ClimateTestServer,ClimateTestNotifier,ClimateTestManager -ErrorAction SilentlyContinue;' +
+    '   if (-not $running) { exit 0 };' +
+    '   Start-Sleep -Milliseconds 500;' +
+    ' };' +
+    ' exit 31' +
+    '}"';
+
+  if not Exec(PowerShellPath, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+  begin
+    Result := 'O instalador não conseguiu preparar a atualização. Feche o ClimateTest Manager e tente novamente. Código CTM-UPD-001.';
+    Exit;
+  end;
+
+  if ResultCode <> 0 then
+  begin
+    Result := 'A versão anterior do ClimateTest Manager continua em execução e não pôde ser encerrada automaticamente. Código CTM-UPD-' + IntToStr(ResultCode) + '. Não ignore arquivos: cancele e informe este código.';
+  end;
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
