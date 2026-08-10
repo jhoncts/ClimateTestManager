@@ -2,9 +2,8 @@ name: Build Windows release
 
 on:
   pull_request:
+  workflow_dispatch:
   push:
-    branches:
-      - "release/v0.7.0"
     tags:
       - "v*"
 
@@ -41,15 +40,18 @@ jobs:
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
 
-      - name: Build executables and installer
+      - name: Build executables and universal installer
         shell: pwsh
         run: .\scripts\build_windows.ps1
 
-      - name: Smoke test packaged server and desktop client
+      - name: Smoke test packaged server and real desktop window
         shell: pwsh
         run: |
           $dataDir = Join-Path $env:RUNNER_TEMP "ClimateTestManagerSmokeData"
+          $readyFile = Join-Path $env:RUNNER_TEMP "ClimateTestManagerDesktop.ready"
+          Remove-Item -LiteralPath $readyFile -Force -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Path $dataDir -Force | Out-Null
+
           $serverExe = ".\dist\ClimateTestManager-v0.7.0\ClimateTestServer.exe"
           $clientExe = ".\dist\ClimateTestManager-v0.7.0\ClimateTestManager.exe"
           $server = Start-Process `
@@ -60,6 +62,8 @@ jobs:
               "--data-directory", "`"$dataDir`""
             ) `
             -PassThru
+
+          $client = $null
           try {
             $ready = $false
             for ($attempt = 1; $attempt -le 45; $attempt++) {
@@ -90,16 +94,149 @@ jobs:
               -Wait `
               -PassThru
             if ($clientCheck.ExitCode -ne 0) {
-              throw "Cliente desktop empacotado não conseguiu validar o servidor. ExitCode=$($clientCheck.ExitCode)"
+              throw "Cliente empacotado não conseguiu validar o servidor. ExitCode=$($clientCheck.ExitCode)"
+            }
+
+            $client = Start-Process `
+              -FilePath $clientExe `
+              -ArgumentList @(
+                "--url", "http://127.0.0.1:18550",
+                "--ready-file", "`"$readyFile`""
+              ) `
+              -PassThru
+
+            $desktopReady = $false
+            for ($attempt = 1; $attempt -le 60; $attempt++) {
+              $client.Refresh()
+              if ($client.HasExited) {
+                throw "Cliente desktop encerrou antes de montar a interface. ExitCode=$($client.ExitCode)"
+              }
+              if (Test-Path -LiteralPath $readyFile) {
+                $desktopReady = $true
+                break
+              }
+              Start-Sleep -Milliseconds 500
+            }
+            if (-not $desktopReady) {
+              throw "A interface desktop real não concluiu a inicialização. A regressão da janela vazia ainda estaria presente."
+            }
+
+            $windowTitled = $false
+            for ($attempt = 1; $attempt -le 20; $attempt++) {
+              $client.Refresh()
+              if ($client.MainWindowTitle -eq "ClimateTest Manager") {
+                $windowTitled = $true
+                break
+              }
+              Start-Sleep -Milliseconds 500
+            }
+            if (-not $windowTitled) {
+              throw "A janela aberta não recebeu o título ClimateTest Manager. Título detectado: '$($client.MainWindowTitle)'"
+            }
+          }
+          finally {
+            if ($client -and -not $client.HasExited) {
+              Stop-Process -Id $client.Id -Force -ErrorAction SilentlyContinue
+            }
+            if (-not $server.HasExited) {
+              Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
+            }
+          }
+
+      - name: Smoke test universal installer as workstation
+        shell: pwsh
+        run: |
+          $serverData = Join-Path $env:RUNNER_TEMP "ClimateTestManagerWorkstationServerData"
+          $clientInstall = Join-Path $env:RUNNER_TEMP "ClimateTestManagerWorkstation"
+          $programData = Join-Path $env:RUNNER_TEMP "ClimateTestManagerClientProgramData"
+          New-Item -ItemType Directory -Path $serverData -Force | Out-Null
+          New-Item -ItemType Directory -Path $programData -Force | Out-Null
+
+          $serverExe = ".\dist\ClimateTestManager-v0.7.0\ClimateTestServer.exe"
+          $setupExe = ".\dist\ClimateTestManager-Setup-v0.7.0.exe"
+          $server = Start-Process `
+            -FilePath $serverExe `
+            -ArgumentList @(
+              "--host", "127.0.0.1",
+              "--port", "18552",
+              "--data-directory", "`"$serverData`""
+            ) `
+            -PassThru
+
+          try {
+            $ready = $false
+            for ($attempt = 1; $attempt -le 45; $attempt++) {
+              if ($server.HasExited) {
+                throw "Servidor temporário da estação encerrou. ExitCode=$($server.ExitCode)"
+              }
+              try {
+                $response = Invoke-WebRequest -Uri "http://127.0.0.1:18552/" -UseBasicParsing -TimeoutSec 2
+                if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 500) {
+                  $ready = $true
+                  break
+                }
+              }
+              catch {
+                Start-Sleep -Seconds 1
+              }
+            }
+            if (-not $ready) {
+              throw "Servidor temporário da estação não respondeu."
+            }
+
+            $oldProgramData = $env:PROGRAMDATA
+            $env:PROGRAMDATA = $programData
+            try {
+              $setup = Start-Process `
+                -FilePath $setupExe `
+                -ArgumentList @(
+                  "/VERYSILENT",
+                  "/SUPPRESSMSGBOXES",
+                  "/NORESTART",
+                  "/ROLE=client",
+                  "/SERVERADDRESS=127.0.0.1:18552",
+                  "/DIR=`"$clientInstall`""
+                ) `
+                -Wait `
+                -PassThru
+              if ($setup.ExitCode -ne 0) {
+                throw "Instalador universal falhou no modo estação. ExitCode=$($setup.ExitCode)"
+              }
+
+              $installedClient = Join-Path $clientInstall "ClimateTestManager.exe"
+              if (-not (Test-Path -LiteralPath $installedClient)) {
+                throw "Instalador de estação não instalou ClimateTestManager.exe."
+              }
+
+              $clientCheck = Start-Process `
+                -FilePath $installedClient `
+                -ArgumentList @("--check-only") `
+                -Wait `
+                -PassThru
+              if ($clientCheck.ExitCode -ne 0) {
+                throw "Estação instalada não usou corretamente o servidor salvo pelo instalador. ExitCode=$($clientCheck.ExitCode)"
+              }
+
+              $serverMarker = Join-Path $clientInstall "server-mode.marker"
+              $clientMarker = Join-Path $clientInstall "client-mode.marker"
+              if (Test-Path -LiteralPath $serverMarker) {
+                throw "Instalação de estação criou marcador de servidor por engano."
+              }
+              if (-not (Test-Path -LiteralPath $clientMarker)) {
+                throw "Instalação de estação não criou marcador de cliente."
+              }
+            }
+            finally {
+              $env:PROGRAMDATA = $oldProgramData
             }
           }
           finally {
             if (-not $server.HasExited) {
-              Stop-Process -Id $server.Id -Force
+              Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
             }
           }
 
-      - name: Smoke test upgrade over running server
+      - name: Smoke test upgrade as central server
         shell: pwsh
         run: |
           $installDir = Join-Path $env:ProgramFiles "ClimateTest Manager"
@@ -126,12 +263,17 @@ jobs:
           }
 
           $setup = Start-Process `
-            -FilePath ".\dist\ClimateTestManager-Server-Setup-v0.7.0.exe" `
-            -ArgumentList @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART") `
+            -FilePath ".\dist\ClimateTestManager-Setup-v0.7.0.exe" `
+            -ArgumentList @(
+              "/VERYSILENT",
+              "/SUPPRESSMSGBOXES",
+              "/NORESTART",
+              "/ROLE=server"
+            ) `
             -Wait `
             -PassThru
           if ($setup.ExitCode -ne 0) {
-            throw "Instalador falhou no teste de atualização. ExitCode=$($setup.ExitCode)"
+            throw "Instalador falhou no teste de atualização do servidor. ExitCode=$($setup.ExitCode)"
           }
 
           if (Get-Process -Id $oldServer.Id -ErrorAction SilentlyContinue) {
@@ -161,36 +303,55 @@ jobs:
           $installedClient = Join-Path $installDir "ClimateTestManager.exe"
           $clientCheck = Start-Process `
             -FilePath $installedClient `
-            -ArgumentList @("--url", "http://127.0.0.1:8550", "--check-only") `
+            -ArgumentList @("--check-only") `
             -Wait `
             -PassThru
           if ($clientCheck.ExitCode -ne 0) {
-            throw "Cliente desktop instalado não conseguiu alcançar o servidor central."
+            throw "Cliente desktop instalado no servidor não conseguiu alcançar o servidor central."
           }
 
-      - name: Upload workflow artifact
+          $serverMarker = Join-Path $installDir "server-mode.marker"
+          if (-not (Test-Path -LiteralPath $serverMarker)) {
+            throw "Instalação do servidor não criou o marcador de servidor."
+          }
+
+      - name: Verify installer checksum
+        shell: pwsh
+        run: |
+          $installer = ".\dist\ClimateTestManager-Setup-v0.7.0.exe"
+          $hashFile = ".\dist\ClimateTestManager-Setup-v0.7.0-SHA256.txt"
+          if (-not (Test-Path -LiteralPath $installer)) {
+            throw "Instalador final não foi gerado."
+          }
+          if (-not (Test-Path -LiteralPath $hashFile)) {
+            throw "Arquivo SHA-256 não foi gerado."
+          }
+          $actual = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant()
+          $declared = (Get-Content -LiteralPath $hashFile -Raw).ToLowerInvariant()
+          if ($declared -notmatch [regex]::Escape($actual)) {
+            throw "SHA-256 publicado não corresponde ao instalador gerado."
+          }
+
+      - name: Upload validated Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ClimateTestManager-v0.7.0-Windows
+          name: ClimateTestManager-v0.7.0-Windows-Validated
           if-no-files-found: error
           path: |
-            dist/ClimateTestManager-Server-Setup-v0.7.0.exe
+            dist/ClimateTestManager-Setup-v0.7.0.exe
+            dist/ClimateTestManager-Setup-v0.7.0-SHA256.txt
             dist/ClimateTestManager-v0.7.0-windows.zip
 
-      - name: Publish GitHub release
-        if: github.ref == 'refs/heads/release/v0.7.0' || startsWith(github.ref, 'refs/tags/')
+      - name: Publish GitHub release only from a tag
+        if: startsWith(github.ref, 'refs/tags/')
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $releaseTag = if ("${{ github.ref }}" -like "refs/tags/*") {
-            "${{ github.ref_name }}"
-          } else {
-            "v0.7.0"
-          }
-          gh release create $releaseTag `
-            "dist/ClimateTestManager-Server-Setup-v0.7.0.exe" `
+          gh release create "${{ github.ref_name }}" `
+            "dist/ClimateTestManager-Setup-v0.7.0.exe" `
+            "dist/ClimateTestManager-Setup-v0.7.0-SHA256.txt" `
             "dist/ClimateTestManager-v0.7.0-windows.zip" `
             --target "${{ github.sha }}" `
-            --title "ClimateTest Manager $releaseTag" `
+            --title "ClimateTest Manager ${{ github.ref_name }}" `
             --generate-notes
