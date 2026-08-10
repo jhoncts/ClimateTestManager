@@ -154,6 +154,43 @@ class ExportAndNotificationTests(unittest.TestCase):
         self.assertEqual(len(desktop.messages), 1)
         self.assertEqual(len(email.messages), 1)
 
+    def test_server_email_and_interactive_desktop_workers_complete_same_event(self) -> None:
+        test_id = self.service.create(_command())
+        self.service.start_chamber(test_id)
+        self.now += timedelta(hours=502)
+        email = RecordingProvider()
+        desktop = RecordingProvider()
+
+        email_result = deliver_due_notifications(
+            self.repository,
+            None,
+            email_provider=email,
+            require_desktop=True,
+            require_email=True,
+            now_provider=lambda: self.now,
+        )
+        desktop_result = deliver_due_notifications(
+            self.repository,
+            desktop,
+            require_desktop=True,
+            require_email=True,
+            now_provider=lambda: self.now,
+        )
+        repeated_email_result = deliver_due_notifications(
+            self.repository,
+            None,
+            email_provider=email,
+            require_desktop=True,
+            require_email=True,
+            now_provider=lambda: self.now,
+        )
+
+        self.assertEqual(email_result, (0, 0))
+        self.assertEqual(desktop_result, (1, 0))
+        self.assertEqual(repeated_email_result, (0, 0))
+        self.assertEqual(len(email.messages), 1)
+        self.assertEqual(len(desktop.messages), 1)
+
     def test_email_provider_sends_to_all_active_recipients_with_tls(self) -> None:
         settings = EmailSettings(
             enabled=True,
@@ -186,7 +223,13 @@ class ExportAndNotificationTests(unittest.TestCase):
         self.assertEqual(message["To"], "admin@example.com, operador@example.com")
         self.assertTrue(message["Date"])
         self.assertTrue(message["Message-ID"])
-        self.assertIn("Processo: 26123.1", message.get_content())
+        plain_body = message.get_body(preferencelist=("plain",))
+        html_body = message.get_body(preferencelist=("html",))
+        self.assertIsNotNone(plain_body)
+        self.assertIsNotNone(html_body)
+        self.assertIn("Processo: 26123.1", plain_body.get_content())
+        self.assertIn("ClimateTest Manager", html_body.get_content())
+        self.assertIn("26123.1", html_body.get_content())
         self.assertEqual(
             client.send_message.call_args.kwargs,
             {

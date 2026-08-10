@@ -27,7 +27,7 @@ def _notification_action(data_directory: str = "") -> str:
     candidates.extend(
         [
             (
-                project_root / "dist" / "ClimateTestManager-v0.5.0" / "ClimateTestNotifier.exe",
+                project_root / "dist" / "ClimateTestManager-v0.6.0" / "ClimateTestNotifier.exe",
                 None,
             ),
             (project_root / "dist" / "ClimateTestNotifier.exe", None),

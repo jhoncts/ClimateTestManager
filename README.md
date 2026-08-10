@@ -1,14 +1,14 @@
 # ClimateTest Manager
 
-Aplicação desktop para controle de ensaios de resistência climática realizados conforme a
+Aplicação cliente-servidor para controle de ensaios de resistência climática realizados conforme a
 **ABNT NBR IEC 60079-0:2020**.
 
 O projeto nasce para substituir uma planilha operacional por um software local, auditável e
-preparado para gerar um executável do Windows sem abrir navegador ou terminal.
+acessível na rede privada do laboratório por computadores e celulares.
 
-> Status: versão 0.5.0 candidata à implantação controlada. O fluxo técnico, autenticação,
-> rastreabilidade, notificações, agenda e backups estão funcionais. A adoção oficial ainda deve
-> seguir a validação interna e os procedimentos do laboratório.
+> Status: versão 0.6.0 candidata à implantação controlada em rede local. O servidor centraliza o
+> banco, as contas, a rastreabilidade, as notificações e os backups. A adoção oficial deve seguir
+> o roteiro de validação da versão e os procedimentos do laboratório.
 
 ## Funcionalidades disponíveis
 
@@ -67,6 +67,16 @@ preparado para gerar um executável do Windows sem abrir navegador ou terminal.
   SQLite, conferência de vínculos e manifesto SHA-256.
 - Registro de falhas do sistema com impacto, ação imediata e encerramento administrativo por ação
   corretiva, preservando o relato original.
+- Acesso simultâneo na rede privada por navegador, sem compartilhar o arquivo SQLite.
+- Primeiro administrador e recuperação da conta disponíveis somente no computador servidor.
+- Código de recuperação rotativo que invalida as sessões anteriores da conta recuperada.
+- Motivos controlados de falha com prioridade automática; descrição e ação tomada obrigatórias.
+- Central interna com leitura individual: prazos para todos e falhas somente para administradores.
+- E-mails HTML com logo e alertas de falha restritos aos administradores.
+- Notificações do Windows com identidade própria e conteúdo operacional compacto.
+- Instalador que configura servidor, notificador, atalho e firewall para redes privadas.
+- Servidor e e-mails iniciados com o Windows; toast separado na sessão interativa para continuar
+  visível ao usuário conectado.
 - Base normativa, versão da regra e ressalva de responsabilidade disponíveis em Configurações.
 - Dossiê de conformidade com matriz ISO/IEC 17025, protocolo de validação, procedimento de ciclo
   de vida e avaliação de riscos.
@@ -152,7 +162,15 @@ ruff format --check .
 pytest
 ```
 
-## Gerar o executável
+## Executar o servidor LAN em desenvolvimento
+
+```powershell
+python src/server.py --data-directory "C:\ClimateTestManager\Dados"
+```
+
+Abra `http://localhost:8550` no servidor e `http://NOME-DO-SERVIDOR:8550` nas demais estações.
+
+## Gerar o instalador
 
 O empacotamento deve ser executado no próprio Windows:
 
@@ -160,30 +178,23 @@ O empacotamento deve ser executado no próprio Windows:
 .\scripts\build_windows.ps1
 ```
 
-O resultado será criado em `dist/ClimateTestManager-v0.5.0-windows.zip`. O comando usa
-`flet pack`, a integração oficial do Flet com o PyInstaller, sem habilitar o console de
-depuração. O pacote contém `ClimateTestManager.exe`, `ClimateTestNotifier.exe` e o manual de
-primeiro uso.
+O resultado principal será `dist/ClimateTestManager-Server-Setup-v0.6.0.exe`. Também é gerado o
+ZIP `dist/ClimateTestManager-v0.6.0-windows.zip`. O instalador contém o atalho gráfico, o servidor
+LAN, o notificador silencioso, a identidade visual e a documentação de validação.
 
 ## Primeiro acesso
 
-Na primeira abertura, o responsável define:
-
-- uma pasta local estável para o banco ativo;
-- uma pasta de cópias de segurança no OneDrive, recomendada para proteger os dados se o
-  computador falhar.
-
-O banco aberto não pode ficar em OneDrive, Dropbox, Google Drive, iCloud ou pasta de rede. Depois
-disso, o sistema solicita:
+Na primeira abertura de `http://localhost:8550`, no próprio servidor, o sistema solicita:
 
 - nome e sobrenome;
 - nome de usuário;
 - e-mail;
 - senha e confirmação.
 
-Essa primeira conta será administradora. Depois do cadastro, o sistema apresenta um guia curto
-organizado pelas tarefas do laboratório. Outros operadores são cadastrados manualmente em
-**Usuários**; não existe criação pública de conta.
+Essa primeira conta será administradora e receberá um código de recuperação exibido uma única
+vez. Depois do cadastro, o sistema apresenta um guia curto. Outros operadores são cadastrados em
+**Usuários**; não existe criação pública de conta. Nas estações remotas, a tela de criação do
+administrador nunca é exibida: basta abrir `http://NOME-DO-SERVIDOR:8550` e entrar.
 
 ## Avisos em segundo plano
 
@@ -193,8 +204,13 @@ deve estar ligado e a sessão do Windows iniciada. A tarefa chama diretamente o 
 abrir uma janela de CMD ou PowerShell.
 
 Um administrador também pode configurar um servidor SMTP em **Configurações**. Quando ativado, o
-mesmo agente envia um e-mail a todos os usuários ativos duas horas antes da retirada nominal e
-quando o limite máximo é ultrapassado. A senha SMTP fica protegida pela conta do Windows.
+agente envia os prazos a todos os usuários ativos. Falhas usam uma fila separada e são enviadas
+somente aos administradores ativos. A senha SMTP fica protegida pela DPAPI no computador servidor
+e permanece inacessível em texto aberto.
+
+O servidor deve permanecer em uma rede privada confiável. Não encaminhe a porta 8550 no roteador
+e não exponha o serviço diretamente à internet. O banco nunca deve ser colocado em pasta de rede;
+configure uma cópia externa com histórico de versões e teste periodicamente a restauração.
 
 ### Configurar os avisos por e-mail
 
@@ -236,7 +252,7 @@ Outlook nem de outro calendário externo.
 - [Regras de negócio](docs/BUSINESS_RULES.md)
 - [Arquitetura](docs/ARCHITECTURE.md)
 - [Guia de desenvolvimento](docs/DEVELOPMENT.md)
-- [Validação manual da v0.5.0](docs/MANUAL_TEST_V050.md)
+- [Implantação e validação da v0.6.0](docs/MANUAL_TEST_V060.md)
 - [Dossiê de conformidade do sistema](docs/compliance/README.md)
 - [Matriz ISO/IEC 17025 para o software](docs/compliance/ISO17025_SOFTWARE_COMPLIANCE_MATRIX.md)
 - [Protocolo formal de validação](docs/compliance/VALIDATION_PROTOCOL_V050.md)

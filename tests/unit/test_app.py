@@ -8,7 +8,12 @@ from unittest.mock import patch
 
 import flet as ft
 
-from climatetest_manager.app import ClimateTestApplication, _application_theme, main
+from climatetest_manager.app import (
+    ClimateTestApplication,
+    _application_theme,
+    _local_server_client,
+    main,
+)
 from climatetest_manager.config import EmailSettings
 from climatetest_manager.database.session import create_session_factory, initialize_database
 from climatetest_manager.repositories.climate_tests import ClimateTestRepository
@@ -58,6 +63,18 @@ class FakePage:
 
 
 class ApplicationTests(unittest.TestCase):
+    def test_server_initial_setup_is_limited_to_loopback_client(self) -> None:
+        page = FakePage()
+        with patch.dict("os.environ", {"CLIMATETEST_SERVER_MODE": "1"}):
+            page.client_ip = "192.168.0.25"
+            self.assertFalse(_local_server_client(page))  # type: ignore[arg-type]
+            page.client_ip = "127.0.0.1"
+            self.assertTrue(_local_server_client(page))  # type: ignore[arg-type]
+            page.client_ip = "::1"
+            self.assertTrue(_local_server_client(page))  # type: ignore[arg-type]
+            page.client_ip = "::ffff:127.0.0.1"
+            self.assertTrue(_local_server_client(page))  # type: ignore[arg-type]
+
     def test_main_builds_first_access_and_database(self) -> None:
         with TemporaryDirectory() as temporary_directory:
             page = FakePage()

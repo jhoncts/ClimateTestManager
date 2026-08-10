@@ -7,6 +7,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from climatetest_manager.database.models import (
+    AdministratorRecoveryRecord,
     SecurityAuditEvent,
     UserRecord,
     UserSessionRecord,
@@ -91,6 +92,36 @@ class UserRepository:
                 .order_by(UserRecord.email)
             )
             return list(dict.fromkeys(session.scalars(statement)))
+
+    def list_active_admin_emails(self) -> list[str]:
+        """Retorna somente os administradores ativos para alertas restritos."""
+
+        with self._session_factory() as session:
+            statement = (
+                select(UserRecord.email)
+                .where(
+                    UserRecord.is_active.is_(True),
+                    UserRecord.role == "admin",
+                )
+                .order_by(UserRecord.email)
+            )
+            return list(dict.fromkeys(session.scalars(statement)))
+
+    def get_recovery_code_hash(self) -> str | None:
+        with self._session_factory() as session:
+            record = session.get(AdministratorRecoveryRecord, 1)
+            return record.code_hash if record is not None else None
+
+    def save_recovery_code_hash(self, code_hash: str, updated_at: datetime) -> None:
+        with self._session_factory() as session:
+            record = session.get(AdministratorRecoveryRecord, 1)
+            if record is None:
+                record = AdministratorRecoveryRecord(id=1, code_hash=code_hash)
+                session.add(record)
+            else:
+                record.code_hash = code_hash
+            record.updated_at = updated_at
+            session.commit()
 
     def mutate(self, user_id: int, operation: Callable[[UserRecord], None]) -> None:
         with self._session_factory() as session:

@@ -220,6 +220,43 @@ class AuthenticationTests(unittest.TestCase):
         with self.assertRaisesRegex(AuthenticationError, "no máximo 2 MB"):
             self.auth.set_profile_photo(admin, b"\x89PNG\r\n\x1a\n" + b"x" * (2 * 1024 * 1024))
 
+    def test_server_recovery_rotates_code_and_revokes_previous_session(self) -> None:
+        admin = self.auth.register_initial_admin(registration("admin", "admin@example.com"))
+        previous_session = self.auth.authenticate("admin", "Senha123", remember=True)
+        self.assertFalse(self.auth.has_administrator_recovery_code())
+        recovery_code = self.auth.rotate_administrator_recovery_code()
+        self.assertTrue(self.auth.has_administrator_recovery_code())
+        recovered, next_code = self.auth.recover_administrator(
+            recovery_code,
+            UserRegistrationCommand(
+                username="admin.corrigido",
+                email="novo-admin@example.com",
+                first_name="Jhon",
+                last_name="Cleiton",
+                password="NovaSenha456",
+                password_confirmation="NovaSenha456",
+                role="admin",
+            ),
+        )
+
+        self.assertEqual(recovered.id, admin.id)
+        self.assertEqual(recovered.username, "admin.corrigido")
+        self.assertNotEqual(next_code, recovery_code)
+        self.assertIsNone(self.auth.restore_session(previous_session.token))
+        self.assertEqual(
+            self.auth.authenticate(
+                "novo-admin@example.com",
+                "NovaSenha456",
+                remember=False,
+            ).user.id,
+            admin.id,
+        )
+        with self.assertRaisesRegex(AuthenticationError, "Código de recuperação inválido"):
+            self.auth.recover_administrator(
+                recovery_code,
+                registration("outra-conta", "outra@example.com"),
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

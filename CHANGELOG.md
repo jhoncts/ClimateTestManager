@@ -7,6 +7,23 @@ e o projeto utiliza versionamento semântico.
 
 ## [Não publicado]
 
+### v0.6.0 — rede local, central de notificações e identidade própria
+
+- Servidor Flet para acesso simultâneo por computadores e celulares na rede privada, mantendo o
+  SQLite exclusivamente no computador servidor.
+- Assistente inicial e recuperação do administrador limitados ao navegador local do servidor.
+- Código de recuperação de uso único, rotação obrigatória e revogação das sessões anteriores.
+- Central interna com leitura individual; avisos operacionais para todos e falhas somente para
+  administradores.
+- Catálogo de motivos de falha com prioridade automática, descrição e ação adotada obrigatórias.
+- Fila idempotente de e-mails de falha destinada somente aos administradores ativos.
+- E-mails HTML responsivos e notificações do Windows com nova identidade visual.
+- Logo exclusiva do ClimateTest Manager em PNG e ICO, preparada como base de uma família de
+  softwares laboratoriais.
+- Instalador do servidor com tarefas automáticas, regra de firewall privada, atalho e dados fora
+  de `Program Files`.
+- Workflow de release que testa, cria os executáveis, compila o instalador e o publica com a tag.
+
 ### Corrigido
 
 - O estado dos avisos em segundo plano agora considera se a tarefa do Windows está realmente
