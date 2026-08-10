@@ -9,6 +9,7 @@ param(
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
+$version = "0.7.0"
 $serverTaskName = "ClimateTestManager-Server"
 $backgroundTaskName = "ClimateTestManager-Background"
 $notifierTaskName = "ClimateTestManager-Notifications"
@@ -84,6 +85,42 @@ function Test-ServerReady {
         }
     }
     return $false
+}
+
+function Start-DetachedServer {
+    # Cria o servidor por Win32_Process para não prender o instalador ao processo permanente.
+    $commandLine = (
+        '"{0}" --host 0.0.0.0 --port {1} --data-directory "{2}"' -f `
+            $serverExecutable,
+            $Port,
+            $DataDirectory
+    )
+    try {
+        $created = Invoke-CimMethod `
+            -ClassName Win32_Process `
+            -MethodName Create `
+            -Arguments @{ CommandLine = $commandLine } `
+            -ErrorAction Stop
+        if ($null -eq $created -or [int]$created.ReturnValue -ne 0) {
+            $code = if ($null -eq $created) { -1 } else { [int]$created.ReturnValue }
+            throw "Win32_Process.Create retornou código $code."
+        }
+        Write-InstallLog "Inicialização direta desacoplada criada. PID=$($created.ProcessId)."
+    }
+    catch {
+        Add-InstallWarning (
+            "Não foi possível desacoplar a inicialização direta; usando o método compatível: " +
+            $_.Exception.Message
+        )
+        Start-Process `
+            -FilePath $serverExecutable `
+            -ArgumentList @(
+                "--host", "0.0.0.0",
+                "--port", "$Port",
+                "--data-directory", "`"$DataDirectory`""
+            ) `
+            -WindowStyle Hidden
+    }
 }
 
 function Register-ServerStartup {
@@ -188,7 +225,7 @@ function Register-BackgroundTasks {
 }
 
 try {
-    Write-InstallLog "Iniciando configuração do ClimateTest Manager v0.6.3."
+    Write-InstallLog "Iniciando configuração do ClimateTest Manager v$version."
     Write-InstallLog "Diretório de instalação: $InstallDirectory"
     Write-InstallLog "Diretório de dados: $DataDirectory"
 
@@ -295,15 +332,8 @@ try {
     }
 
     if (-not (Test-ServerReady -Attempts 30)) {
-        Write-InstallLog -Level "WARN" -Message "Servidor ainda não respondeu pela tarefa. Tentando inicialização direta."
-        Start-Process `
-            -FilePath $serverExecutable `
-            -ArgumentList @(
-                "--host", "0.0.0.0",
-                "--port", "$Port",
-                "--data-directory", "`"$DataDirectory`""
-            ) `
-            -WindowStyle Hidden
+        Write-InstallLog -Level "WARN" -Message "Servidor ainda não respondeu pela tarefa. Tentando inicialização direta desacoplada."
+        Start-DetachedServer
     }
 
     if (-not (Test-ServerReady -Attempts 30)) {
@@ -318,7 +348,7 @@ try {
     }
 
     $status = [ordered]@{
-        version = "0.6.3"
+        version = $version
         installed_at = (Get-Date).ToString("o")
         server_url = "http://$env:COMPUTERNAME`:$Port"
         local_url = "http://localhost:$Port"
