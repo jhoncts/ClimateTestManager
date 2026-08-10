@@ -87,6 +87,43 @@ function Test-ServerReady {
     return $false
 }
 
+function Start-DetachedServer {
+    """Inicia o servidor por Win32_Process para não prender o instalador ao processo permanente."""
+
+    $commandLine = (
+        '"{0}" --host 0.0.0.0 --port {1} --data-directory "{2}"' -f `
+            $serverExecutable,
+            $Port,
+            $DataDirectory
+    )
+    try {
+        $created = Invoke-CimMethod `
+            -ClassName Win32_Process `
+            -MethodName Create `
+            -Arguments @{ CommandLine = $commandLine } `
+            -ErrorAction Stop
+        if ($null -eq $created -or [int]$created.ReturnValue -ne 0) {
+            $code = if ($null -eq $created) { -1 } else { [int]$created.ReturnValue }
+            throw "Win32_Process.Create retornou código $code."
+        }
+        Write-InstallLog "Inicialização direta desacoplada criada. PID=$($created.ProcessId)."
+    }
+    catch {
+        Add-InstallWarning (
+            "Não foi possível desacoplar a inicialização direta; usando o método compatível: " +
+            $_.Exception.Message
+        )
+        Start-Process `
+            -FilePath $serverExecutable `
+            -ArgumentList @(
+                "--host", "0.0.0.0",
+                "--port", "$Port",
+                "--data-directory", "`"$DataDirectory`""
+            ) `
+            -WindowStyle Hidden
+    }
+}
+
 function Register-ServerStartup {
     param(
         [Parameter(Mandatory = $true)]
@@ -296,15 +333,8 @@ try {
     }
 
     if (-not (Test-ServerReady -Attempts 30)) {
-        Write-InstallLog -Level "WARN" -Message "Servidor ainda não respondeu pela tarefa. Tentando inicialização direta."
-        Start-Process `
-            -FilePath $serverExecutable `
-            -ArgumentList @(
-                "--host", "0.0.0.0",
-                "--port", "$Port",
-                "--data-directory", "`"$DataDirectory`""
-            ) `
-            -WindowStyle Hidden
+        Write-InstallLog -Level "WARN" -Message "Servidor ainda não respondeu pela tarefa. Tentando inicialização direta desacoplada."
+        Start-DetachedServer
     }
 
     if (-not (Test-ServerReady -Attempts 30)) {
