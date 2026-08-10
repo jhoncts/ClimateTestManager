@@ -148,9 +148,9 @@ jobs:
         run: |
           $serverData = Join-Path $env:RUNNER_TEMP "ClimateTestManagerWorkstationServerData"
           $clientInstall = Join-Path $env:RUNNER_TEMP "ClimateTestManagerWorkstation"
-          $programData = Join-Path $env:RUNNER_TEMP "ClimateTestManagerClientProgramData"
+          $readyFile = Join-Path $env:RUNNER_TEMP "ClimateTestManagerWorkstation.ready"
+          Remove-Item -LiteralPath $readyFile -Force -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Path $serverData -Force | Out-Null
-          New-Item -ItemType Directory -Path $programData -Force | Out-Null
 
           $serverExe = ".\dist\ClimateTestManager-v0.7.0\ClimateTestServer.exe"
           $setupExe = ".\dist\ClimateTestManager-Setup-v0.7.0.exe"
@@ -163,6 +163,7 @@ jobs:
             ) `
             -PassThru
 
+          $client = $null
           try {
             $ready = $false
             for ($attempt = 1; $attempt -le 45; $attempt++) {
@@ -184,53 +185,93 @@ jobs:
               throw "Servidor temporário da estação não respondeu."
             }
 
-            $oldProgramData = $env:PROGRAMDATA
-            $env:PROGRAMDATA = $programData
-            try {
-              $setup = Start-Process `
-                -FilePath $setupExe `
-                -ArgumentList @(
-                  "/VERYSILENT",
-                  "/SUPPRESSMSGBOXES",
-                  "/NORESTART",
-                  "/ROLE=client",
-                  "/SERVERADDRESS=127.0.0.1:18552",
-                  "/DIR=`"$clientInstall`""
-                ) `
-                -Wait `
-                -PassThru
-              if ($setup.ExitCode -ne 0) {
-                throw "Instalador universal falhou no modo estação. ExitCode=$($setup.ExitCode)"
-              }
-
-              $installedClient = Join-Path $clientInstall "ClimateTestManager.exe"
-              if (-not (Test-Path -LiteralPath $installedClient)) {
-                throw "Instalador de estação não instalou ClimateTestManager.exe."
-              }
-
-              $clientCheck = Start-Process `
-                -FilePath $installedClient `
-                -ArgumentList @("--check-only") `
-                -Wait `
-                -PassThru
-              if ($clientCheck.ExitCode -ne 0) {
-                throw "Estação instalada não usou corretamente o servidor salvo pelo instalador. ExitCode=$($clientCheck.ExitCode)"
-              }
-
-              $serverMarker = Join-Path $clientInstall "server-mode.marker"
-              $clientMarker = Join-Path $clientInstall "client-mode.marker"
-              if (Test-Path -LiteralPath $serverMarker) {
-                throw "Instalação de estação criou marcador de servidor por engano."
-              }
-              if (-not (Test-Path -LiteralPath $clientMarker)) {
-                throw "Instalação de estação não criou marcador de cliente."
-              }
+            $setup = Start-Process `
+              -FilePath $setupExe `
+              -ArgumentList @(
+                "/VERYSILENT",
+                "/SUPPRESSMSGBOXES",
+                "/NORESTART",
+                "/ROLE=client",
+                "/SERVERADDRESS=127.0.0.1:18552",
+                "/DIR=`"$clientInstall`""
+              ) `
+              -Wait `
+              -PassThru
+            if ($setup.ExitCode -ne 0) {
+              throw "Instalador universal falhou no modo estação. ExitCode=$($setup.ExitCode)"
             }
-            finally {
-              $env:PROGRAMDATA = $oldProgramData
+
+            $installedClient = Join-Path $clientInstall "ClimateTestManager.exe"
+            if (-not (Test-Path -LiteralPath $installedClient)) {
+              throw "Instalador de estação não instalou ClimateTestManager.exe."
+            }
+
+            $clientCheck = Start-Process `
+              -FilePath $installedClient `
+              -ArgumentList @("--check-only") `
+              -Wait `
+              -PassThru
+            if ($clientCheck.ExitCode -ne 0) {
+              throw "Estação instalada não usou corretamente o servidor salvo pelo instalador. ExitCode=$($clientCheck.ExitCode)"
+            }
+
+            $client = Start-Process `
+              -FilePath $installedClient `
+              -ArgumentList @("--ready-file", "`"$readyFile`"") `
+              -PassThru
+            $desktopReady = $false
+            for ($attempt = 1; $attempt -le 60; $attempt++) {
+              $client.Refresh()
+              if ($client.HasExited) {
+                throw "Estação instalada encerrou antes de montar a interface. ExitCode=$($client.ExitCode)"
+              }
+              if (Test-Path -LiteralPath $readyFile) {
+                $desktopReady = $true
+                break
+              }
+              Start-Sleep -Milliseconds 500
+            }
+            if (-not $desktopReady) {
+              throw "Estação instalada não montou a interface desktop real."
+            }
+            if (-not $client.HasExited) {
+              Stop-Process -Id $client.Id -Force -ErrorAction SilentlyContinue
+              $client = $null
+            }
+
+            $serverMarker = Join-Path $clientInstall "server-mode.marker"
+            $clientMarker = Join-Path $clientInstall "client-mode.marker"
+            if (Test-Path -LiteralPath $serverMarker) {
+              throw "Instalação de estação criou marcador de servidor por engano."
+            }
+            if (-not (Test-Path -LiteralPath $clientMarker)) {
+              throw "Instalação de estação não criou marcador de cliente."
+            }
+            if (Get-ScheduledTask -TaskName "ClimateTestManager-Server" -ErrorAction SilentlyContinue) {
+              throw "Instalação de estação criou tarefa de servidor por engano."
+            }
+
+            $uninstaller = Join-Path $clientInstall "unins000.exe"
+            if (-not (Test-Path -LiteralPath $uninstaller)) {
+              throw "Desinstalador da estação não foi criado."
+            }
+            $uninstall = Start-Process `
+              -FilePath $uninstaller `
+              -ArgumentList @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART") `
+              -Wait `
+              -PassThru
+            if ($uninstall.ExitCode -ne 0) {
+              throw "Desinstalação da estação falhou. ExitCode=$($uninstall.ExitCode)"
+            }
+            $server.Refresh()
+            if ($server.HasExited) {
+              throw "Desinstalar uma estação encerrou indevidamente o servidor central."
             }
           }
           finally {
+            if ($client -and -not $client.HasExited) {
+              Stop-Process -Id $client.Id -Force -ErrorAction SilentlyContinue
+            }
             if (-not $server.HasExited) {
               Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
             }
@@ -268,7 +309,8 @@ jobs:
               "/VERYSILENT",
               "/SUPPRESSMSGBOXES",
               "/NORESTART",
-              "/ROLE=server"
+              "/ROLE=server",
+              "/DIR=`"$installDir`""
             ) `
             -Wait `
             -PassThru
