@@ -1,5 +1,5 @@
 #define MyAppName "ClimateTest Manager"
-#define MyAppVersion "0.6.1"
+#define MyAppVersion "0.6.2"
 #define MyAppPublisher "Jhon Cleiton"
 #define MyAppExeName "ClimateTestManager.exe"
 
@@ -35,14 +35,14 @@ Name: "{commonappdata}\ClimateTestManager\Logs"
 Name: "{commonappdata}\ClimateTestManager\Backups"
 
 [Files]
-Source: "..\dist\ClimateTestManager-v0.6.1\ClimateTestManager.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.6.1\ClimateTestServer.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.6.1\ClimateTestNotifier.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.6.1\climatetest.ico"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.6.1\LEIA-ME-PRIMEIRO.md"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.6.1\install_server_tasks.ps1"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.6.1\uninstall_server_tasks.ps1"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.6.1\documentacao-conformidade\*"; DestDir: "{app}\documentacao-conformidade"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\ClimateTestManager-v0.6.2\ClimateTestManager.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v0.6.2\ClimateTestServer.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v0.6.2\ClimateTestNotifier.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v0.6.2\climatetest.ico"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v0.6.2\LEIA-ME-PRIMEIRO.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v0.6.2\install_server_tasks.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v0.6.2\uninstall_server_tasks.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v0.6.2\documentacao-conformidade\*"; DestDir: "{app}\documentacao-conformidade"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Parameters: "--url http://localhost:8550"; IconFilename: "{app}\climatetest.ico"
