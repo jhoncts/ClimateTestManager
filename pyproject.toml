@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "climatetest-manager"
-version = "0.6.3"
+version = "0.7.0"
 description = "Desktop application for managing climate-resistance tests according to ABNT NBR IEC 60079-0:2020."
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
@@ -12,7 +12,7 @@ authors = [
   { name = "Jhon Cleiton" },
 ]
 dependencies = [
-  "flet[all]==0.86.1",
+  "flet[all]==0.86.4",
   "SQLAlchemy==2.0.51",
   "alembic==1.18.5",
   "platformdirs==4.11.0",

@@ -4,7 +4,7 @@ on:
   pull_request:
   push:
     branches:
-      - "release/v0.6.3"
+      - "release/v0.7.0"
     tags:
       - "v*"
 
@@ -45,12 +45,13 @@ jobs:
         shell: pwsh
         run: .\scripts\build_windows.ps1
 
-      - name: Smoke test packaged server
+      - name: Smoke test packaged server and desktop client
         shell: pwsh
         run: |
           $dataDir = Join-Path $env:RUNNER_TEMP "ClimateTestManagerSmokeData"
           New-Item -ItemType Directory -Path $dataDir -Force | Out-Null
-          $serverExe = ".\dist\ClimateTestManager-v0.6.3\ClimateTestServer.exe"
+          $serverExe = ".\dist\ClimateTestManager-v0.7.0\ClimateTestServer.exe"
+          $clientExe = ".\dist\ClimateTestManager-v0.7.0\ClimateTestManager.exe"
           $server = Start-Process `
             -FilePath $serverExe `
             -ArgumentList @(
@@ -82,6 +83,15 @@ jobs:
             if (-not $ready) {
               throw "ClimateTestServer.exe não respondeu ao smoke test na porta 18550."
             }
+
+            $clientCheck = Start-Process `
+              -FilePath $clientExe `
+              -ArgumentList @("--url", "http://127.0.0.1:18550", "--check-only") `
+              -Wait `
+              -PassThru
+            if ($clientCheck.ExitCode -ne 0) {
+              throw "Cliente desktop empacotado não conseguiu validar o servidor. ExitCode=$($clientCheck.ExitCode)"
+            }
           }
           finally {
             if (-not $server.HasExited) {
@@ -97,7 +107,7 @@ jobs:
           New-Item -ItemType Directory -Path $installDir -Force | Out-Null
           New-Item -ItemType Directory -Path $oldData -Force | Out-Null
           Copy-Item `
-            ".\dist\ClimateTestManager-v0.6.3\ClimateTestServer.exe" `
+            ".\dist\ClimateTestManager-v0.7.0\ClimateTestServer.exe" `
             (Join-Path $installDir "ClimateTestServer.exe") `
             -Force
 
@@ -116,7 +126,7 @@ jobs:
           }
 
           $setup = Start-Process `
-            -FilePath ".\dist\ClimateTestManager-Server-Setup-v0.6.3.exe" `
+            -FilePath ".\dist\ClimateTestManager-Server-Setup-v0.7.0.exe" `
             -ArgumentList @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART") `
             -Wait `
             -PassThru
@@ -148,17 +158,27 @@ jobs:
             throw "Servidor instalado não respondeu após o teste de atualização."
           }
 
+          $installedClient = Join-Path $installDir "ClimateTestManager.exe"
+          $clientCheck = Start-Process `
+            -FilePath $installedClient `
+            -ArgumentList @("--url", "http://127.0.0.1:8550", "--check-only") `
+            -Wait `
+            -PassThru
+          if ($clientCheck.ExitCode -ne 0) {
+            throw "Cliente desktop instalado não conseguiu alcançar o servidor central."
+          }
+
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ClimateTestManager-v0.6.3-Windows
+          name: ClimateTestManager-v0.7.0-Windows
           if-no-files-found: error
           path: |
-            dist/ClimateTestManager-Server-Setup-v0.6.3.exe
-            dist/ClimateTestManager-v0.6.3-windows.zip
+            dist/ClimateTestManager-Server-Setup-v0.7.0.exe
+            dist/ClimateTestManager-v0.7.0-windows.zip
 
       - name: Publish GitHub release
-        if: github.ref == 'refs/heads/release/v0.6.3' || startsWith(github.ref, 'refs/tags/')
+        if: github.ref == 'refs/heads/release/v0.7.0' || startsWith(github.ref, 'refs/tags/')
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -166,11 +186,11 @@ jobs:
           $releaseTag = if ("${{ github.ref }}" -like "refs/tags/*") {
             "${{ github.ref_name }}"
           } else {
-            "v0.6.3"
+            "v0.7.0"
           }
           gh release create $releaseTag `
-            "dist/ClimateTestManager-Server-Setup-v0.6.3.exe" `
-            "dist/ClimateTestManager-v0.6.3-windows.zip" `
+            "dist/ClimateTestManager-Server-Setup-v0.7.0.exe" `
+            "dist/ClimateTestManager-v0.7.0-windows.zip" `
             --target "${{ github.sha }}" `
             --title "ClimateTest Manager $releaseTag" `
             --generate-notes

@@ -8,6 +8,7 @@ from pathlib import Path
 import flet as ft
 
 from climatetest_manager.app import main
+from climatetest_manager.client_session import enable_client_session_persistence
 
 
 def _arguments() -> argparse.Namespace:
@@ -37,6 +38,7 @@ def _ensure_standard_streams() -> None:
 
 def run_server() -> None:
     _ensure_standard_streams()
+    enable_client_session_persistence()
     arguments = _arguments()
     if arguments.data_directory:
         os.environ["CLIMATETEST_DATA_DIR"] = arguments.data_directory

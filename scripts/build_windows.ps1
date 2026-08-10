@@ -1,8 +1,9 @@
 $ErrorActionPreference = "Stop"
-$version = "0.6.3"
+$version = "0.7.0"
 $releaseDir = "dist\ClimateTestManager-v$version"
 $releaseZip = "dist\ClimateTestManager-v$version-windows.zip"
 $installerPath = "dist\ClimateTestManager-Server-Setup-v$version.exe"
+$assetsStage = ".release-assets"
 
 if (-not (Test-Path ".\.venv\Scripts\python.exe")) {
     throw "Ambiente virtual nao encontrado. Crie a .venv e instale o projeto antes de empacotar."
@@ -13,42 +14,72 @@ if (Test-Path -LiteralPath $releaseDir) {
 }
 New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
 
+if (Test-Path -LiteralPath $assetsStage) {
+    Remove-Item -LiteralPath $assetsStage -Recurse -Force
+}
+New-Item -ItemType Directory -Path $assetsStage -Force | Out-Null
+Copy-Item "src\assets\*" $assetsStage -Recurse -Force
+New-Item -ItemType Directory -Path (Join-Path $assetsStage "icons") -Force | Out-Null
+Copy-Item `
+    "src\assets\brand\climatetest-logo.png" `
+    (Join-Path $assetsStage "favicon.png") `
+    -Force
+Copy-Item `
+    "src\assets\brand\climatetest-logo.png" `
+    (Join-Path $assetsStage "icons\loading-animation.png") `
+    -Force
+
 .\.venv\Scripts\flet.exe pack src/client.py `
     --name ClimateTestManager `
     --icon "src\assets\brand\climatetest.ico" `
+    --add-data "$assetsStage;assets" `
     --product-name "ClimateTest Manager" `
     --product-version $version `
     --file-version "$version.0" `
-    --file-description "Acesso ao servidor do ClimateTest Manager" `
+    --file-description "Cliente desktop do ClimateTest Manager" `
     --company-name "ClimateTest Manager" `
     --copyright "Copyright (c) 2026 Jhon Cleiton" `
     --distpath $releaseDir `
     --yes
+if ($LASTEXITCODE -ne 0) {
+    throw "Falha ao empacotar ClimateTestManager.exe."
+}
 
 .\.venv\Scripts\python.exe -m PyInstaller src/server.py `
     --name ClimateTestServer `
     --noconsole `
     --onefile `
     --icon "src\assets\brand\climatetest.ico" `
-    --add-data "src\assets;assets" `
+    --add-data "$assetsStage;assets" `
     --collect-all flet_web `
     --distpath $releaseDir `
     --clean `
     --noconfirm
+if ($LASTEXITCODE -ne 0) {
+    throw "Falha ao empacotar ClimateTestServer.exe."
+}
 
 .\.venv\Scripts\python.exe -m PyInstaller src/notifier.py `
     --name ClimateTestNotifier `
     --noconsole `
     --onefile `
     --icon "src\assets\brand\climatetest.ico" `
-    --add-data "src\assets;assets" `
+    --add-data "$assetsStage;assets" `
     --distpath $releaseDir `
     --clean `
     --noconfirm
+if ($LASTEXITCODE -ne 0) {
+    throw "Falha ao empacotar ClimateTestNotifier.exe."
+}
 
 Copy-Item "docs\MANUAL_TEST_V060.md" (Join-Path $releaseDir "LEIA-ME-PRIMEIRO.md")
 Copy-Item "src\assets\brand\climatetest.ico" (Join-Path $releaseDir "climatetest.ico")
-Copy-Item "scripts\install_server_tasks.ps1" $releaseDir
+$serverTaskScript = Join-Path $releaseDir "install_server_tasks.ps1"
+Copy-Item "scripts\install_server_tasks.ps1" $serverTaskScript
+$serverTaskContent = Get-Content -LiteralPath $serverTaskScript -Raw
+$serverTaskContent = $serverTaskContent.Replace("v0.6.3", "v$version")
+$serverTaskContent = $serverTaskContent.Replace('version = "0.6.3"', "version = `"$version`"")
+Set-Content -LiteralPath $serverTaskScript -Value $serverTaskContent -Encoding UTF8
 Copy-Item "scripts\uninstall_server_tasks.ps1" $releaseDir
 $complianceDir = Join-Path $releaseDir "documentacao-conformidade"
 New-Item -ItemType Directory -Path $complianceDir -Force | Out-Null
@@ -83,6 +114,8 @@ if (-not (Test-Path -LiteralPath $installerPath)) {
 if (-not (Test-Path -LiteralPath $releaseZip)) {
     throw "O build terminou sem gerar $releaseZip."
 }
+
+Remove-Item -LiteralPath $assetsStage -Recurse -Force -ErrorAction SilentlyContinue
 
 Write-Host "Instalador criado em $installerPath"
 Write-Host "Pacote criado em $releaseZip"
