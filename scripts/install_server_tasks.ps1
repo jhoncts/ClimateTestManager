@@ -188,7 +188,7 @@ function Register-BackgroundTasks {
 }
 
 try {
-    Write-InstallLog "Iniciando configuração do ClimateTest Manager v0.6.1."
+    Write-InstallLog "Iniciando configuração do ClimateTest Manager v0.6.3."
     Write-InstallLog "Diretório de instalação: $InstallDirectory"
     Write-InstallLog "Diretório de dados: $DataDirectory"
 
@@ -318,7 +318,7 @@ try {
     }
 
     $status = [ordered]@{
-        version = "0.6.1"
+        version = "0.6.3"
         installed_at = (Get-Date).ToString("o")
         server_url = "http://$env:COMPUTERNAME`:$Port"
         local_url = "http://localhost:$Port"
