@@ -157,7 +157,7 @@ var
   ExistingUrl: String;
   Role: String;
 begin
-  { Não expanda {app} aqui: InitializeWizard ocorre antes da seleção definitiva do diretório. }
+  // O diretório de aplicação ainda não deve ser consultado durante InitializeWizard.
   ExistingServerInstall :=
     FileExists(ExpandConstant('{commonappdata}\ClimateTestManager\Data\climatetest_manager.db')) or
     FileExists(ExpandConstant('{commonappdata}\ClimateTestManager\server-mode.marker'));
