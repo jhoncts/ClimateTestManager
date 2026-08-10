@@ -144,7 +144,9 @@ jobs:
           $serverData = Join-Path $env:RUNNER_TEMP "ClimateTestManagerWorkstationServerData"
           $clientInstall = Join-Path $env:RUNNER_TEMP "ClimateTestManagerWorkstation"
           $readyFile = Join-Path $env:RUNNER_TEMP "ClimateTestManagerWorkstation.ready"
+          $setupLog = Join-Path $env:RUNNER_TEMP "ClimateTestManagerWorkstation-setup.log"
           Remove-Item -LiteralPath $readyFile -Force -ErrorAction SilentlyContinue
+          Remove-Item -LiteralPath $setupLog -Force -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Path $serverData -Force | Out-Null
 
           $serverExe = ".\dist\ClimateTestManager-v0.7.0\ClimateTestServer.exe"
@@ -188,11 +190,17 @@ jobs:
                 "/NORESTART",
                 "/ROLE=client",
                 "/SERVERADDRESS=127.0.0.1:18552",
-                "/DIR=`"$clientInstall`""
+                "/DIR=`"$clientInstall`"",
+                "/LOG=`"$setupLog`""
               ) `
               -Wait `
               -PassThru
             if ($setup.ExitCode -ne 0) {
+              if (Test-Path -LiteralPath $setupLog) {
+                Write-Host "===== LOG DO INSTALADOR EM MODO ESTAÇÃO ====="
+                Get-Content -LiteralPath $setupLog
+                Write-Host "===== FIM DO LOG DO INSTALADOR ====="
+              }
               throw "Instalador universal falhou no modo estação. ExitCode=$($setup.ExitCode)"
             }
 
@@ -286,6 +294,7 @@ jobs:
         run: |
           $installDir = Join-Path $env:ProgramFiles "ClimateTest Manager"
           $oldData = Join-Path $env:RUNNER_TEMP "ClimateTestManagerOldData"
+          $setupLog = Join-Path $env:RUNNER_TEMP "ClimateTestManagerServer-setup.log"
           New-Item -ItemType Directory -Path $installDir -Force | Out-Null
           New-Item -ItemType Directory -Path $oldData -Force | Out-Null
           Copy-Item `
@@ -314,11 +323,17 @@ jobs:
               "/SUPPRESSMSGBOXES",
               "/NORESTART",
               "/ROLE=server",
-              "/DIR=`"$installDir`""
+              "/DIR=`"$installDir`"",
+              "/LOG=`"$setupLog`""
             ) `
             -Wait `
             -PassThru
           if ($setup.ExitCode -ne 0) {
+            if (Test-Path -LiteralPath $setupLog) {
+              Write-Host "===== LOG DO INSTALADOR EM MODO SERVIDOR ====="
+              Get-Content -LiteralPath $setupLog
+              Write-Host "===== FIM DO LOG DO INSTALADOR ====="
+            }
             throw "Instalador falhou no teste de atualização do servidor. ExitCode=$($setup.ExitCode)"
           }
 
