@@ -2,7 +2,6 @@
 
 import argparse
 import asyncio
-import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
