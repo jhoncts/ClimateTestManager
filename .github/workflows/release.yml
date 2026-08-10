@@ -45,6 +45,50 @@ jobs:
         shell: pwsh
         run: .\scripts\build_windows.ps1
 
+      - name: Smoke test packaged server
+        shell: pwsh
+        run: |
+          $dataDir = Join-Path $env:RUNNER_TEMP "ClimateTestManagerSmokeData"
+          New-Item -ItemType Directory -Path $dataDir -Force | Out-Null
+          $serverExe = ".\dist\ClimateTestManager-v0.6.2\ClimateTestServer.exe"
+          $server = Start-Process `
+            -FilePath $serverExe `
+            -ArgumentList @(
+              "--host", "127.0.0.1",
+              "--port", "18550",
+              "--data-directory", "`"$dataDir`""
+            ) `
+            -PassThru
+          try {
+            $ready = $false
+            for ($attempt = 1; $attempt -le 45; $attempt++) {
+              if ($server.HasExited) {
+                throw "ClimateTestServer.exe encerrou antes de responder. ExitCode=$($server.ExitCode)"
+              }
+              try {
+                $response = Invoke-WebRequest `
+                  -Uri "http://127.0.0.1:18550/" `
+                  -UseBasicParsing `
+                  -TimeoutSec 2
+                if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 500) {
+                  $ready = $true
+                  break
+                }
+              }
+              catch {
+                Start-Sleep -Seconds 1
+              }
+            }
+            if (-not $ready) {
+              throw "ClimateTestServer.exe não respondeu ao smoke test na porta 18550."
+            }
+          }
+          finally {
+            if (-not $server.HasExited) {
+              Stop-Process -Id $server.Id -Force
+            }
+          }
+
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
