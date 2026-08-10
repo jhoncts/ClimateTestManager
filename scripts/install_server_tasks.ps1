@@ -9,6 +9,7 @@ param(
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
+$version = "0.7.0"
 $serverTaskName = "ClimateTestManager-Server"
 $backgroundTaskName = "ClimateTestManager-Background"
 $notifierTaskName = "ClimateTestManager-Notifications"
@@ -188,7 +189,7 @@ function Register-BackgroundTasks {
 }
 
 try {
-    Write-InstallLog "Iniciando configuração do ClimateTest Manager v0.6.3."
+    Write-InstallLog "Iniciando configuração do ClimateTest Manager v$version."
     Write-InstallLog "Diretório de instalação: $InstallDirectory"
     Write-InstallLog "Diretório de dados: $DataDirectory"
 
@@ -318,7 +319,7 @@ try {
     }
 
     $status = [ordered]@{
-        version = "0.6.3"
+        version = $version
         installed_at = (Get-Date).ToString("o")
         server_url = "http://$env:COMPUTERNAME`:$Port"
         local_url = "http://localhost:$Port"
