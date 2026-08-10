@@ -1,6 +1,6 @@
 """Sessão persistente por dispositivo para clientes conectados ao servidor central."""
 
-from contextlib import suppress
+import flet as ft
 
 from climatetest_manager import app as app_module
 from climatetest_manager.services.auth import UserSummary
@@ -9,26 +9,24 @@ _SESSION_KEY = "climatetest.manager.auth.remembered_session_token.v1"
 _PATCHED = False
 
 
-async def _load_client_token(page: object) -> str | None:
+async def _load_client_token(page: ft.Page) -> str | None:
     """Lê o token persistido no dispositivo que está exibindo a interface."""
 
     try:
-        preferences = getattr(page, "shared_preferences")
-        value = await preferences.get(_SESSION_KEY)
+        value = await page.shared_preferences.get(_SESSION_KEY)
     except Exception:
         return None
     return value if isinstance(value, str) and value.strip() else None
 
 
-async def _save_client_token(page: object, token: str | None) -> None:
+async def _save_client_token(page: ft.Page, token: str | None) -> None:
     """Salva ou remove a sessão no armazenamento local do próprio cliente."""
 
     try:
-        preferences = getattr(page, "shared_preferences")
         if token:
-            await preferences.set(_SESSION_KEY, token)
+            await page.shared_preferences.set(_SESSION_KEY, token)
         else:
-            await preferences.remove(_SESSION_KEY)
+            await page.shared_preferences.remove(_SESSION_KEY)
     except Exception:
         # Persistência é uma conveniência: uma falha local não pode impedir login/logout.
         return
@@ -97,7 +95,6 @@ class ClientSessionLauncher(_OriginalLauncher):
         self._open_application(session.user)
 
     def _open_application(self, user: UserSummary) -> None:
-        # Mantido explícito para que o aplicativo aberto use a subclasse abaixo.
         ClientSessionApplication(
             self._page,
             self._repository,
@@ -116,12 +113,11 @@ class ClientSessionApplication(_OriginalApplication):
 
     def _finish_signed_out(self, message: str | None = None) -> None:
         self._page.run_task(_save_client_token, self._page, None)
-        with suppress(Exception):
-            super()._finish_signed_out(message)
+        super()._finish_signed_out(message)
 
 
 def enable_client_session_persistence() -> None:
-    """Ativa uma vez a persistência segura por dispositivo no modo servidor."""
+    """Ativa uma vez a persistência por dispositivo no modo servidor."""
 
     global _PATCHED
     if _PATCHED:
