@@ -88,8 +88,7 @@ function Test-ServerReady {
 }
 
 function Start-DetachedServer {
-    """Inicia o servidor por Win32_Process para não prender o instalador ao processo permanente."""
-
+    # Cria o servidor por Win32_Process para não prender o instalador ao processo permanente.
     $commandLine = (
         '"{0}" --host 0.0.0.0 --port {1} --data-directory "{2}"' -f `
             $serverExecutable,
