@@ -9,7 +9,7 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
-VERSION = "0.6.2"
+VERSION = "0.6.3"
 
 
 def _arguments() -> argparse.Namespace:
