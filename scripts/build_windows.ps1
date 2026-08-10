@@ -65,7 +65,12 @@ Copy-Item `
 
 Copy-Item "docs\MANUAL_TEST_V060.md" (Join-Path $releaseDir "LEIA-ME-PRIMEIRO.md")
 Copy-Item "src\assets\brand\climatetest.ico" (Join-Path $releaseDir "climatetest.ico")
-Copy-Item "scripts\install_server_tasks.ps1" $releaseDir
+$serverTaskScript = Join-Path $releaseDir "install_server_tasks.ps1"
+Copy-Item "scripts\install_server_tasks.ps1" $serverTaskScript
+$serverTaskContent = Get-Content -LiteralPath $serverTaskScript -Raw
+$serverTaskContent = $serverTaskContent.Replace("v0.6.3", "v$version")
+$serverTaskContent = $serverTaskContent.Replace('version = "0.6.3"', "version = `"$version`"")
+Set-Content -LiteralPath $serverTaskScript -Value $serverTaskContent -Encoding UTF8
 Copy-Item "scripts\uninstall_server_tasks.ps1" $releaseDir
 $complianceDir = Join-Path $releaseDir "documentacao-conformidade"
 New-Item -ItemType Directory -Path $complianceDir -Force | Out-Null
