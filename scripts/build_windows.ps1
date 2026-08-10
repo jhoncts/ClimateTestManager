@@ -1,6 +1,8 @@
 $ErrorActionPreference = "Stop"
-$releaseDir = "dist\ClimateTestManager-v0.6.0"
-$releaseZip = "dist\ClimateTestManager-v0.6.0-windows.zip"
+$version = "0.6.1"
+$releaseDir = "dist\ClimateTestManager-v$version"
+$releaseZip = "dist\ClimateTestManager-v$version-windows.zip"
+$installerPath = "dist\ClimateTestManager-Server-Setup-v$version.exe"
 
 if (-not (Test-Path ".\.venv\Scripts\python.exe")) {
     throw "Ambiente virtual nao encontrado. Crie a .venv e instale o projeto antes de empacotar."
@@ -15,8 +17,8 @@ New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
     --name ClimateTestManager `
     --icon "src\assets\brand\climatetest.ico" `
     --product-name "ClimateTest Manager" `
-    --product-version "0.6.0" `
-    --file-version "0.6.0.0" `
+    --product-version $version `
+    --file-version "$version.0" `
     --file-description "Acesso ao servidor do ClimateTest Manager" `
     --company-name "ClimateTest Manager" `
     --copyright "Copyright (c) 2026 Jhon Cleiton" `
@@ -67,16 +69,21 @@ $innoCandidates = @(
 $iscc = $innoCandidates |
     Where-Object { Test-Path -LiteralPath $_ } |
     Select-Object -First 1
-if ($iscc) {
-    & $iscc "installer\ClimateTestManager.iss"
-    if ($LASTEXITCODE -ne 0) {
-        throw "O Inno Setup nao conseguiu gerar o instalador."
-    }
-    Write-Host "Instalador criado em dist\ClimateTestManager-Server-Setup-v0.6.0.exe"
-}
-else {
-    Write-Warning "Inno Setup 6 nao encontrado. O ZIP foi criado, mas o instalador nao."
+if (-not $iscc) {
+    throw "Inno Setup 6 nao encontrado. O instalador da v$version e obrigatorio."
 }
 
+& $iscc "installer\ClimateTestManager.iss"
+if ($LASTEXITCODE -ne 0) {
+    throw "O Inno Setup nao conseguiu gerar o instalador."
+}
+if (-not (Test-Path -LiteralPath $installerPath)) {
+    throw "O build terminou sem gerar $installerPath."
+}
+if (-not (Test-Path -LiteralPath $releaseZip)) {
+    throw "O build terminou sem gerar $releaseZip."
+}
+
+Write-Host "Instalador criado em $installerPath"
 Write-Host "Pacote criado em $releaseZip"
 Write-Host "Executaveis prontos em $releaseDir"
