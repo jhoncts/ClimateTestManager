@@ -57,11 +57,16 @@ if (Test-Path -LiteralPath $releaseZip) {
 }
 Compress-Archive -Path "$releaseDir\*" -DestinationPath $releaseZip
 
+$innoCommand = Get-Command "ISCC.exe" -ErrorAction SilentlyContinue
+$programFilesX86 = [Environment]::GetFolderPath("ProgramFilesX86")
 $innoCandidates = @(
-    "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe",
-    "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
-)
-$iscc = $innoCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    $innoCommand.Source,
+    (Join-Path $programFilesX86 "Inno Setup 6\ISCC.exe"),
+    (Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe")
+) | Where-Object { $_ }
+$iscc = $innoCandidates |
+    Where-Object { Test-Path -LiteralPath $_ } |
+    Select-Object -First 1
 if ($iscc) {
     & $iscc "installer\ClimateTestManager.iss"
     if ($LASTEXITCODE -ne 0) {
