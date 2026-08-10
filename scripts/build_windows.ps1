@@ -1,6 +1,6 @@
 $ErrorActionPreference = "Stop"
-$releaseDir = "dist\ClimateTestManager-v0.5.0"
-$releaseZip = "dist\ClimateTestManager-v0.5.0-windows.zip"
+$releaseDir = "dist\ClimateTestManager-v0.6.0"
+$releaseZip = "dist\ClimateTestManager-v0.6.0-windows.zip"
 
 if (-not (Test-Path ".\.venv\Scripts\python.exe")) {
     throw "Ambiente virtual nao encontrado. Crie a .venv e instale o projeto antes de empacotar."
@@ -11,26 +11,43 @@ if (Test-Path -LiteralPath $releaseDir) {
 }
 New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
 
-flet pack src/main.py `
+.\.venv\Scripts\flet.exe pack src/client.py `
     --name ClimateTestManager `
+    --icon "src\assets\brand\climatetest.ico" `
     --product-name "ClimateTest Manager" `
-    --product-version "0.5.0" `
-    --file-version "0.5.0.0" `
-    --file-description "Gerenciador de ensaios de resistencia climatica" `
+    --product-version "0.6.0" `
+    --file-version "0.6.0.0" `
+    --file-description "Acesso ao servidor do ClimateTest Manager" `
     --company-name "ClimateTest Manager" `
     --copyright "Copyright (c) 2026 Jhon Cleiton" `
     --distpath $releaseDir `
     --yes
 
-.\.venv\Scripts\python.exe -m PyInstaller src/notifier.py `
-    --name ClimateTestNotifier `
+.\.venv\Scripts\python.exe -m PyInstaller src/server.py `
+    --name ClimateTestServer `
     --noconsole `
     --onefile `
+    --icon "src\assets\brand\climatetest.ico" `
+    --add-data "src\assets;assets" `
+    --collect-all flet_web `
     --distpath $releaseDir `
     --clean `
     --noconfirm
 
-Copy-Item "docs\MANUAL_TEST_V050.md" (Join-Path $releaseDir "LEIA-ME-PRIMEIRO.md")
+.\.venv\Scripts\python.exe -m PyInstaller src/notifier.py `
+    --name ClimateTestNotifier `
+    --noconsole `
+    --onefile `
+    --icon "src\assets\brand\climatetest.ico" `
+    --add-data "src\assets;assets" `
+    --distpath $releaseDir `
+    --clean `
+    --noconfirm
+
+Copy-Item "docs\MANUAL_TEST_V060.md" (Join-Path $releaseDir "LEIA-ME-PRIMEIRO.md")
+Copy-Item "src\assets\brand\climatetest.ico" (Join-Path $releaseDir "climatetest.ico")
+Copy-Item "scripts\install_server_tasks.ps1" $releaseDir
+Copy-Item "scripts\uninstall_server_tasks.ps1" $releaseDir
 $complianceDir = Join-Path $releaseDir "documentacao-conformidade"
 New-Item -ItemType Directory -Path $complianceDir -Force | Out-Null
 Copy-Item "docs\compliance\*" $complianceDir -Recurse -Force
@@ -39,6 +56,22 @@ if (Test-Path -LiteralPath $releaseZip) {
     Remove-Item -LiteralPath $releaseZip -Force
 }
 Compress-Archive -Path "$releaseDir\*" -DestinationPath $releaseZip
+
+$innoCandidates = @(
+    "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe",
+    "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
+)
+$iscc = $innoCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+if ($iscc) {
+    & $iscc "installer\ClimateTestManager.iss"
+    if ($LASTEXITCODE -ne 0) {
+        throw "O Inno Setup nao conseguiu gerar o instalador."
+    }
+    Write-Host "Instalador criado em dist\ClimateTestManager-Server-Setup-v0.6.0.exe"
+}
+else {
+    Write-Warning "Inno Setup 6 nao encontrado. O ZIP foi criado, mas o instalador nao."
+}
 
 Write-Host "Pacote criado em $releaseZip"
 Write-Host "Executaveis prontos em $releaseDir"

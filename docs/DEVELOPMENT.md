@@ -81,15 +81,15 @@ Faça commits pequenos e coerentes. O prefixo indica a intenção:
 ```
 
 O PyInstaller não faz compilação cruzada. O `.exe` final deve ser gerado no Windows onde será
-usado ou em outra máquina Windows compatível. A v0.5.0 gera uma pasta de distribuição e o arquivo
-`dist\ClimateTestManager-v0.5.0-windows.zip`.
+usado ou em outra máquina Windows compatível. A v0.6.0 gera a pasta de distribuição, o ZIP e,
+quando o Inno Setup 6 está instalado, `dist\ClimateTestManager-Server-Setup-v0.6.0.exe`.
 
 ## 8. Testar o agente de notificações
 
 Use somente um banco de demonstração fora do repositório:
 
 ```powershell
-$env:CLIMATETEST_DATA_DIR = "C:\Scripts\ClimateTestManager\dados-teste-v0.5.0"
+$env:CLIMATETEST_DATA_DIR = "C:\Scripts\ClimateTestManager\dados-teste-v0.6.0"
 python src\notifier.py --data-directory $env:CLIMATETEST_DATA_DIR
 ```
 

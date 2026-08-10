@@ -1,12 +1,15 @@
 """Configuração da janela principal da aplicação."""
 
+import ipaddress
 import os
 from collections.abc import Callable
 from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
+from threading import Lock
 
 import flet as ft
+from sqlalchemy import Engine
 
 from climatetest_manager import __version__
 from climatetest_manager.config import (
@@ -27,7 +30,11 @@ from climatetest_manager.config import (
     test_controls_enabled,
 )
 from climatetest_manager.database.session import create_session_factory, initialize_database
-from climatetest_manager.repositories.climate_tests import ClimateTestRepository
+from climatetest_manager.domain.incidents import incident_reason
+from climatetest_manager.repositories.climate_tests import (
+    ClimateTestRepository,
+    UserNotificationSummary,
+)
 from climatetest_manager.repositories.users import UserRepository
 from climatetest_manager.services.auth import (
     AuthenticationService,
@@ -54,6 +61,7 @@ from climatetest_manager.services.notifications import (
     EmailDeliveryReceipt,
     EmailNotificationProvider,
     WindowsToastProvider,
+    deliver_pending_incident_emails,
 )
 from climatetest_manager.ui.components import (
     dialog_actions,
@@ -72,6 +80,7 @@ from climatetest_manager.ui.views.agenda import build_agenda_view
 from climatetest_manager.ui.views.auth import (
     build_initial_setup_view,
     build_login_view,
+    build_server_waiting_view,
     build_storage_setup_view,
 )
 from climatetest_manager.ui.views.dashboard import build_dashboard
@@ -81,11 +90,39 @@ from climatetest_manager.ui.views.new_test import (
     NewTestView,
     build_edit_test_view,
 )
+from climatetest_manager.ui.views.notifications import build_notifications_view
 from climatetest_manager.ui.views.onboarding import build_onboarding_view
 from climatetest_manager.ui.views.settings import build_settings_view
 from climatetest_manager.ui.views.test_details import build_test_details_view
 from climatetest_manager.ui.views.tests_list import build_tests_list_view
 from climatetest_manager.ui.views.users import build_users_view
+
+_SERVER_CONTEXT_LOCK = Lock()
+_SERVER_ENGINE: Engine | None = None
+_SERVER_REPOSITORY: ClimateTestRepository | None = None
+_SERVER_AUTH_SERVICE: AuthenticationService | None = None
+
+
+def _server_mode() -> bool:
+    return os.getenv("CLIMATETEST_SERVER_MODE", "").strip() == "1"
+
+
+def _local_server_client(page: ft.Page) -> bool:
+    """Reconhece o navegador local; conexões remotas não recebem o assistente inicial."""
+
+    if not _server_mode():
+        return True
+    raw_ip = str(getattr(page, "client_ip", "") or "").strip()
+    if not raw_ip:
+        return False
+    if raw_ip.casefold() == "localhost":
+        return True
+    with suppress(ValueError):
+        address = ipaddress.ip_address(raw_ip)
+        if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
+            address = address.ipv4_mapped
+        return address.is_loopback
+    return False
 
 
 def _application_theme() -> ft.Theme:
@@ -126,6 +163,7 @@ def _navigation_item(
     selected: bool = False,
     on_click: Callable[[], None] | None = None,
     layout: LayoutProfile,
+    badge_count: int = 0,
 ) -> ft.Container:
     """Cria um item visual da navegação lateral."""
 
@@ -147,6 +185,15 @@ def _navigation_item(
         tooltip=label if layout.compact_navigation else None,
         opacity=1 if on_click or selected else 0.55,
         on_click=(lambda _event: on_click()) if on_click else None,
+        badge=(
+            ft.Badge(
+                label=str(min(badge_count, 99)),
+                bgcolor=AppColors.DANGER,
+                text_color=AppColors.WHITE,
+            )
+            if badge_count
+            else None
+        ),
         content=ft.Row(
             alignment=(
                 ft.MainAxisAlignment.CENTER
@@ -174,6 +221,7 @@ def _build_sidebar(
     on_new_test: Callable[[], None],
     on_agenda: Callable[[], None],
     on_history: Callable[[], None],
+    on_notifications: Callable[[], None],
     on_help: Callable[[], None],
     on_settings: Callable[[], None],
     on_users: Callable[[], None] | None,
@@ -182,6 +230,7 @@ def _build_sidebar(
     on_toggle_sidebar: Callable[[], None] | None,
     current_user: UserSummary,
     layout: LayoutProfile,
+    notification_count: int,
 ) -> ft.Container:
     """Monta a identidade e a navegação principal."""
 
@@ -189,12 +238,13 @@ def _build_sidebar(
         width=layout.brand_icon_size,
         height=layout.brand_icon_size,
         border_radius=12,
-        bgcolor=AppColors.PRIMARY,
+        bgcolor=AppColors.SURFACE,
+        padding=3,
         alignment=ft.Alignment.CENTER,
-        content=ft.Icon(
-            ft.Icons.SCIENCE,
-            color=AppColors.WHITE,
-            size=24 if not layout.compact_navigation else 22,
+        content=ft.Image(
+            src="brand/climatetest-logo.png",
+            fit=ft.BoxFit.CONTAIN,
+            semantics_label="Logo do ClimateTest Manager",
         ),
     )
     brand: ft.Control
@@ -370,6 +420,14 @@ def _build_sidebar(
                     layout=layout,
                 ),
                 _navigation_item(
+                    "Notificações",
+                    ft.Icons.NOTIFICATIONS_OUTLINED,
+                    selected=selected_view == "notifications",
+                    on_click=on_notifications,
+                    layout=layout,
+                    badge_count=notification_count,
+                ),
+                _navigation_item(
                     "Guia de uso",
                     ft.Icons.HELP_OUTLINE,
                     selected=selected_view == "help",
@@ -414,6 +472,7 @@ def _build_shell(
     on_new_test: Callable[[], None],
     on_agenda: Callable[[], None],
     on_history: Callable[[], None],
+    on_notifications: Callable[[], None],
     on_help: Callable[[], None],
     on_settings: Callable[[], None],
     on_users: Callable[[], None] | None,
@@ -422,6 +481,7 @@ def _build_shell(
     on_toggle_sidebar: Callable[[], None] | None,
     current_user: UserSummary,
     layout: LayoutProfile,
+    notification_count: int,
 ) -> ft.Row:
     """Combina a navegação e o conteúdo da tela atual."""
 
@@ -436,6 +496,7 @@ def _build_shell(
                 on_new_test=on_new_test,
                 on_agenda=on_agenda,
                 on_history=on_history,
+                on_notifications=on_notifications,
                 on_help=on_help,
                 on_settings=on_settings,
                 on_users=on_users,
@@ -444,6 +505,7 @@ def _build_shell(
                 on_toggle_sidebar=on_toggle_sidebar,
                 current_user=current_user,
                 layout=layout,
+                notification_count=notification_count,
             ),
             ft.Container(
                 expand=True,
@@ -535,6 +597,13 @@ class ClimateTestApplication:
         if self._current_content is None or self._selected_view is None:
             raise RuntimeError("Não há tela selecionada para compor o shell.")
         effective_layout = self._layout.with_collapsed_sidebar(self._sidebar_collapsed)
+        notification_count = sum(
+            not notification.is_read
+            for notification in self._repository.list_user_notifications(
+                user_id=self._current_user.id,
+                is_admin=self._current_user.is_admin,
+            )
+        )
         return _build_shell(
             self._current_content,
             selected_view=self._selected_view,
@@ -543,6 +612,7 @@ class ClimateTestApplication:
             on_new_test=self.show_new_test,
             on_agenda=self.show_agenda,
             on_history=self.show_history,
+            on_notifications=self.show_notifications,
             on_help=self.show_help,
             on_settings=self.show_settings,
             on_users=self.show_users if self._current_user.is_admin else None,
@@ -551,6 +621,7 @@ class ClimateTestApplication:
             on_toggle_sidebar=(self._toggle_sidebar if self._layout.mode != "compact" else None),
             current_user=self._current_user,
             layout=effective_layout,
+            notification_count=notification_count,
         )
 
     def _toggle_sidebar(self) -> None:
@@ -700,6 +771,40 @@ class ClimateTestApplication:
         )
         self._render(content, selected_view="history")
 
+    def show_notifications(self) -> None:
+        notifications = self._repository.list_user_notifications(
+            user_id=self._current_user.id,
+            is_admin=self._current_user.is_admin,
+        )
+        content = build_notifications_view(
+            notifications,
+            is_admin=self._current_user.is_admin,
+            on_mark_read=self._mark_notification_read,
+            on_mark_all_read=lambda: self._mark_all_notifications_read(notifications),
+        )
+        self._render(content, selected_view="notifications")
+
+    def _mark_notification_read(self, source_kind: str, source_id: int) -> None:
+        self._repository.mark_user_notification_read(
+            user_id=self._current_user.id,
+            source_kind=source_kind,
+            source_id=source_id,
+        )
+        self.show_notifications()
+
+    def _mark_all_notifications_read(
+        self,
+        notifications: list[UserNotificationSummary],
+    ) -> None:
+        for notification in notifications:
+            if not notification.is_read:
+                self._repository.mark_user_notification_read(
+                    user_id=self._current_user.id,
+                    source_kind=notification.source_kind,
+                    source_id=notification.source_id,
+                )
+        self.show_notifications()
+
     def show_agenda(self) -> None:
         content = build_agenda_view(
             self._service.list_agenda_events(),
@@ -719,7 +824,9 @@ class ClimateTestApplication:
                 if self._current_user.is_admin
                 else []
             ),
-            system_incidents=self._repository.list_system_incidents(),
+            system_incidents=(
+                self._repository.list_system_incidents() if self._current_user.is_admin else []
+            ),
             theme_mode=self._theme_mode,
             current_user=self._current_user,
             on_theme_change=self._change_theme,
@@ -743,45 +850,64 @@ class ClimateTestApplication:
                 self._resolve_system_incident if self._current_user.is_admin else None
             ),
             on_refresh=self.show_settings,
+            on_rotate_administrator_recovery=(
+                self._rotate_administrator_recovery_code
+                if self._current_user.is_admin and _local_server_client(self._page)
+                else None
+            ),
+            allow_theme_change=not _server_mode(),
+            managed_server_mode=_server_mode(),
         )
         self._render(content, selected_view="settings")
 
     def _report_system_incident(
         self,
-        category: str,
-        severity: str,
+        reason_code: str,
         description: str,
         immediate_action: str,
     ) -> str | None:
         """Registra uma falha sem ocultar o relato original do operador."""
 
-        if category not in {
-            "Falha do software",
-            "Indisponibilidade",
-            "Dado ou relatório incorreto",
-            "Notificação",
-            "Segurança ou acesso",
-            "Backup ou restauração",
-            "Outro",
-        }:
-            return "Categoria de falha inválida."
-        if severity not in {"Baixo", "Médio", "Alto", "Crítico"}:
-            return "Impacto da falha inválido."
+        try:
+            reason = incident_reason(reason_code)
+        except ValueError as error:
+            return str(error)
         if not 10 <= len(description) <= 2000:
             return "A descrição precisa ter entre 10 e 2.000 caracteres."
         if not 10 <= len(immediate_action) <= 2000:
             return "A ação imediata precisa ter entre 10 e 2.000 caracteres."
         try:
             self._repository.report_system_incident(
-                category=category,
-                severity=severity,
+                reason_code=reason.code,
+                category=reason.label,
+                severity=reason.severity,
                 description=description,
                 immediate_action=immediate_action,
                 reported_by=self._current_user.actor_label,
             )
         except (OSError, ValueError) as error:
             return str(error)
-        self._show_message("Falha registrada para avaliação e tratamento.")
+        email_settings = load_email_settings()
+        if email_settings.is_configured:
+            recipients = self._auth_service.notification_admin_emails()
+            provider = EmailNotificationProvider(email_settings, recipients) if recipients else None
+            _delivered, failed = deliver_pending_incident_emails(
+                self._repository,
+                provider,
+            )
+            if failed:
+                self._show_message(
+                    "Falha registrada. O e-mail ao administrador ficou pendente "
+                    "para nova tentativa.",
+                    error=True,
+                )
+                return None
+            self._show_message("Falha registrada e encaminhada ao administrador.")
+        else:
+            self._show_message(
+                "Falha registrada na central do administrador. O e-mail será enviado "
+                "quando o SMTP for configurado."
+            )
         return None
 
     def _resolve_system_incident(
@@ -805,6 +931,13 @@ class ClimateTestApplication:
             return str(error)
         self._show_message("Falha encerrada com a ação corretiva registrada.")
         return None
+
+    def _rotate_administrator_recovery_code(self) -> str:
+        if not self._current_user.is_admin or not _local_server_client(self._page):
+            raise ValueError(
+                "O código só pode ser renovado por um administrador no próprio servidor."
+            )
+        return self._auth_service.rotate_administrator_recovery_code(self._current_user)
 
     def show_help(self, *, first_access: bool = False) -> None:
         content = build_onboarding_view(
@@ -1048,6 +1181,11 @@ class ClimateTestApplication:
         self._show_message(f"Equipamento retomado. {affected} prazo(s) foram recalculados.")
 
     def _change_theme(self, mode: str) -> None:
+        if _server_mode():
+            self._show_message(
+                "O modo servidor usa um tema único para manter todas as sessões consistentes."
+            )
+            return
         self._theme_mode = "dark" if mode == "dark" else "light"
         AppColors.apply_mode(self._theme_mode)
         self._page.theme_mode = (
@@ -1118,6 +1256,67 @@ class ClimateTestApplication:
             self._show_message(f"Cópia de segurança criada em: {path}")
 
     async def _configure_backup_directory(self, _event: object | None = None) -> None:
+        if _server_mode():
+            page = self._page
+            path_field = ft.TextField(
+                label="Pasta de backup no computador servidor",
+                value=str(
+                    get_external_backup_directory() or suggest_onedrive_backup_directory() or ""
+                ),
+                hint_text=(
+                    "Ex.: C:\\Users\\Laboratorio\\OneDrive - Empresa\\ClimateTestManager\\Backups"
+                ),
+                max_length=500,
+                counter="",
+            )
+            error_text = ft.Text("", size=11, color=AppColors.DANGER)
+
+            def confirm(_confirm_event: object | None = None) -> None:
+                if not path_field.value.strip():
+                    error_text.value = "Informe a pasta de backup do servidor."
+                    error_text.update()
+                    return
+                try:
+                    save_storage_settings(
+                        get_database_path().parent,
+                        Path(path_field.value.strip()),
+                    )
+                    create_configured_database_backups(get_database_path())
+                except (OSError, ValueError) as error:
+                    error_text.value = str(error)
+                    error_text.update()
+                    return
+                page.pop_dialog()
+                self.show_settings()
+                self._show_message("Pasta de backup atualizada e primeira cópia criada.")
+
+            page.show_dialog(
+                styled_dialog(
+                    title="Configurar backup automático",
+                    subtitle="Use um caminho existente no próprio computador servidor",
+                    icon=ft.Icons.BACKUP_OUTLINED,
+                    content=ft.Column(
+                        width=600,
+                        tight=True,
+                        spacing=10,
+                        controls=[
+                            path_field,
+                            dialog_banner(
+                                "Digite o caminho do OneDrive ou de outro destino protegido. "
+                                "O navegador não pode escolher pastas internas do servidor."
+                            ),
+                            error_text,
+                        ],
+                    ),
+                    actions=dialog_actions(
+                        page=page,
+                        primary_label="Salvar e criar cópia",
+                        primary_icon=ft.Icons.BACKUP,
+                        on_confirm=confirm,
+                    ),
+                )
+            )
+            return
         path = await ft.FilePicker().get_directory_path(
             dialog_title="Escolha a pasta das cópias automáticas no OneDrive"
         )
@@ -1134,6 +1333,9 @@ class ClimateTestApplication:
 
     def _open_data_folder(self) -> None:
         folder = get_database_path().parent
+        if _server_mode():
+            self._show_message(f"Pasta dos dados no servidor: {folder}")
+            return
         if not hasattr(os, "startfile"):
             self._show_message(
                 f"A pasta dos dados é: {folder}",
@@ -1277,11 +1479,16 @@ class ClimateTestApplication:
             allow_multiple=False,
             file_type=ft.FilePickerFileType.CUSTOM,
             allowed_extensions=["png", "jpg", "jpeg", "webp"],
+            with_data=_server_mode(),
         )
-        if not files or not files[0].path:
+        if not files:
             return
         try:
-            image_bytes = Path(files[0].path).read_bytes()
+            image_bytes = (
+                files[0].bytes
+                if files[0].bytes is not None
+                else Path(files[0].path or "").read_bytes()
+            )
             self._current_user = self._auth_service.set_profile_photo(
                 self._current_user,
                 image_bytes,
@@ -1334,17 +1541,19 @@ class ClimateTestLauncher:
         auth_service: AuthenticationService,
         *,
         theme_mode: str,
+        local_server_client: bool,
     ) -> None:
         self._page = page
         self._repository = repository
         self._auth_service = auth_service
         self._theme_mode = theme_mode
+        self._local_server_client = local_server_client
         self._session_token: str | None = None
         self._switcher = _screen_switcher()
         self._switcher_mounted = False
 
     def start(self) -> None:
-        token = load_remembered_session_token()
+        token = None if _server_mode() else load_remembered_session_token()
         if token:
             user = self._auth_service.restore_session(token)
             if user is not None:
@@ -1354,9 +1563,19 @@ class ClimateTestLauncher:
             with suppress(OSError):
                 save_remembered_session_token(None)
         if self._auth_service.requires_initial_setup():
-            self.show_initial_setup()
+            if self._local_server_client:
+                self.show_initial_setup()
+            else:
+                self._render_entry(build_server_waiting_view())
         else:
             self.show_login()
+            recovery_code: str | None = None
+            if self._local_server_client:
+                with _SERVER_CONTEXT_LOCK:
+                    if not self._auth_service.has_administrator_recovery_code():
+                        recovery_code = self._auth_service.rotate_administrator_recovery_code()
+            if recovery_code is not None:
+                self._show_recovery_code(recovery_code)
 
     def _render_entry(self, content: ft.Control) -> None:
         if not self._switcher_mounted:
@@ -1371,10 +1590,19 @@ class ClimateTestLauncher:
 
     def show_login(self) -> None:
         self._session_token = None
-        self._render_entry(build_login_view(self._login))
+        self._render_entry(
+            build_login_view(
+                self._login,
+                on_recover_admin=(
+                    self._recover_administrator if self._local_server_client else None
+                ),
+                allow_remember=not _server_mode(),
+            )
+        )
 
     def _register_initial_admin(self, command: UserRegistrationCommand) -> None:
         self._auth_service.register_initial_admin(command)
+        recovery_code = self._auth_service.rotate_administrator_recovery_code()
         session = self._auth_service.authenticate(
             command.username,
             command.password,
@@ -1382,8 +1610,67 @@ class ClimateTestLauncher:
         )
         self._session_token = session.token
         self._open_application(session.user)
+        self._show_recovery_code(recovery_code)
+
+    def _recover_administrator(
+        self,
+        recovery_code: str,
+        command: UserRegistrationCommand,
+    ) -> str:
+        if not self._local_server_client:
+            raise ValueError("A recuperação só pode ser executada no próprio servidor.")
+        _user, next_code = self._auth_service.recover_administrator(
+            recovery_code,
+            command,
+        )
+        return next_code
+
+    def _show_recovery_code(self, recovery_code: str) -> None:
+        page = self._page
+        page.show_dialog(
+            ft.AlertDialog(
+                modal=True,
+                title=ft.Text("Guarde o código de recuperação"),
+                content=ft.Column(
+                    width=540,
+                    tight=True,
+                    spacing=12,
+                    controls=[
+                        ft.Text(
+                            "Este código permite corrigir a conta administradora somente no "
+                            "computador servidor. Ele não será mostrado novamente.",
+                        ),
+                        ft.Container(
+                            border_radius=12,
+                            bgcolor=AppColors.INFO_LIGHT,
+                            padding=16,
+                            content=ft.Text(
+                                recovery_code,
+                                size=19,
+                                weight=ft.FontWeight.BOLD,
+                                selectable=True,
+                            ),
+                        ),
+                        ft.Text(
+                            "Anote ou imprima e guarde fora do servidor. Não envie o código "
+                            "a operadores.",
+                            size=12,
+                            color=AppColors.TEXT_SECONDARY,
+                        ),
+                    ],
+                ),
+                actions=[
+                    ft.Button(
+                        content="Já guardei em local seguro",
+                        icon=ft.Icons.VERIFIED_USER_OUTLINED,
+                        on_click=lambda _event: page.pop_dialog(),
+                    )
+                ],
+            )
+        )
 
     def _login(self, login: str, password: str, remember: bool) -> None:
+        remember = remember and not _server_mode()
         session = self._auth_service.authenticate(
             login,
             password,
@@ -1427,20 +1714,37 @@ def _configure_page(page: ft.Page, theme_mode: str) -> None:
     page.window.height = 800
     page.window.min_width = 880
     page.window.min_height = 720
+    page.window.icon = "brand/climatetest-logo.png"
 
 
 def _start_configured_application(page: ft.Page) -> None:
     """Abre o banco somente depois de existir uma decisão de armazenamento."""
 
-    theme_mode = load_theme_mode()
+    theme_mode = "light" if _server_mode() else load_theme_mode()
     _configure_page(page, theme_mode)
 
     database_path = get_database_path()
     # Se já houver um banco, a cópia diária é feita antes de qualquer migração.
     with suppress(OSError, ValueError):
         create_configured_database_backups(database_path)
+    global _SERVER_AUTH_SERVICE, _SERVER_ENGINE, _SERVER_REPOSITORY
     try:
-        engine = initialize_database(database_path)
+        if _server_mode():
+            with _SERVER_CONTEXT_LOCK:
+                if _SERVER_REPOSITORY is None or _SERVER_AUTH_SERVICE is None:
+                    engine = initialize_database(database_path)
+                    session_factory = create_session_factory(engine)
+                    _SERVER_ENGINE = engine
+                    _SERVER_REPOSITORY = ClimateTestRepository(session_factory)
+                    _SERVER_AUTH_SERVICE = AuthenticationService(UserRepository(session_factory))
+                repository = _SERVER_REPOSITORY
+                auth_service = _SERVER_AUTH_SERVICE
+            engine = _SERVER_ENGINE
+        else:
+            engine = initialize_database(database_path)
+            session_factory = create_session_factory(engine)
+            repository = ClimateTestRepository(session_factory)
+            auth_service = AuthenticationService(UserRepository(session_factory))
     except Exception as error:  # pragma: no cover - depende do sistema operacional
         page.clean()
         page.add(
@@ -1461,17 +1765,16 @@ def _start_configured_application(page: ft.Page) -> None:
         )
         return
 
-    session_factory = create_session_factory(engine)
-    repository = ClimateTestRepository(session_factory)
-    auth_service = AuthenticationService(UserRepository(session_factory))
     with suppress(OSError, ValueError):
         create_configured_database_backups(database_path)
-    page.on_close = lambda _event: engine.dispose()
+    if not _server_mode():
+        page.on_close = lambda _event: engine.dispose()
     ClimateTestLauncher(
         page,
         repository,
         auth_service,
         theme_mode=theme_mode,
+        local_server_client=_local_server_client(page),
     ).start()
 
 
@@ -1481,6 +1784,10 @@ def main(page: ft.Page) -> None:
     _configure_page(page, "light")
     if not storage_setup_required():
         _start_configured_application(page)
+        return
+    if _server_mode() and not _local_server_client(page):
+        page.clean()
+        page.add(build_server_waiting_view())
         return
 
     def confirm_storage(data_directory: Path, backup_directory: Path | None) -> None:

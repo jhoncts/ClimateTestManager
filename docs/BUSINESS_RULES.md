@@ -232,7 +232,13 @@ a `Atrasado`.
 
 ## Falhas do sistema
 
-- Qualquer usuário autenticado pode registrar categoria, impacto, descrição e ação imediata.
+- Qualquer usuário autenticado pode escolher um motivo controlado e registrar uma descrição breve
+  e a ação tomada ao reconhecer a falha.
+- A prioridade é atribuída automaticamente pelo catálogo do sistema; o usuário não pode
+  reclassificá-la durante o relato.
+- O motivo **Outros** permanece disponível e exige a mesma descrição e ação tomada.
+- A falha aparece na central interna e no e-mail somente dos administradores ativos. Avisos de
+  prazos e operações continuam disponíveis a todos os usuários ativos.
 - O relato e a ação imediata originais não podem ser substituídos durante o encerramento.
 - Somente Administrador pode encerrar uma falha, registrando ação corretiva, responsável e data.
 - Uma falha com possível impacto em ensaio ou resultado precisa ser tratada também pelo

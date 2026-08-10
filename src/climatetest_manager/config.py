@@ -306,7 +306,7 @@ def save_preference(key: str, value: object | None) -> None:
 
 
 def _protect_windows_secret(value: str) -> str:
-    """Protege um segredo com DPAPI, vinculado ao usuário atual do Windows."""
+    """Protege um segredo com DPAPI no servidor Windows, sem gravar texto aberto."""
 
     if sys.platform != "win32":
         raise OSError("O armazenamento protegido de senha está disponível somente no Windows.")
@@ -332,7 +332,7 @@ def _protect_windows_secret(value: str) -> str:
         None,
         None,
         None,
-        0x1,
+        0x5,  # CRYPTPROTECT_UI_FORBIDDEN | CRYPTPROTECT_LOCAL_MACHINE
         ctypes.byref(output_blob),
     )
     if not protected:
@@ -415,7 +415,7 @@ def save_email_settings(
     *,
     new_password: str = "",
 ) -> None:
-    """Persiste o SMTP e protege uma nova senha com a conta atual do Windows."""
+    """Persiste o SMTP e protege uma nova senha para os processos do servidor."""
 
     values = load_preferences()
     values.update(

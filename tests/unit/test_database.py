@@ -47,6 +47,8 @@ class DatabaseTests(unittest.TestCase):
                         "user_sessions",
                         "security_audit_events",
                         "system_incidents",
+                        "user_notification_reads",
+                        "administrator_recovery",
                     },
                 )
                 self.assertIn(

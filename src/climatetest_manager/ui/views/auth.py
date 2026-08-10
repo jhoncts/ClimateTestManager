@@ -44,10 +44,15 @@ def _brand() -> ft.Column:
             ft.Container(
                 width=72,
                 height=72,
-                border_radius=20,
-                bgcolor="#26A69A",
+                border_radius=18,
+                bgcolor=AppColors.WHITE,
+                padding=5,
                 alignment=ft.Alignment.CENTER,
-                content=ft.Icon(ft.Icons.SCIENCE, color=AppColors.WHITE, size=38),
+                content=ft.Image(
+                    src="brand/climatetest-logo.png",
+                    fit=ft.BoxFit.CONTAIN,
+                    semantics_label="Logo do ClimateTest Manager",
+                ),
             ),
             ft.Text(
                 "ClimateTest Manager",
@@ -88,6 +93,12 @@ def _auth_shell(content: ft.Control) -> ft.Container:
             height=680,
             border_radius=24,
             bgcolor=AppColors.SURFACE,
+            shadow=ft.BoxShadow(
+                blur_radius=34,
+                spread_radius=1,
+                color="#220F172A",
+                offset=ft.Offset(0, 12),
+            ),
             clip_behavior=ft.ClipBehavior.HARD_EDGE,
             content=ft.ResponsiveRow(
                 spacing=0,
@@ -101,7 +112,7 @@ def _auth_shell(content: ft.Control) -> ft.Container:
                         gradient=ft.LinearGradient(
                             begin=ft.Alignment.TOP_LEFT,
                             end=ft.Alignment.BOTTOM_RIGHT,
-                            colors=["#0F766E", "#0F172A"],
+                            colors=["#087E8B", "#102A43"],
                         ),
                         content=_brand(),
                     ),
@@ -123,8 +134,12 @@ class LoginView:
     def __init__(
         self,
         on_login: Callable[[str, str, bool], None],
+        *,
+        on_recover_admin: Callable[[str, UserRegistrationCommand], str] | None = None,
+        allow_remember: bool = True,
     ) -> None:
         self._on_login = on_login
+        self._on_recover_admin = on_recover_admin
         self.login = ft.TextField(
             label="Usuário ou e-mail",
             prefix_icon=ft.Icons.PERSON_OUTLINE,
@@ -146,6 +161,7 @@ class LoginView:
         self.remember = ft.Checkbox(
             label="Manter conectado neste computador por 30 dias",
             value=False,
+            visible=allow_remember,
         )
         self.error = ft.Text("", size=12, color=AppColors.DANGER)
         self.root = _auth_shell(
@@ -178,6 +194,17 @@ class LoginView:
                         color=AppColors.WHITE,
                         tooltip="Validar as credenciais e abrir o sistema",
                         on_click=lambda _event: self._submit(),
+                    ),
+                    *(
+                        [
+                            ft.TextButton(
+                                content="Recuperar administrador neste servidor",
+                                icon=ft.Icons.ADMIN_PANEL_SETTINGS_OUTLINED,
+                                on_click=self._show_recovery_dialog,
+                            )
+                        ]
+                        if self._on_recover_admin is not None
+                        else []
                     ),
                     ft.Container(
                         border_radius=12,
@@ -217,6 +244,135 @@ class LoginView:
             self.error.value = str(error)
             with suppress(RuntimeError):
                 self.error.update()
+
+    def _show_recovery_dialog(self, _event: object | None = None) -> None:
+        if self._on_recover_admin is None:
+            return
+        recovery_code = ft.TextField(
+            label="Código de recuperação",
+            hint_text="CTM-XXXX-XXXX-XXXX-XXXX-XXXX",
+            max_length=32,
+            counter="",
+        )
+        first_name = ft.TextField(label="Nome correto", max_length=80, counter="")
+        last_name = ft.TextField(label="Sobrenome correto", max_length=120, counter="")
+        username = ft.TextField(label="Novo usuário", max_length=32, counter="")
+        email = ft.TextField(label="Novo e-mail", max_length=254, counter="")
+        password = ft.TextField(
+            label="Nova senha",
+            password=True,
+            can_reveal_password=True,
+            max_length=128,
+            counter="",
+        )
+        confirmation = ft.TextField(
+            label="Confirmar nova senha",
+            password=True,
+            can_reveal_password=True,
+            max_length=128,
+            counter="",
+        )
+        error_text = ft.Text("", size=11, color=AppColors.DANGER)
+        page = self.root.page
+
+        def confirm(_confirm_event: object | None = None) -> None:
+            command = UserRegistrationCommand(
+                username=username.value,
+                email=email.value,
+                first_name=first_name.value,
+                last_name=last_name.value,
+                password=password.value,
+                password_confirmation=confirmation.value,
+                role="admin",
+            )
+            try:
+                next_code = self._on_recover_admin(recovery_code.value, command)
+            except ValueError as error:
+                error_text.value = str(error)
+                error_text.update()
+                return
+            page.pop_dialog()
+            page.show_dialog(
+                ft.AlertDialog(
+                    modal=True,
+                    title=ft.Text("Administrador recuperado"),
+                    content=ft.Column(
+                        width=520,
+                        tight=True,
+                        spacing=12,
+                        controls=[
+                            ft.Text(
+                                "Entre com os novos dados. O código anterior foi invalidado; "
+                                "guarde o novo código em local seguro fora do computador.",
+                            ),
+                            ft.Container(
+                                border_radius=12,
+                                bgcolor=AppColors.INFO_LIGHT,
+                                padding=14,
+                                content=ft.Text(
+                                    next_code,
+                                    size=18,
+                                    weight=ft.FontWeight.BOLD,
+                                    selectable=True,
+                                ),
+                            ),
+                        ],
+                    ),
+                    actions=[
+                        ft.Button(
+                            content="Entendi",
+                            on_click=lambda _event: page.pop_dialog(),
+                        )
+                    ],
+                )
+            )
+
+        page.show_dialog(
+            ft.AlertDialog(
+                modal=True,
+                title=ft.Text("Recuperar administrador"),
+                content=ft.Column(
+                    width=580,
+                    tight=True,
+                    scroll=ft.ScrollMode.AUTO,
+                    spacing=11,
+                    controls=[
+                        ft.Text(
+                            "Disponível somente no computador servidor. A conta principal "
+                            "será corrigida, todas as sessões antigas serão encerradas e o "
+                            "código será renovado.",
+                            size=12,
+                            color=AppColors.TEXT_SECONDARY,
+                        ),
+                        recovery_code,
+                        ft.ResponsiveRow(
+                            controls=[
+                                ft.Container(col={"xs": 12, "sm": 6}, content=first_name),
+                                ft.Container(col={"xs": 12, "sm": 6}, content=last_name),
+                            ]
+                        ),
+                        username,
+                        email,
+                        password,
+                        confirmation,
+                        error_text,
+                    ],
+                ),
+                actions=[
+                    ft.TextButton(
+                        content="Cancelar",
+                        on_click=lambda _event: page.pop_dialog(),
+                    ),
+                    ft.Button(
+                        content="Recuperar e invalidar sessões",
+                        icon=ft.Icons.SECURITY,
+                        bgcolor=AppColors.DANGER,
+                        color=AppColors.WHITE,
+                        on_click=confirm,
+                    ),
+                ],
+            )
+        )
 
 
 class InitialSetupView:
@@ -350,14 +506,62 @@ class InitialSetupView:
                 self.error.update()
 
 
-def build_login_view(on_login: Callable[[str, str, bool], None]) -> ft.Container:
-    return LoginView(on_login).root
+def build_login_view(
+    on_login: Callable[[str, str, bool], None],
+    *,
+    on_recover_admin: Callable[[str, UserRegistrationCommand], str] | None = None,
+    allow_remember: bool = True,
+) -> ft.Container:
+    return LoginView(
+        on_login,
+        on_recover_admin=on_recover_admin,
+        allow_remember=allow_remember,
+    ).root
 
 
 def build_initial_setup_view(
     on_create_admin: Callable[[UserRegistrationCommand], None],
 ) -> ft.Container:
     return InitialSetupView(on_create_admin).root
+
+
+def build_server_waiting_view() -> ft.Container:
+    """Impede que uma conexão remota assuma o primeiro administrador."""
+
+    return _auth_shell(
+        ft.Column(
+            alignment=ft.MainAxisAlignment.CENTER,
+            horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+            spacing=16,
+            controls=[
+                ft.Icon(ft.Icons.LAN_OUTLINED, size=52, color=AppColors.PRIMARY),
+                ft.Text(
+                    "Servidor aguardando configuração local",
+                    size=25,
+                    weight=ft.FontWeight.BOLD,
+                    text_align=ft.TextAlign.CENTER,
+                ),
+                ft.Text(
+                    "Por segurança, somente o navegador aberto no próprio computador servidor "
+                    "pode escolher o armazenamento e criar o primeiro administrador.",
+                    size=13,
+                    color=AppColors.TEXT_SECONDARY,
+                    text_align=ft.TextAlign.CENTER,
+                ),
+                ft.Container(
+                    border_radius=12,
+                    bgcolor=AppColors.INFO_LIGHT,
+                    padding=14,
+                    content=ft.Text(
+                        "Depois da configuração, atualize esta página e entre com a conta "
+                        "fornecida pelo administrador.",
+                        size=12,
+                        text_align=ft.TextAlign.CENTER,
+                    ),
+                ),
+            ],
+        )
+    )
 
 
 class StorageSetupView:

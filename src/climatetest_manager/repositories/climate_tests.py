@@ -15,6 +15,7 @@ from climatetest_manager.database.models import (
     NotifierRunState,
     ResourcePauseRecord,
     SystemIncidentRecord,
+    UserNotificationReadRecord,
 )
 from climatetest_manager.domain.enums import EquipmentResource, TestSituation
 
@@ -99,6 +100,33 @@ class SystemIncidentSummary:
     corrective_action: str | None
     resolved_by: str | None
     resolved_at: datetime | None
+    reason_code: str = "other"
+
+
+@dataclass(frozen=True, slots=True)
+class UserNotificationSummary:
+    """Aviso operacional ou administrativo exibido na central interna."""
+
+    source_kind: str
+    source_id: int
+    title: str
+    message: str
+    severity: str
+    created_at: datetime
+    is_read: bool
+
+
+@dataclass(frozen=True, slots=True)
+class PendingIncidentEmail:
+    """Falha aguardando o alerta restrito por e-mail aos administradores."""
+
+    id: int
+    category: str
+    severity: str
+    description: str
+    immediate_action: str
+    reported_by: str
+    reported_at: datetime
 
 
 class ClimateTestRepository:
@@ -426,6 +454,7 @@ class ClimateTestRepository:
     def report_system_incident(
         self,
         *,
+        reason_code: str = "other",
         category: str,
         severity: str,
         description: str,
@@ -435,6 +464,7 @@ class ClimateTestRepository:
         """Registra a falha e a contenção inicial sem alterar registros anteriores."""
 
         record = SystemIncidentRecord(
+            reason_code=reason_code,
             category=category,
             severity=severity,
             description=description,
@@ -445,6 +475,44 @@ class ClimateTestRepository:
             session.add(record)
             session.commit()
             return record.id
+
+    def list_pending_incident_emails(self, *, limit: int = 20) -> list[PendingIncidentEmail]:
+        """Retorna alertas de falha ainda não aceitos pelo servidor SMTP."""
+
+        with self._session_factory() as session:
+            statement = (
+                select(SystemIncidentRecord)
+                .where(SystemIncidentRecord.admin_email_sent_at.is_(None))
+                .order_by(SystemIncidentRecord.reported_at, SystemIncidentRecord.id)
+                .limit(limit)
+            )
+            return [
+                PendingIncidentEmail(
+                    id=record.id,
+                    category=record.category,
+                    severity=record.severity,
+                    description=record.description,
+                    immediate_action=record.immediate_action,
+                    reported_by=record.reported_by,
+                    reported_at=record.reported_at,
+                )
+                for record in session.scalars(statement)
+            ]
+
+    def mark_incident_email(
+        self,
+        incident_id: int,
+        *,
+        sent_at: datetime | None,
+        error_message: str | None = None,
+    ) -> None:
+        with self._session_factory() as session:
+            record = session.get(SystemIncidentRecord, incident_id)
+            if record is None:
+                raise LookupError(f"Falha do sistema #{incident_id} não encontrada.")
+            record.admin_email_sent_at = sent_at
+            record.admin_email_error = error_message
+            session.commit()
 
     def resolve_system_incident(
         self,
@@ -484,6 +552,7 @@ class ClimateTestRepository:
             return [
                 SystemIncidentSummary(
                     id=record.id,
+                    reason_code=record.reason_code,
                     category=record.category,
                     severity=record.severity,
                     description=record.description,
@@ -497,3 +566,101 @@ class ClimateTestRepository:
                 )
                 for record in session.scalars(statement)
             ]
+
+    def list_user_notifications(
+        self,
+        *,
+        user_id: int,
+        is_admin: bool,
+        now: datetime | None = None,
+        limit: int = 80,
+    ) -> list[UserNotificationSummary]:
+        """Combina avisos operacionais e, para admins, falhas registradas."""
+
+        current_time = (now or datetime.now()).replace(microsecond=0)
+        with self._session_factory() as session:
+            reads = {
+                (record.source_kind, record.source_id)
+                for record in session.scalars(
+                    select(UserNotificationReadRecord).where(
+                        UserNotificationReadRecord.user_id == user_id
+                    )
+                )
+            }
+            operational = session.scalars(
+                select(NotificationEvent)
+                .where(NotificationEvent.scheduled_for_at <= current_time)
+                .order_by(NotificationEvent.scheduled_for_at.desc(), NotificationEvent.id.desc())
+                .limit(limit)
+            ).all()
+            notifications = [
+                UserNotificationSummary(
+                    source_kind="operation",
+                    source_id=record.id,
+                    title=record.title,
+                    message=record.message,
+                    severity=(
+                        "high"
+                        if "ultrapassado" in record.title.casefold()
+                        or "atras" in record.title.casefold()
+                        else "info"
+                    ),
+                    created_at=record.scheduled_for_at,
+                    is_read=("operation", record.id) in reads,
+                )
+                for record in operational
+            ]
+            if is_admin:
+                incidents = session.scalars(
+                    select(SystemIncidentRecord)
+                    .order_by(
+                        SystemIncidentRecord.reported_at.desc(),
+                        SystemIncidentRecord.id.desc(),
+                    )
+                    .limit(limit)
+                ).all()
+                notifications.extend(
+                    UserNotificationSummary(
+                        source_kind="incident",
+                        source_id=record.id,
+                        title=f"Falha #{record.id} • Prioridade {record.severity}",
+                        message=(
+                            f"{record.category}\nRegistrada por {record.reported_by}\n"
+                            f"{record.description}"
+                        ),
+                        severity=record.severity.casefold(),
+                        created_at=record.reported_at,
+                        is_read=("incident", record.id) in reads,
+                    )
+                    for record in incidents
+                )
+            return sorted(
+                notifications,
+                key=lambda item: item.created_at,
+                reverse=True,
+            )[:limit]
+
+    def mark_user_notification_read(
+        self,
+        *,
+        user_id: int,
+        source_kind: str,
+        source_id: int,
+    ) -> None:
+        if source_kind not in {"operation", "incident"}:
+            raise ValueError("Origem de notificação inválida.")
+        with self._session_factory() as session:
+            exists_statement = select(UserNotificationReadRecord.id).where(
+                UserNotificationReadRecord.user_id == user_id,
+                UserNotificationReadRecord.source_kind == source_kind,
+                UserNotificationReadRecord.source_id == source_id,
+            )
+            if session.scalar(exists_statement) is None:
+                session.add(
+                    UserNotificationReadRecord(
+                        user_id=user_id,
+                        source_kind=source_kind,
+                        source_id=source_id,
+                    )
+                )
+                session.commit()

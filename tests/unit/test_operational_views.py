@@ -349,7 +349,7 @@ class OperationalViewTests(unittest.TestCase):
             on_open_data_folder=lambda: None,
             on_backup=backup,
             on_configure_backup=backup,
-            on_report_system_incident=lambda _category, _severity, _description, _action: None,
+            on_report_system_incident=lambda _reason, _description, _action: None,
             on_resolve_system_incident=lambda _incident_id, _action: None,
             on_refresh=lambda: None,
         )
@@ -440,7 +440,7 @@ class OperationalViewTests(unittest.TestCase):
             on_open_data_folder=lambda: None,
             on_backup=backup,
             on_configure_backup=backup,
-            on_report_system_incident=lambda _category, _severity, _description, _action: None,
+            on_report_system_incident=lambda _reason, _description, _action: None,
             on_resolve_system_incident=lambda _incident_id, _action: None,
             on_refresh=lambda: None,
         )
@@ -619,7 +619,7 @@ class OperationalViewTests(unittest.TestCase):
             on_open_data_folder=lambda: None,
             on_backup=backup,
             on_configure_backup=backup,
-            on_report_system_incident=lambda _category, _severity, _description, _action: None,
+            on_report_system_incident=lambda _reason, _description, _action: None,
             on_resolve_system_incident=lambda _incident_id, _action: None,
             on_refresh=lambda: None,
         )

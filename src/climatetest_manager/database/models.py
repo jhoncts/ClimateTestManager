@@ -301,6 +301,7 @@ class SystemIncidentRecord(Base):
     __tablename__ = "system_incidents"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    reason_code: Mapped[str] = mapped_column(String(80), default="other", index=True)
     category: Mapped[str] = mapped_column(String(80), index=True)
     severity: Mapped[str] = mapped_column(String(24), index=True)
     description: Mapped[str] = mapped_column(Text)
@@ -311,3 +312,40 @@ class SystemIncidentRecord(Base):
     corrective_action: Mapped[str | None] = mapped_column(Text, nullable=True)
     resolved_by: Mapped[str | None] = mapped_column(String(180), nullable=True)
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    admin_email_sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    admin_email_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class UserNotificationReadRecord(Base):
+    """Marca, por usuário, quais avisos da central interna já foram lidos."""
+
+    __tablename__ = "user_notification_reads"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "source_kind",
+            "source_id",
+            name="uq_user_notification_source",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        index=True,
+    )
+    source_kind: Mapped[str] = mapped_column(String(24), index=True)
+    source_id: Mapped[int] = mapped_column(Integer, index=True)
+    read_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+
+class AdministratorRecoveryRecord(Base):
+    """Hash do código que permite recuperar o administrador apenas no servidor."""
+
+    __tablename__ = "administrator_recovery"
+
+    id: Mapped[int] = mapped_column(primary_key=True, default=1)
+    code_hash: Mapped[str] = mapped_column(String(64))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)

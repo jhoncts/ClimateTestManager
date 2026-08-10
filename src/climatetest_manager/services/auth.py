@@ -143,6 +143,19 @@ def _token_hash(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
+def _recovery_hash(code: str) -> str:
+    normalized = "".join(code.strip().upper().split())
+    return hashlib.sha256(normalized.encode("ascii", errors="ignore")).hexdigest()
+
+
+def _new_recovery_code() -> str:
+    """Gera um código legível sem caracteres visualmente ambíguos."""
+
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    payload = "".join(secrets.choice(alphabet) for _ in range(20))
+    return "CTM-" + "-".join(payload[index : index + 4] for index in range(0, 20, 4))
+
+
 def _summary(user: UserRecord) -> UserSummary:
     return UserSummary(
         id=user.id,
@@ -166,6 +179,9 @@ class AuthenticationService:
 
     def requires_initial_setup(self) -> bool:
         return self._repository.count_users() == 0
+
+    def has_administrator_recovery_code(self) -> bool:
+        return self._repository.get_recovery_code_hash() is not None
 
     def _validated_identity(
         self,
@@ -213,6 +229,84 @@ class AuthenticationService:
             target_user_id=user.id,
         )
         return _summary(user)
+
+    def rotate_administrator_recovery_code(
+        self,
+        actor: UserSummary | None = None,
+    ) -> str:
+        """Substitui o código anterior e devolve o novo valor uma única vez."""
+
+        if actor is not None:
+            self._require_admin(actor)
+        code = _new_recovery_code()
+        now = datetime.now(UTC)
+        self._repository.save_recovery_code_hash(_recovery_hash(code), now)
+        self._repository.add_security_event(
+            actor_user_id=actor.id if actor is not None else None,
+            actor_label=(
+                actor.actor_label if actor is not None else "Configuração local do servidor"
+            ),
+            action="Código de recuperação do administrador renovado",
+            target_user_id=actor.id if actor is not None else None,
+        )
+        return code
+
+    def recover_administrator(
+        self,
+        recovery_code: str,
+        command: UserRegistrationCommand,
+    ) -> tuple[UserSummary, str]:
+        """Recupera a conta principal; a UI só expõe esta ação no próprio servidor."""
+
+        expected_hash = self._repository.get_recovery_code_hash()
+        if not expected_hash or not hmac.compare_digest(
+            expected_hash,
+            _recovery_hash(recovery_code),
+        ):
+            raise AuthenticationError("Código de recuperação inválido.")
+        candidates = self._repository.list_all()
+        target = next(
+            (user for user in candidates if user.role == "admin" and user.is_active),
+            next((user for user in candidates if user.role == "admin"), None),
+        )
+        if target is None:
+            raise AuthenticationError("Não existe uma conta administradora para recuperar.")
+        (
+            username,
+            normalized_username,
+            email,
+            normalized_email,
+            first_name,
+            last_name,
+        ) = self._validated_identity(command, excluding_id=target.id)
+        password = _validate_password(command.password, command.password_confirmation)
+
+        def operation(record: UserRecord) -> None:
+            record.username = username
+            record.normalized_username = normalized_username
+            record.email = email
+            record.normalized_email = normalized_email
+            record.first_name = first_name
+            record.last_name = last_name
+            record.password_hash = _hash_password(password)
+            record.role = "admin"
+            record.is_active = True
+
+        self._repository.mutate(target.id, operation)
+        now = datetime.now(UTC)
+        self._repository.revoke_user_sessions(target.id, now)
+        refreshed = self._repository.get(target.id)
+        if refreshed is None:
+            raise AuthenticationError("Não foi possível recuperar o administrador.")
+        recovered = _summary(refreshed)
+        self._repository.add_security_event(
+            actor_user_id=None,
+            actor_label="Recuperação local do servidor",
+            action="Administrador principal recuperado",
+            target_user_id=recovered.id,
+            details=recovered.actor_label,
+        )
+        return recovered, self.rotate_administrator_recovery_code()
 
     def _build_user(
         self,
@@ -310,6 +404,11 @@ class AuthenticationService:
     def list_active_emails(self, actor: UserSummary) -> list[str]:
         self._require_admin(actor)
         return self._repository.list_active_emails()
+
+    def notification_admin_emails(self) -> list[str]:
+        """Uso interno do servidor para alertas restritos, sem expor a lista na UI."""
+
+        return self._repository.list_active_admin_emails()
 
     def create_user(
         self,

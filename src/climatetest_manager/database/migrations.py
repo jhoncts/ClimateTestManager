@@ -2,7 +2,7 @@
 
 from sqlalchemy import Engine, inspect, text
 
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 
 OPERATIONAL_COLUMNS = {
     "chamber_started_at": "DATETIME",
@@ -28,6 +28,12 @@ NOTIFICATION_COLUMNS = {
 
 USER_COLUMNS = {
     "profile_photo_b64": "TEXT",
+}
+
+INCIDENT_COLUMNS = {
+    "reason_code": "VARCHAR(80) NOT NULL DEFAULT 'other'",
+    "admin_email_sent_at": "DATETIME",
+    "admin_email_error": "TEXT",
 }
 
 
@@ -56,6 +62,7 @@ def migrate_database(engine: Engine) -> None:
         for table_name, columns in (
             ("notification_events", NOTIFICATION_COLUMNS),
             ("users", USER_COLUMNS),
+            ("system_incidents", INCIDENT_COLUMNS),
         ):
             if table_name not in table_names:
                 continue

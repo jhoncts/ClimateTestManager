@@ -24,6 +24,35 @@ detalhes do sistema operacional.
 
 ## Decisões iniciais
 
+### Implantação LAN na v0.6.0
+
+O banco SQLite continua local, porém apenas no computador servidor do laboratório. O processo
+`ClimateTestServer.exe` hospeda a aplicação Flet em `0.0.0.0:8550`; estações e celulares na rede
+privada usam o navegador. Como todo SQL é executado no servidor, nenhum arquivo SQLite é aberto
+por SMB, OneDrive ou por outro computador.
+
+O contexto de banco é inicializado uma única vez sob uma trava de processo e compartilhado por
+sessões independentes. Cada ação continua abrindo sua própria sessão SQLAlchemy curta, com WAL e
+`busy_timeout`. O primeiro administrador e sua recuperação são expostos somente quando
+`Page.client_ip` é loopback. Conexões remotas recebem apenas uma tela de espera até a configuração
+local terminar e, depois, somente o login.
+
+O instalador cria o servidor como tarefa `SYSTEM` iniciada com o Windows, um agente `SYSTEM` para
+e-mails/backups, um agente interativo para os toasts a cada cinco minutos e uma regra de firewall
+limitada ao perfil privado. A porta não deve ser encaminhada à internet; acesso remoto futuro
+exige uma borda HTTPS/VPN.
+
+### Central interna de notificações
+
+Os avisos operacionais já persistidos em `notification_events` são apresentados a todos os
+usuários quando vencem. `user_notification_reads` guarda a leitura individual sem duplicar o
+conteúdo. Administradores também recebem os registros de `system_incidents`; operadores não
+conseguem consultar essa categoria.
+
+Falhas usam um catálogo de motivos que determina a prioridade automaticamente. O e-mail de cada
+falha possui entrega idempotente aos administradores ativos e é tentado novamente pelo agente
+caso o SMTP esteja temporariamente indisponível.
+
 ### Estrutura `src`
 
 O código importável fica dentro de `src/climatetest_manager`. Isso reduz o risco de os testes
@@ -121,9 +150,11 @@ O contrato `NotificationProvider` atende separadamente o toast local e o SMTP. A
 toast já entregue. Os destinatários são os e-mails das contas ativas.
 
 A configuração SMTP é restrita ao administrador. Os campos não sensíveis ficam em
-`preferences.json`; a senha é protegida pela DPAPI do Windows e vinculada à conta que realizou a
-configuração. A senha protegida é prioritária; `CLIMATETEST_SMTP_PASSWORD` serve somente como
-alternativa de teste quando ainda não existe credencial salva. Senhas de app do Gmail são
+`preferences.json`; a senha é protegida pela DPAPI no escopo da máquina e o arquivo permanece sob
+as permissões da pasta de dados do servidor. Isso permite que o servidor e o agente agendado
+trabalhem sem texto aberto e sob identidades Windows diferentes. A senha protegida é prioritária;
+`CLIMATETEST_SMTP_PASSWORD` serve somente como alternativa de teste quando ainda não existe
+credencial salva. Senhas de app do Gmail são
 normalizadas sem os espaços usados apenas para apresentação. A interface oferece modelos de
 provedor e reutiliza o mesmo tutorial no diálogo de configuração e no Guia de uso; o envio
 continua centralizado no agente local. O envelope informa explicitamente remetente e

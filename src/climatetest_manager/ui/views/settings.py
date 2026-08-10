@@ -9,6 +9,7 @@ from climatetest_manager import __version__
 from climatetest_manager.config import EmailSettings
 from climatetest_manager.database.migrations import SCHEMA_VERSION
 from climatetest_manager.domain.climate_rules import NORMATIVE_RULE_VERSION
+from climatetest_manager.domain.incidents import INCIDENT_REASONS, incident_reason
 from climatetest_manager.repositories.climate_tests import (
     NotificationStatus,
     SystemIncidentSummary,
@@ -50,9 +51,12 @@ def build_settings_view(
     on_open_data_folder: Callable[[], None],
     on_backup: Callable[[object | None], Awaitable[None]],
     on_configure_backup: Callable[[object | None], Awaitable[None]] | None,
-    on_report_system_incident: Callable[[str, str, str, str], str | None],
+    on_report_system_incident: Callable[[str, str, str], str | None],
     on_resolve_system_incident: Callable[[int, str], str | None] | None,
     on_refresh: Callable[[], None],
+    on_rotate_administrator_recovery: Callable[[], str] | None = None,
+    allow_theme_change: bool = True,
+    managed_server_mode: bool = False,
 ) -> ft.Column:
     """Monta conta, preferências locais e integrações do Windows."""
 
@@ -74,6 +78,12 @@ def build_settings_view(
     theme_switch = ft.Switch(
         label="Usar tema escuro",
         value=theme_mode == "dark",
+        disabled=not allow_theme_change,
+        tooltip=(
+            None
+            if allow_theme_change
+            else "No modo servidor, o tema é mantido igual entre todas as sessões."
+        ),
     )
     theme_switch.on_change = lambda _event: on_theme_change(
         "dark" if theme_switch.value else "light"
@@ -149,6 +159,69 @@ def build_settings_view(
         )
 
     password_button.on_click = show_password_dialog
+    recovery_button = ft.Button(
+        content="Renovar código de recuperação",
+        icon=ft.Icons.ADMIN_PANEL_SETTINGS_OUTLINED,
+    )
+
+    def show_recovery_code_dialog(_event: object | None = None) -> None:
+        if on_rotate_administrator_recovery is None:
+            return
+        page = recovery_button.page
+        try:
+            recovery_code = on_rotate_administrator_recovery()
+        except ValueError as error:
+            page.show_dialog(
+                styled_dialog(
+                    title="Não foi possível renovar o código",
+                    subtitle=str(error),
+                    icon=ft.Icons.ERROR_OUTLINE,
+                    actions=[
+                        ft.Button(
+                            content="Fechar",
+                            on_click=lambda _close_event: page.pop_dialog(),
+                        )
+                    ],
+                )
+            )
+            return
+        page.show_dialog(
+            ft.AlertDialog(
+                modal=True,
+                title=ft.Text("Novo código de recuperação"),
+                content=ft.Column(
+                    width=540,
+                    tight=True,
+                    spacing=12,
+                    controls=[
+                        ft.Text(
+                            "O código anterior foi invalidado. Guarde este valor fora do "
+                            "servidor; ele não será exibido novamente."
+                        ),
+                        ft.Container(
+                            border_radius=12,
+                            bgcolor=AppColors.INFO_LIGHT,
+                            padding=16,
+                            content=ft.Text(
+                                recovery_code,
+                                size=19,
+                                weight=ft.FontWeight.BOLD,
+                                selectable=True,
+                            ),
+                        ),
+                    ],
+                ),
+                actions=[
+                    ft.Button(
+                        content="Já guardei em local seguro",
+                        icon=ft.Icons.VERIFIED_USER_OUTLINED,
+                        on_click=lambda _close_event: page.pop_dialog(),
+                    )
+                ],
+            )
+        )
+
+    recovery_button.on_click = show_recovery_code_dialog
     email_button = ft.Button(
         content="Configurar e-mail",
         icon=ft.Icons.MARK_EMAIL_READ_OUTLINED,
@@ -429,7 +502,7 @@ def build_settings_view(
     disable_notifications_button = ft.Button(
         content="Desativar avisos",
         icon=ft.Icons.NOTIFICATIONS_OFF,
-        disabled=not notifications_enabled,
+        disabled=not notifications_enabled or managed_server_mode,
     )
 
     def confirm_remove_photo(_event: object | None = None) -> None:
@@ -509,30 +582,42 @@ def build_settings_view(
     )
 
     def show_report_incident_dialog(_event: object | None = None) -> None:
-        category = ft.Dropdown(
-            label="Categoria",
-            value="Falha do software",
+        reason_selector = ft.Dropdown(
+            label="Motivo da falha",
+            value="software_crash",
             options=[
-                ft.DropdownOption(key=value, text=value)
-                for value in (
-                    "Falha do software",
-                    "Indisponibilidade",
-                    "Dado ou relatório incorreto",
-                    "Notificação",
-                    "Segurança ou acesso",
-                    "Backup ou restauração",
-                    "Outro",
-                )
+                ft.DropdownOption(key=reason.code, text=reason.label) for reason in INCIDENT_REASONS
             ],
         )
-        severity = ft.Dropdown(
-            label="Impacto",
-            value="Médio",
-            options=[
-                ft.DropdownOption(key=value, text=value)
-                for value in ("Baixo", "Médio", "Alto", "Crítico")
-            ],
+        initial_reason = incident_reason("software_crash")
+        priority_text = ft.Text(
+            f"Prioridade automática: {initial_reason.severity}",
+            size=12,
+            weight=ft.FontWeight.BOLD,
+            color=AppColors.DANGER,
         )
+        guidance_text = ft.Text(
+            initial_reason.guidance,
+            size=11,
+            color=AppColors.TEXT_SECONDARY,
+        )
+        priority_card = ft.Container(
+            border_radius=11,
+            bgcolor=AppColors.WARNING_LIGHT,
+            padding=12,
+            content=ft.Column(spacing=3, controls=[priority_text, guidance_text]),
+        )
+
+        def update_priority(_event: object | None = None) -> None:
+            reason = incident_reason(reason_selector.value or "other")
+            priority_text.value = f"Prioridade automática: {reason.severity}"
+            priority_text.color = (
+                AppColors.DANGER if reason.severity in {"Crítica", "Alta"} else AppColors.WARNING
+            )
+            guidance_text.value = reason.guidance
+            priority_card.update()
+
+        reason_selector.on_select = update_priority
         description = ft.TextField(
             label="O que aconteceu?",
             hint_text="Descreva a falha, quando ocorreu e quais registros podem ter sido afetados.",
@@ -542,7 +627,7 @@ def build_settings_view(
             max_length=2000,
         )
         immediate_action = ft.TextField(
-            label="Ação imediata adotada",
+            label="Qual ação você tomou ao reconhecer a falha?",
             hint_text="Ex.: interrompido o uso e conferidos os registros com a planilha de apoio.",
             multiline=True,
             min_lines=2,
@@ -562,8 +647,7 @@ def build_settings_view(
                 error_text.update()
                 return
             error = on_report_system_incident(
-                category.value or "Outro",
-                severity.value or "Médio",
+                reason_selector.value or "other",
                 description.value.strip(),
                 immediate_action.value.strip(),
             )
@@ -589,13 +673,8 @@ def build_settings_view(
                             "puder ter sido afetado, interrompa o uso e aplique o procedimento "
                             "de trabalho não conforme do laboratório."
                         ),
-                        ft.ResponsiveRow(
-                            spacing=10,
-                            controls=[
-                                ft.Container(col={"xs": 12, "sm": 7}, content=category),
-                                ft.Container(col={"xs": 12, "sm": 5}, content=severity),
-                            ],
-                        ),
+                        reason_selector,
+                        priority_card,
                         description,
                         immediate_action,
                         error_text,
@@ -615,6 +694,9 @@ def build_settings_view(
     def incident_control(incident: SystemIncidentSummary) -> ft.Control:
         is_open = incident.status == "open"
         severity_color = {
+            "Crítica": AppColors.DANGER,
+            "Alta": AppColors.DANGER,
+            "Média": AppColors.WARNING,
             "Crítico": AppColors.DANGER,
             "Alto": AppColors.DANGER,
             "Médio": AppColors.WARNING,
@@ -848,6 +930,11 @@ def build_settings_view(
                                     else []
                                 ),
                                 password_button,
+                                *(
+                                    [recovery_button]
+                                    if on_rotate_administrator_recovery is not None
+                                    else []
+                                ),
                             ],
                         ),
                     ],
@@ -1040,8 +1127,15 @@ def build_settings_view(
                         ),
                         ft.Text(last_result, size=12, color=AppColors.TEXT_SECONDARY),
                         ft.Text(
-                            "O computador precisa estar ligado e a sessão do Windows iniciada. "
-                            "A tarefa chama diretamente o notificador sem abrir CMD ou PowerShell.",
+                            (
+                                "O servidor, os e-mails e os backups continuam sem login. "
+                                "Os avisos visuais aparecem quando a sessão do Windows está "
+                                "iniciada. As tarefas são gerenciadas pelo instalador."
+                                if managed_server_mode
+                                else "O computador precisa estar ligado e a sessão do Windows "
+                                "iniciada. A tarefa chama diretamente o notificador sem abrir "
+                                "CMD ou PowerShell."
+                            ),
                             size=12,
                             color=AppColors.TEXT_SECONDARY,
                         ),
@@ -1052,13 +1146,18 @@ def build_settings_view(
                                 ft.Button(
                                     content="Testar notificação",
                                     icon=ft.Icons.NOTIFICATIONS,
-                                    tooltip="Exibir imediatamente um aviso de teste no Windows",
+                                    tooltip=(
+                                        "No modo servidor, valide o toast com um prazo operacional."
+                                        if managed_server_mode
+                                        else "Exibir imediatamente um aviso de teste no Windows"
+                                    ),
+                                    disabled=managed_server_mode,
                                     on_click=lambda _event: on_test_notification(),
                                 ),
                                 ft.Button(
                                     content="Ativar avisos",
                                     icon=ft.Icons.NOTIFICATIONS_ACTIVE,
-                                    disabled=notifications_enabled,
+                                    disabled=notifications_enabled or managed_server_mode,
                                     bgcolor=AppColors.PRIMARY,
                                     color=AppColors.WHITE,
                                     on_click=lambda _event: on_enable_notifications(),
@@ -1246,9 +1345,18 @@ def build_settings_view(
                                     bgcolor=AppColors.PAGE_BACKGROUND,
                                     padding=14,
                                     content=ft.Text(
-                                        "Nenhuma falha registrada. Isso não dispensa o relato "
-                                        "quando ocorrer indisponibilidade, erro, perda ou risco "
-                                        "à integridade dos dados.",
+                                        (
+                                            "Nenhuma falha registrada. Isso não dispensa o "
+                                            "relato quando ocorrer indisponibilidade, erro, "
+                                            "perda ou risco "
+                                            "à integridade dos dados."
+                                            if current_user.is_admin
+                                            else (
+                                                "O histórico de falhas é reservado "
+                                                "à administração. Você pode registrar "
+                                                "um novo relato pelo botão acima."
+                                            )
+                                        ),
                                         size=11,
                                         color=AppColors.TEXT_SECONDARY,
                                     ),
