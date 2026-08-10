@@ -2,7 +2,8 @@ $ErrorActionPreference = "Stop"
 $version = "0.7.0"
 $releaseDir = "dist\ClimateTestManager-v$version"
 $releaseZip = "dist\ClimateTestManager-v$version-windows.zip"
-$installerPath = "dist\ClimateTestManager-Server-Setup-v$version.exe"
+$installerPath = "dist\ClimateTestManager-Setup-v$version.exe"
+$installerHashPath = "dist\ClimateTestManager-Setup-v$version-SHA256.txt"
 $assetsStage = ".release-assets"
 
 if (-not (Test-Path ".\.venv\Scripts\python.exe")) {
@@ -72,14 +73,9 @@ if ($LASTEXITCODE -ne 0) {
     throw "Falha ao empacotar ClimateTestNotifier.exe."
 }
 
-Copy-Item "docs\MANUAL_TEST_V060.md" (Join-Path $releaseDir "LEIA-ME-PRIMEIRO.md")
+Copy-Item "docs\INSTALACAO_WINDOWS.md" (Join-Path $releaseDir "LEIA-ME-PRIMEIRO.md")
 Copy-Item "src\assets\brand\climatetest.ico" (Join-Path $releaseDir "climatetest.ico")
-$serverTaskScript = Join-Path $releaseDir "install_server_tasks.ps1"
-Copy-Item "scripts\install_server_tasks.ps1" $serverTaskScript
-$serverTaskContent = Get-Content -LiteralPath $serverTaskScript -Raw
-$serverTaskContent = $serverTaskContent.Replace("v0.6.3", "v$version")
-$serverTaskContent = $serverTaskContent.Replace('version = "0.6.3"', "version = `"$version`"")
-Set-Content -LiteralPath $serverTaskScript -Value $serverTaskContent -Encoding UTF8
+Copy-Item "scripts\install_server_tasks.ps1" $releaseDir
 Copy-Item "scripts\uninstall_server_tasks.ps1" $releaseDir
 $complianceDir = Join-Path $releaseDir "documentacao-conformidade"
 New-Item -ItemType Directory -Path $complianceDir -Force | Out-Null
@@ -115,8 +111,13 @@ if (-not (Test-Path -LiteralPath $releaseZip)) {
     throw "O build terminou sem gerar $releaseZip."
 }
 
+$installerHash = (Get-FileHash -LiteralPath $installerPath -Algorithm SHA256).Hash.ToLowerInvariant()
+"SHA256  $installerHash  $(Split-Path -Leaf $installerPath)" |
+    Set-Content -LiteralPath $installerHashPath -Encoding ascii
+
 Remove-Item -LiteralPath $assetsStage -Recurse -Force -ErrorAction SilentlyContinue
 
 Write-Host "Instalador criado em $installerPath"
+Write-Host "SHA-256 criado em $installerHashPath"
 Write-Host "Pacote criado em $releaseZip"
 Write-Host "Executaveis prontos em $releaseDir"
