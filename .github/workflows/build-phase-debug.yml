@@ -29,7 +29,7 @@ jobs:
           New-Item -ItemType Directory -Path ".release-assets\icons" -Force | Out-Null
           Copy-Item "src\assets\brand\climatetest-logo.png" ".release-assets\favicon.png" -Force
           Copy-Item "src\assets\brand\climatetest-logo.png" ".release-assets\icons\loading-animation.png" -Force
-          New-Item -ItemType Directory -Path "dist\ClimateTestManager-v0.7.0" -Force | Out-Null
+          New-Item -ItemType Directory -Path "dist\ClimateTestManager-v0.8.0" -Force | Out-Null
       - name: Pack desktop client
         shell: pwsh
         run: |
@@ -38,12 +38,12 @@ jobs:
             --icon "src\assets\brand\climatetest.ico" `
             --add-data ".release-assets;assets" `
             --product-name "ClimateTest Manager" `
-            --product-version "0.7.0" `
-            --file-version "0.7.0.0" `
+            --product-version "0.8.0" `
+            --file-version "0.8.0.0" `
             --file-description "Cliente desktop do ClimateTest Manager" `
             --company-name "ClimateTest Manager" `
             --copyright "Copyright (c) 2026 Jhon Cleiton" `
-            --distpath "dist\ClimateTestManager-v0.7.0" `
+            --distpath "dist\ClimateTestManager-v0.8.0" `
             --yes
       - name: Pack central server
         shell: pwsh
@@ -55,7 +55,7 @@ jobs:
             --icon "src\assets\brand\climatetest.ico" `
             --add-data ".release-assets;assets" `
             --collect-all flet_web `
-            --distpath "dist\ClimateTestManager-v0.7.0" `
+            --distpath "dist\ClimateTestManager-v0.8.0" `
             --clean `
             --noconfirm
       - name: Pack background notifier
@@ -67,13 +67,13 @@ jobs:
             --onefile `
             --icon "src\assets\brand\climatetest.ico" `
             --add-data ".release-assets;assets" `
-            --distpath "dist\ClimateTestManager-v0.7.0" `
+            --distpath "dist\ClimateTestManager-v0.8.0" `
             --clean `
             --noconfirm
       - name: Stage installer files
         shell: pwsh
         run: |
-          $releaseDir = "dist\ClimateTestManager-v0.7.0"
+          $releaseDir = "dist\ClimateTestManager-v0.8.0"
           Copy-Item "docs\INSTALACAO_WINDOWS.md" (Join-Path $releaseDir "LEIA-ME-PRIMEIRO.md")
           Copy-Item "src\assets\brand\climatetest.ico" (Join-Path $releaseDir "climatetest.ico")
           Copy-Item "scripts\install_server_tasks.ps1" $releaseDir
