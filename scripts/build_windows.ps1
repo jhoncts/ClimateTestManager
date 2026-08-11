@@ -77,6 +77,7 @@ Copy-Item "docs\INSTALACAO_WINDOWS.md" (Join-Path $releaseDir "LEIA-ME-PRIMEIRO.
 Copy-Item "src\assets\brand\climatetest.ico" (Join-Path $releaseDir "climatetest.ico")
 Copy-Item "scripts\install_server_tasks.ps1" $releaseDir
 Copy-Item "scripts\uninstall_server_tasks.ps1" $releaseDir
+Copy-Item "scripts\discover_server.ps1" $releaseDir
 $complianceDir = Join-Path $releaseDir "documentacao-conformidade"
 New-Item -ItemType Directory -Path $complianceDir -Force | Out-Null
 Copy-Item "docs\compliance\*" $complianceDir -Recurse -Force
