@@ -180,10 +180,13 @@ def download_verified_update(update: UpdateInfo) -> Path:
     destination_directory.mkdir(parents=True, exist_ok=True)
     destination = destination_directory / update.installer_name
     temporary = destination.with_suffix(destination.suffix + ".download")
-    with urllib.request.urlopen(
-        urllib.request.Request(update.installer_url, headers={"User-Agent": _USER_AGENT}),
-        timeout=30,
-    ) as response, temporary.open("wb") as output:
+    with (
+        urllib.request.urlopen(
+            urllib.request.Request(update.installer_url, headers={"User-Agent": _USER_AGENT}),
+            timeout=30,
+        ) as response,
+        temporary.open("wb") as output,
+    ):
         digest = hashlib.sha256()
         while True:
             chunk = response.read(1024 * 1024)
