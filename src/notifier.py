@@ -48,12 +48,13 @@ def main() -> None:
         email_settings = load_email_settings()
         use_email = arguments.channels in {"both", "email"}
         use_desktop = arguments.channels in {"both", "desktop"}
+        automatic_email = use_email and email_settings.automatic_enabled
         email_provider = (
             EmailNotificationProvider(
                 email_settings,
                 user_repository.list_active_emails(),
             )
-            if use_email and email_settings.is_configured
+            if automatic_email
             else None
         )
         admin_emails = user_repository.list_active_admin_emails()
@@ -62,7 +63,7 @@ def main() -> None:
                 email_settings,
                 admin_emails,
             )
-            if use_email and email_settings.is_configured and admin_emails
+            if automatic_email and admin_emails
             else None
         )
         deliver_due_notifications(
@@ -70,9 +71,9 @@ def main() -> None:
             WindowsToastProvider() if use_desktop else None,
             email_provider=email_provider,
             require_desktop=True,
-            require_email=email_settings.is_configured,
+            require_email=automatic_email,
         )
-        if use_email:
+        if automatic_email:
             deliver_pending_incident_emails(repository, admin_email_provider)
     finally:
         engine.dispose()

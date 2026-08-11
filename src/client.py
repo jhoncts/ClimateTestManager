@@ -1,14 +1,26 @@
 """Cliente desktop nativo que conecta ao servidor central do ClimateTest Manager."""
 
-import argparse
+import argparse  # noqa: I001
 import asyncio
 import os
+import sys
+import threading
 import urllib.error
 import urllib.request
+from contextlib import suppress
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
 import flet as ft
+
+from climatetest_manager.client_bridge import DesktopToastCommand, TOAST_COMMAND_KEY
+from climatetest_manager.services.notifications import WindowsToastProvider
+from climatetest_manager.services.updates import (
+    automatic_update_checks_enabled,
+    check_for_update,
+    download_verified_update,
+    launch_installer_elevated,
+)
 
 VERSION = "0.7.0"
 DEFAULT_PORT = 8550
@@ -20,6 +32,7 @@ def _arguments() -> argparse.Namespace:
     parser.add_argument("--url", default="")
     parser.add_argument("--check-only", action="store_true")
     parser.add_argument("--ready-file", default="", help=argparse.SUPPRESS)
+    parser.add_argument("--no-tray", action="store_true", help=argparse.SUPPRESS)
     return parser.parse_args()
 
 
@@ -96,7 +109,7 @@ def _configure_page(page: ft.Page) -> None:
     page.window.height = 800
     page.window.min_width = 900
     page.window.min_height = 700
-    page.window.icon = "brand/climatetest-logo.png"
+    page.window.icon = "brand/climatetest.ico"
 
 
 def _splash_card(status: ft.Text, retry: ft.Button) -> ft.Container:
@@ -175,16 +188,253 @@ def _write_ready_marker(path: Path, server_url: str) -> None:
     temporary.replace(path)
 
 
+class _TrayController:
+    """Bandeja nativa do Windows sem misturar o loop do Flet com o do shell."""
+
+    def __init__(self, page: ft.Page, assets_directory: Path, *, disabled: bool = False) -> None:
+        self._page = page
+        self._assets_directory = assets_directory
+        self._disabled = disabled
+        self._icon: object | None = None
+        self._thread: threading.Thread | None = None
+        self._exiting = False
+        self._hidden_notice_sent = False
+
+    @property
+    def active(self) -> bool:
+        return self._icon is not None and not self._exiting
+
+    def start(self) -> bool:
+        if (
+            self._disabled
+            or sys.platform != "win32"
+            or os.environ.get("GITHUB_ACTIONS", "").casefold() == "true"
+        ):
+            return False
+        try:
+            import pystray
+            from PIL import Image
+
+            logo = self._assets_directory / "brand" / "climatetest-logo.png"
+            with Image.open(logo) as opened:
+                icon_image = opened.convert("RGBA").copy()
+            menu = pystray.Menu(
+                pystray.MenuItem(
+                    "Abrir ClimateTest Manager",
+                    self._open_from_tray,
+                    default=True,
+                ),
+                pystray.Menu.SEPARATOR,
+                pystray.MenuItem("Sair", self._exit_from_tray),
+            )
+            self._icon = pystray.Icon(
+                "ClimateTestManager",
+                icon=icon_image,
+                title="ClimateTest Manager",
+                menu=menu,
+            )
+            self._thread = threading.Thread(
+                target=self._icon.run,
+                name="ClimateTestManagerTray",
+                daemon=True,
+            )
+            self._thread.start()
+            return True
+        except Exception:
+            self._icon = None
+            return False
+
+    def _open_from_tray(self, _icon: object, _item: object) -> None:
+        self._page.run_task(self.show_window)
+
+    def _exit_from_tray(self, _icon: object, _item: object) -> None:
+        self._page.run_task(self.exit_application)
+
+    async def show_window(self) -> None:
+        self._page.window.skip_task_bar = False
+        self._page.window.visible = True
+        self._page.update()
+        await self._page.window.to_front()
+
+    async def hide_window(self) -> None:
+        self._page.window.visible = False
+        self._page.window.skip_task_bar = True
+        self._page.update()
+        if not self._hidden_notice_sent:
+            self._hidden_notice_sent = True
+            self.notify(
+                "ClimateTest Manager",
+                "O aplicativo continua ativo em segundo plano. "
+                "Use o ícone ao lado do relógio para abrir novamente.",
+            )
+
+    async def exit_application(self) -> None:
+        self._exiting = True
+        icon = self._icon
+        self._icon = None
+        if icon is not None:
+            with suppress(Exception):
+                icon.stop()
+        self._page.window.prevent_close = False
+        await self._page.window.destroy()
+
+    def notify(self, title: str, message: str) -> None:
+        icon = self._icon
+        if icon is not None:
+            try:
+                icon.notify(message, title)
+                return
+            except Exception:
+                pass
+        try:
+            WindowsToastProvider().send(title, message)
+        except Exception:
+            return
+
+
+async def _watch_desktop_commands(page: ft.Page, tray: _TrayController) -> None:
+    """Entrega localmente os toasts solicitados pela sessão remota."""
+
+    last_id = ""
+    while True:
+        try:
+            raw = await page.shared_preferences.get(TOAST_COMMAND_KEY)
+            if isinstance(raw, str) and raw.strip():
+                command = DesktopToastCommand.from_json(raw)
+                if command.command_id != last_id:
+                    tray.notify(command.title, command.message)
+                    last_id = command.command_id
+                await page.shared_preferences.remove(TOAST_COMMAND_KEY)
+        except Exception:
+            pass
+        await asyncio.sleep(0.6)
+
+
+async def _offer_available_update(page: ft.Page, tray: _TrayController) -> None:
+    """Consulta sem bloquear a UI e oferece apenas instaladores com SHA-256 válido."""
+
+    if not automatic_update_checks_enabled():
+        return
+    update = await asyncio.to_thread(check_for_update, VERSION)
+    if update is None:
+        return
+
+    progress = ft.ProgressRing(width=20, height=20, stroke_width=2, visible=False)
+    status = ft.Text("", size=11, color="#66788A")
+    install_button: ft.Button
+    dialog: ft.AlertDialog
+
+    async def download_and_install() -> None:
+        install_button.disabled = True
+        progress.visible = True
+        status.value = "Baixando e verificando a atualização..."
+        status.color = "#66788A"
+        page.update()
+        try:
+            installer = await asyncio.to_thread(download_verified_update, update)
+            status.value = "Integridade confirmada. Solicitando permissão do Windows..."
+            page.update()
+            launched = await asyncio.to_thread(launch_installer_elevated, installer)
+            if not launched:
+                raise OSError("O Windows não iniciou o instalador com permissão administrativa.")
+        except (OSError, ValueError) as error:
+            progress.visible = False
+            install_button.disabled = False
+            status.value = f"Não foi possível atualizar: {error}"
+            status.color = "#B42318"
+            page.update()
+            return
+
+        with suppress(Exception):
+            page.pop_dialog()
+        if tray.active:
+            await tray.exit_application()
+        else:
+            await page.window.destroy()
+
+    def start_update(_event: object | None = None) -> None:
+        page.run_task(download_and_install)
+
+    notes = update.release_notes.strip()
+    notes_control: list[ft.Control] = []
+    if notes:
+        notes_control.append(
+            ft.Container(
+                border_radius=10,
+                bgcolor="#F4F7FA",
+                padding=10,
+                content=ft.Text(
+                    notes[:1200],
+                    size=10,
+                    color="#536579",
+                    max_lines=8,
+                    overflow=ft.TextOverflow.ELLIPSIS,
+                ),
+            )
+        )
+
+    install_button = ft.Button(
+        content="Baixar e instalar",
+        icon=ft.Icons.SYSTEM_UPDATE_ALT,
+        bgcolor="#087E8B",
+        color="#FFFFFF",
+        on_click=start_update,
+    )
+    dialog = ft.AlertDialog(
+        modal=True,
+        title=ft.Text("Nova atualização disponível", weight=ft.FontWeight.BOLD),
+        content=ft.Column(
+            tight=True,
+            spacing=12,
+            controls=[
+                ft.Text(
+                    f"ClimateTest Manager v{update.version} está disponível. "
+                    f"Versão instalada: v{VERSION}.",
+                    size=12,
+                ),
+                *notes_control,
+                ft.Row(spacing=10, controls=[progress, status]),
+                ft.Text(
+                    "O instalador é baixado do GitHub e só é executado depois da "
+                    "verificação do SHA-256 publicado.",
+                    size=10,
+                    color="#66788A",
+                ),
+            ],
+        ),
+        actions=[
+            ft.TextButton(content="Agora não", on_click=lambda _event: page.pop_dialog()),
+            install_button,
+        ],
+        actions_alignment=ft.MainAxisAlignment.END,
+    )
+    page.open(dialog)
+
+
 async def desktop_main(
     page: ft.Page,
     server_url: str,
     *,
     ready_file: Path | None = None,
+    no_tray: bool = False,
 ) -> None:
     """Mantém o servidor invisível e mostra somente uma janela própria do aplicativo."""
 
     _configure_page(page)
     server_url = server_url.rstrip("/")
+    assets_directory = Path(__file__).resolve().parent / "assets"
+    tray = _TrayController(page, assets_directory, disabled=no_tray)
+    tray_active = tray.start()
+    if tray_active:
+        page.window.prevent_close = True
+
+        def on_window_event(event: ft.WindowEvent) -> None:
+            if event.type == ft.WindowEventType.CLOSE and not tray._exiting:
+                page.run_task(tray.hide_window)
+
+        page.window.on_event = on_window_event
+        page.run_task(_watch_desktop_commands, page, tray)
+
     status = ft.Text(
         "Conectando ao computador central...",
         size=12,
@@ -284,6 +534,7 @@ async def desktop_main(
         page.update()
         if ready_file is not None:
             await asyncio.to_thread(_write_ready_marker, ready_file, server_url)
+        page.run_task(_offer_available_update, page, tray)
 
     page.run_task(reveal_when_ready)
 
@@ -292,11 +543,17 @@ def _build_page_handler(
     server_url: str,
     *,
     ready_file: Path | None = None,
+    no_tray: bool = False,
 ):
     """Devolve um handler realmente assíncrono para que o Flet aguarde a montagem da página."""
 
     async def page_handler(page: ft.Page) -> None:
-        await desktop_main(page, server_url, ready_file=ready_file)
+        await desktop_main(
+            page,
+            server_url,
+            ready_file=ready_file,
+            no_tray=no_tray,
+        )
 
     return page_handler
 
@@ -314,7 +571,11 @@ def main() -> None:
     ready_file = Path(arguments.ready_file).expanduser() if arguments.ready_file.strip() else None
     assets_directory = Path(__file__).resolve().parent / "assets"
     ft.run(
-        _build_page_handler(server_url, ready_file=ready_file),
+        _build_page_handler(
+            server_url,
+            ready_file=ready_file,
+            no_tray=arguments.no_tray,
+        ),
         assets_dir=str(assets_directory),
     )
 

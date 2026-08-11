@@ -2,8 +2,11 @@
 
 import base64
 from collections.abc import Callable
+from functools import lru_cache
+from io import BytesIO
 
 import flet as ft
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from climatetest_manager.services.auth import UserSummary
 from climatetest_manager.ui.theme import AppColors
@@ -24,6 +27,45 @@ _GITHUB_MARK_SVG = (
     '"/></svg>'
 )
 GITHUB_MARK_BASE64 = base64.b64encode(_GITHUB_MARK_SVG.encode("utf-8")).decode("ascii")
+
+
+@lru_cache(maxsize=32)
+def _optimized_profile_photo_source(encoded: str) -> str | None:
+    """Reduz a foto antes de enviá-la pela LAN e devolve uma Data URI válida.
+
+    O banco pode conter imagens antigas de até 2 MB. Enviar o base64 original em cada troca
+    de tela deixava as estações lentas e, além disso, ``Image.src`` recebia base64 sem o prefixo
+    de tipo de mídia. A normalização abaixo resolve os dois problemas sem perder a foto original.
+    """
+
+    try:
+        raw = base64.b64decode(encoded, validate=True)
+    except ValueError:
+        return None
+    if not raw:
+        return None
+
+    try:
+        with Image.open(BytesIO(raw)) as opened:
+            opened.load()
+            normalized = ImageOps.exif_transpose(opened)
+            fitted = ImageOps.fit(
+                normalized,
+                (256, 256),
+                method=Image.Resampling.LANCZOS,
+                centering=(0.5, 0.5),
+            )
+            if fitted.mode not in {"RGB", "RGBA"}:
+                fitted = fitted.convert("RGBA" if "A" in fitted.getbands() else "RGB")
+            output = BytesIO()
+            fitted.save(output, format="WEBP", quality=82, method=6)
+    except (OSError, UnidentifiedImageError):
+        # Bancos antigos podem conter base64 válido que não representa uma imagem real.
+        # Mantemos um ft.Image com error_content para o cliente cair nas iniciais sem quebrar a UI.
+        return f"data:application/octet-stream;base64,{encoded}"
+
+    compact = base64.b64encode(output.getvalue()).decode("ascii")
+    return f"data:image/webp;base64,{compact}"
 
 
 def contextual_help(message: str) -> ft.Container:
@@ -62,19 +104,22 @@ def section_heading(title: str, help_text: str, *, size: int = 17) -> ft.Row:
 
 
 def user_avatar(user: UserSummary, *, size: int = 38) -> ft.Container:
-    """Exibe a foto opcional ou as iniciais do usuário."""
+    """Exibe uma miniatura leve da foto opcional ou as iniciais do usuário."""
 
     initials = (user.first_name[:1] + user.last_name[:1]).upper()
-    if user.profile_photo_b64:
+    source = (
+        _optimized_profile_photo_source(user.profile_photo_b64) if user.profile_photo_b64 else None
+    )
+    if source:
         content: ft.Control = ft.Image(
-            src=user.profile_photo_b64,
+            src=source,
             width=size,
             height=size,
             fit=ft.BoxFit.COVER,
             border_radius=size / 2,
             filter_quality=ft.FilterQuality.HIGH,
-            cache_width=size * 3,
-            cache_height=size * 3,
+            cache_width=max(64, size * 3),
+            cache_height=max(64, size * 3),
             anti_alias=True,
             gapless_playback=True,
             error_content=ft.Text(

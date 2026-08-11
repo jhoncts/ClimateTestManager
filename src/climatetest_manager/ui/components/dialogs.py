@@ -11,6 +11,34 @@ from climatetest_manager.ui.theme import AppColors
 OTHER_REASON = "Outros"
 
 
+def _noop_value_event(_event: object | None = None) -> None:
+    """Faz o cliente enviar o valor alterado ao servidor sem executar lógica adicional."""
+
+
+def _enable_remote_value_sync(control: ft.Control) -> None:
+    """Liga eventos mínimos em inputs lidos apenas no botão de confirmação.
+
+    Em uma sessão Flet remota, um campo sem evento pode permanecer somente no cliente até que
+    outro controle seja acionado. Isso fazia o servidor enxergar strings antigas/vazias mesmo
+    quando o usuário via o texto digitado na tela. Percorrer o conteúdo dos diálogos elimina
+    essa diferença sem alterar a regra de negócio de cada formulário.
+    """
+
+    if isinstance(control, (ft.TextField, ft.Switch, ft.Checkbox)) and control.on_change is None:
+        control.on_change = _noop_value_event
+    elif isinstance(control, ft.Dropdown) and control.on_select is None:
+        control.on_select = _noop_value_event
+
+    child = getattr(control, "content", None)
+    if isinstance(child, ft.Control):
+        _enable_remote_value_sync(child)
+    children = getattr(control, "controls", None)
+    if isinstance(children, list):
+        for item in children:
+            if isinstance(item, ft.Control):
+                _enable_remote_value_sync(item)
+
+
 def dialog_header(
     title: str,
     subtitle: str,
@@ -129,6 +157,7 @@ def styled_dialog(
 ) -> ft.AlertDialog:
     """Monta a superfície visual comum de todos os diálogos da aplicação."""
 
+    _enable_remote_value_sync(content)
     return ft.AlertDialog(
         modal=True,
         scrollable=scrollable,
@@ -178,6 +207,7 @@ class ReasonSelector:
             focused_border_color=AppColors.PRIMARY,
             bgcolor=AppColors.SURFACE,
             visible=False,
+            on_change=_noop_value_event,
         )
         self.other_guidance = ft.Text(
             f"Descreva brevemente, em até {MAX_REASON_LENGTH} caracteres.",

@@ -14,6 +14,7 @@ $serverTaskName = "ClimateTestManager-Server"
 $backgroundTaskName = "ClimateTestManager-Background"
 $notifierTaskName = "ClimateTestManager-Notifications"
 $firewallName = "ClimateTest Manager - Rede local"
+$discoveryFirewallName = "ClimateTest Manager - Descoberta local"
 $serverExecutable = Join-Path $InstallDirectory "ClimateTestServer.exe"
 $notifierExecutable = Join-Path $InstallDirectory "ClimateTestNotifier.exe"
 $productRoot = Split-Path -Parent $DataDirectory
@@ -302,6 +303,8 @@ try {
 
     try {
         & netsh.exe advfirewall firewall delete rule name="$firewallName" | Out-Null
+        & netsh.exe advfirewall firewall delete rule name="$discoveryFirewallName" | Out-Null
+
         & netsh.exe advfirewall firewall add rule `
             name="$firewallName" `
             dir=in `
@@ -310,11 +313,27 @@ try {
             localport=$Port `
             profile=any `
             remoteip=localsubnet | Out-Null
-        if ($LASTEXITCODE -ne 0) {
-            Add-InstallWarning "A regra de firewall não pôde ser criada automaticamente. O acesso local continuará funcionando."
+        $tcpFirewallExitCode = $LASTEXITCODE
+
+        & netsh.exe advfirewall firewall add rule `
+            name="$discoveryFirewallName" `
+            dir=in `
+            action=allow `
+            protocol=UDP `
+            localport=8551 `
+            profile=any `
+            remoteip=localsubnet | Out-Null
+        $discoveryFirewallExitCode = $LASTEXITCODE
+
+        if (($tcpFirewallExitCode -ne 0) -or ($discoveryFirewallExitCode -ne 0)) {
+            Add-InstallWarning (
+                "Uma regra de firewall não pôde ser criada automaticamente. " +
+                "O acesso local continuará disponível quando permitido pelo Windows."
+            )
         }
         else {
-            Write-InstallLog "Firewall liberado somente para a sub-rede local na porta $Port."
+            Write-InstallLog "Firewall TCP $Port liberado somente para a sub-rede local."
+            Write-InstallLog "Descoberta UDP 8551 liberada somente para a sub-rede local."
         }
     }
     catch {
