@@ -32,7 +32,9 @@ def _metric(label: str, value: object, icon: ft.IconData) -> ft.Container:
                 ft.Column(
                     spacing=1,
                     controls=[
-                        ft.Text(str(value or 0), size=20, weight=ft.FontWeight.BOLD, color="#0F172A"),
+                        ft.Text(
+                            str(value or 0), size=20, weight=ft.FontWeight.BOLD, color="#0F172A"
+                        ),
                         ft.Text(label, size=9, color="#64748B"),
                     ],
                 ),
@@ -74,7 +76,9 @@ def _test_card(item: dict[str, Any]) -> ft.Container:
                     content=ft.Column(
                         spacing=2,
                         controls=[
-                            ft.Text(str(situation), size=10, weight=ft.FontWeight.BOLD, color="#087E8B"),
+                            ft.Text(
+                                str(situation), size=10, weight=ft.FontWeight.BOLD, color="#087E8B"
+                            ),
                             ft.Text(str(deadline), size=9, color="#64748B"),
                         ],
                     ),
@@ -110,9 +114,7 @@ def build_offline_view(
     user = user if isinstance(user, dict) else {}
     saved_at = _date(snapshot.get("saved_at")) if snapshot else "Nenhuma sincronização disponível"
 
-    cached_controls = [
-        _test_card(item) for item in tests if isinstance(item, dict)
-    ] or [
+    cached_controls = [_test_card(item) for item in tests if isinstance(item, dict)] or [
         ft.Container(
             border_radius=14,
             bgcolor="#FFFFFF",
@@ -232,9 +234,15 @@ def build_offline_view(
                     spacing=10,
                     run_spacing=10,
                     controls=[
-                        _metric("Em andamento", summary.get("in_progress", 0), ft.Icons.PLAY_CIRCLE_OUTLINE),
+                        _metric(
+                            "Em andamento",
+                            summary.get("in_progress", 0),
+                            ft.Icons.PLAY_CIRCLE_OUTLINE,
+                        ),
                         _metric("Aguardando", summary.get("waiting", 0), ft.Icons.PENDING_ACTIONS),
-                        _metric("Pausados", summary.get("paused", 0), ft.Icons.PAUSE_CIRCLE_OUTLINE),
+                        _metric(
+                            "Pausados", summary.get("paused", 0), ft.Icons.PAUSE_CIRCLE_OUTLINE
+                        ),
                         _metric("Atrasados", summary.get("overdue", 0), ft.Icons.WARNING_AMBER),
                     ],
                 ),

@@ -12,9 +12,9 @@ from climatetest_manager.domain.incidents import INCIDENT_REASONS, incident_reas
 from climatetest_manager.repositories.climate_tests import NotificationStatus, SystemIncidentSummary
 from climatetest_manager.services.auth import UserSummary
 from climatetest_manager.services.network import ServerIdentity
-from climatetest_manager.ui.components import dialog_actions, dialog_banner, styled_dialog
+from climatetest_manager.ui.components import dialog_banner, styled_dialog
 from climatetest_manager.ui.interaction import apply_interaction_polish, glass_surface
-from climatetest_manager.ui.theme import AppColors, THEME_OPTIONS
+from climatetest_manager.ui.theme import THEME_OPTIONS, AppColors
 from climatetest_manager.ui.views.server_status import build_server_status_card
 from climatetest_manager.ui.views.settings import build_settings_view
 

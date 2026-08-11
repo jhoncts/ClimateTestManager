@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import flet as ft
 
-from climatetest_manager.domain.enums import ConditionInputMode
 from climatetest_manager.services.climate_tests import ClimateTestDetails
 from climatetest_manager.ui.components import section_heading
 from climatetest_manager.ui.components.table17 import build_table17_preview

@@ -76,17 +76,18 @@ class SingleInstanceCoordinator:
                 continue
             except OSError:
                 break
-            with connection:
-                with suppress(OSError):
-                    data = connection.recv(32)
-                    if data.strip().upper() == _ACTIVATION_MESSAGE.strip():
-                        self.activation_requested.set()
+            with connection, suppress(OSError):
+                data = connection.recv(32)
+                if data.strip().upper() == _ACTIVATION_MESSAGE.strip():
+                    self.activation_requested.set()
 
     @staticmethod
     def _signal_primary() -> None:
         for _attempt in range(12):
             try:
-                with socket.create_connection(("127.0.0.1", _ACTIVATION_PORT), timeout=0.25) as sock:
+                with socket.create_connection(
+                    ("127.0.0.1", _ACTIVATION_PORT), timeout=0.25
+                ) as sock:
                     sock.sendall(_ACTIVATION_MESSAGE)
                     return
             except OSError:

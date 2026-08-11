@@ -9,7 +9,6 @@ import flet as ft
 
 from climatetest_manager.ui.theme import AppColors
 
-
 _CLICKABLE_TYPES = (
     ft.Button,
     ft.TextButton,

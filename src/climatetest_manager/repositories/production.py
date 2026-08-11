@@ -83,9 +83,7 @@ class ProductionClimateTestRepository(ClimateTestRepository):
                 )
             }
         return [
-            item
-            for item in notifications
-            if (item.source_kind, item.source_id) not in dismissed
+            item for item in notifications if (item.source_kind, item.source_id) not in dismissed
         ]
 
     def dismiss_user_notification(

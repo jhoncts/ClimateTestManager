@@ -159,9 +159,7 @@ def build_notifications_view(
 
     def refresh_selection() -> None:
         count = len(selected)
-        selection_text.value = (
-            "Nenhuma selecionada" if count == 0 else f"{count} selecionada(s)"
-        )
+        selection_text.value = "Nenhuma selecionada" if count == 0 else f"{count} selecionada(s)"
         mark_selected.disabled = count == 0 or on_mark_many_read is None
         delete_selected.disabled = count == 0 or on_dismiss_many is None
         try:

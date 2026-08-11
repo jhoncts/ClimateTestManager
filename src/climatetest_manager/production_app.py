@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
@@ -30,7 +29,10 @@ from climatetest_manager.config import (
 from climatetest_manager.database.session import create_session_factory, initialize_database
 from climatetest_manager.repositories.production import ProductionClimateTestRepository
 from climatetest_manager.repositories.users import UserRepository
-from climatetest_manager.services.auth import AuthenticationService, UserRegistrationCommand, UserSummary
+from climatetest_manager.services.auth import (
+    AuthenticationService,
+    UserSummary,
+)
 from climatetest_manager.services.exports import create_configured_database_backups
 from climatetest_manager.services.network import get_server_identity
 from climatetest_manager.ui.interaction import apply_interaction_polish
@@ -257,7 +259,9 @@ class ProductionClimateTestApplication(legacy.ClimateTestApplication):
 
     def show_edit_test(self, test_id: int) -> None:
         if not self._current_user.is_admin:
-            self._show_message("Somente administradores podem corrigir o cadastro do ensaio.", error=True)
+            self._show_message(
+                "Somente administradores podem corrigir o cadastro do ensaio.", error=True
+            )
             return
         self._prepare_theme()
         view = PolishedNewTestView(
@@ -313,9 +317,11 @@ class ProductionClimateTestApplication(legacy.ClimateTestApplication):
             on_edit=lambda: self.show_edit_test(test_id),
             on_delete=lambda: self._delete_test(test_id),
             on_admin_delete=(
-                lambda reason: self._delete_test_as_admin(test_id, reason)
-                if self._current_user.is_admin
-                else None
+                lambda reason: (
+                    self._delete_test_as_admin(test_id, reason)
+                    if self._current_user.is_admin
+                    else None
+                )
             ),
             on_change_timestamp=lambda timestamp, value, reason: self._perform(
                 test_id,
@@ -325,13 +331,15 @@ class ProductionClimateTestApplication(legacy.ClimateTestApplication):
                 "Horário operacional corrigido e alteração registrada.",
             ),
             on_advance_for_testing=(
-                lambda: self._perform(
-                    test_id,
-                    lambda: self._service.advance_for_testing(test_id),
-                    "Etapa avançada somente para validação.",
+                lambda: (
+                    self._perform(
+                        test_id,
+                        lambda: self._service.advance_for_testing(test_id),
+                        "Etapa avançada somente para validação.",
+                    )
+                    if test_controls_enabled()
+                    else None
                 )
-                if test_controls_enabled()
-                else None
             ),
         )
         self._render(content, selected_view="details")
