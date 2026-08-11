@@ -16,7 +16,7 @@ def _noop_value_event(_event: object | None = None) -> None:
 
 
 def _enable_remote_value_sync(control: ft.Control) -> None:
-    """Liga eventos mínimos em inputs que seriam lidos apenas no botão de confirmação.
+    """Liga eventos mínimos em inputs lidos apenas no botão de confirmação.
 
     Em uma sessão Flet remota, um campo sem evento pode permanecer somente no cliente até que
     outro controle seja acionado. Isso fazia o servidor enxergar strings antigas/vazias mesmo
@@ -24,11 +24,7 @@ def _enable_remote_value_sync(control: ft.Control) -> None:
     essa diferença sem alterar a regra de negócio de cada formulário.
     """
 
-    if isinstance(control, ft.TextField) and control.on_change is None:
-        control.on_change = _noop_value_event
-    elif isinstance(control, ft.Switch) and control.on_change is None:
-        control.on_change = _noop_value_event
-    elif isinstance(control, ft.Checkbox) and control.on_change is None:
+    if isinstance(control, (ft.TextField, ft.Switch, ft.Checkbox)) and control.on_change is None:
         control.on_change = _noop_value_event
     elif isinstance(control, ft.Dropdown) and control.on_select is None:
         control.on_select = _noop_value_event
