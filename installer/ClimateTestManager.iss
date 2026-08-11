@@ -542,8 +542,8 @@ begin
       WizardForm.FinishedLabel.Caption :=
         'O servidor central foi instalado, iniciado e verificado. O aplicativo também respondeu ' +
         'corretamente como cliente Windows.' + #13#10 + #13#10 +
-        'As estações de trabalho poderão localizar este servidor automaticamente na rede local.' +
-        #13#10 + #13#10 + 'Clique em Concluir para abrir o ClimateTest Manager.';
+        'As estações de trabalho poderão localizar este servidor automaticamente na rede local.' + #13#10 + #13#10 +
+        'Clique em Concluir para abrir o ClimateTest Manager.';
     end
     else
     begin
