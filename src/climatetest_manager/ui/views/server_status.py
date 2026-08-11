@@ -28,9 +28,7 @@ def build_server_status_card(
         backup_action.append(
             ft.Button(
                 content=(
-                    "Alterar cópia externa"
-                    if backup_configured
-                    else "Configurar cópia externa"
+                    "Alterar cópia externa" if backup_configured else "Configurar cópia externa"
                 ),
                 icon=ft.Icons.BACKUP_OUTLINED,
                 on_click=on_configure_backup,
