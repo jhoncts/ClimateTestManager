@@ -1,8 +1,11 @@
 """Testes de autenticação, perfis, sessões e identificação da auditoria."""
 
 import unittest
+from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
+
+from PIL import Image
 
 from climatetest_manager.database.session import create_session_factory, initialize_database
 from climatetest_manager.repositories.climate_tests import ClimateTestRepository
@@ -34,6 +37,12 @@ def registration(
         password_confirmation="Senha123",
         role=role,
     )
+
+
+def profile_photo_bytes() -> bytes:
+    buffer = BytesIO()
+    Image.new("RGB", (96, 64), "white").save(buffer, format="PNG")
+    return buffer.getvalue()
 
 
 class AuthenticationTests(unittest.TestCase):
@@ -198,10 +207,7 @@ class AuthenticationTests(unittest.TestCase):
             admin,
             registration("operador", "operador@example.com"),
         )
-        updated = self.auth.set_profile_photo(
-            operator,
-            b"\x89PNG\r\n\x1a\nimagem-de-teste",
-        )
+        updated = self.auth.set_profile_photo(operator, profile_photo_bytes())
 
         self.assertIsNotNone(updated.profile_photo_b64)
         self.assertEqual(
@@ -217,8 +223,8 @@ class AuthenticationTests(unittest.TestCase):
 
         with self.assertRaisesRegex(AuthenticationError, "PNG, JPG ou WEBP"):
             self.auth.set_profile_photo(admin, b"arquivo invalido")
-        with self.assertRaisesRegex(AuthenticationError, "no máximo 2 MB"):
-            self.auth.set_profile_photo(admin, b"\x89PNG\r\n\x1a\n" + b"x" * (2 * 1024 * 1024))
+        with self.assertRaisesRegex(AuthenticationError, "no máximo 12 MB"):
+            self.auth.set_profile_photo(admin, b"x" * (12 * 1024 * 1024 + 1))
 
     def test_server_recovery_rotates_code_and_revokes_previous_session(self) -> None:
         admin = self.auth.register_initial_admin(registration("admin", "admin@example.com"))
