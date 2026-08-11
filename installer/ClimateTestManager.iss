@@ -1,5 +1,5 @@
 #define MyAppName "ClimateTest Manager"
-#define MyAppVersion "0.7.0"
+#define MyAppVersion "0.8.0"
 #define MyAppPublisher "Jhon Cleiton"
 #define MyAppExeName "ClimateTestManager.exe"
 
@@ -36,16 +36,16 @@ Name: "{commonappdata}\ClimateTestManager\Backups"
 
 [Files]
 ; O arquivo temporário de descoberta fica primeiro para permitir ExtractTemporaryFile com SolidCompression.
-Source: "..\dist\ClimateTestManager-v0.7.0\discover_server.ps1"; Flags: dontcopy noencryption
-Source: "..\dist\ClimateTestManager-v0.7.0\ClimateTestManager.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.7.0\ClimateTestServer.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.7.0\ClimateTestNotifier.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.7.0\climatetest.ico"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.7.0\LEIA-ME-PRIMEIRO.md"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.7.0\install_server_tasks.ps1"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.7.0\uninstall_server_tasks.ps1"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.7.0\discover_server.ps1"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.7.0\documentacao-conformidade\*"; DestDir: "{app}\documentacao-conformidade"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\ClimateTestManager-v0.8.0\discover_server.ps1"; Flags: dontcopy noencryption
+Source: "..\dist\ClimateTestManager-v0.8.0\ClimateTestManager.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v0.8.0\ClimateTestServer.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v0.8.0\ClimateTestNotifier.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v0.8.0\climatetest.ico"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v0.8.0\LEIA-ME-PRIMEIRO.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v0.8.0\install_server_tasks.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v0.8.0\uninstall_server_tasks.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v0.8.0\discover_server.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v0.8.0\documentacao-conformidade\*"; DestDir: "{app}\documentacao-conformidade"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\climatetest.ico"
