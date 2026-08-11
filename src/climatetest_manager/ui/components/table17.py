@@ -100,7 +100,7 @@ def _cell(
     border_color = AppColors.PRIMARY if active else AppColors.DIVIDER
     return ft.Container(
         width=width,
-        min_height=58 if not header else 42,
+        height=58 if not header else 42,
         padding=ft.Padding.symmetric(horizontal=10, vertical=8),
         border=ft.Border.all(2 if active else 1, border_color),
         bgcolor=background,

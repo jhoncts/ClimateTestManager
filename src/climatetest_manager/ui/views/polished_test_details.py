@@ -193,7 +193,7 @@ class PolishedTestDetailsView(TestDetailsView):
                         size=10,
                         color=AppColors.TEXT_SECONDARY,
                     ),
-                    leading=ft.Icons.HISTORY,
+                    leading=ft.Icon(ft.Icons.HISTORY),
                     maintain_state=True,
                     controls=[ft.Container(padding=8, content=self._history_panel())],
                 ),
@@ -220,7 +220,10 @@ class PolishedTestDetailsView(TestDetailsView):
                 _condition_pill(
                     ft.Icons.SCHEDULE,
                     "Permanência",
-                    f"{details.chamber_duration_hours} h (+{details.chamber_duration_tolerance_hours} h)",
+                    (
+                        f"{details.chamber_duration_hours} h "
+                        f"(+{details.chamber_duration_tolerance_hours} h)"
+                    ),
                 ),
             ],
         )
@@ -274,7 +277,7 @@ class PolishedTestDetailsView(TestDetailsView):
                     size=9,
                     color=AppColors.TEXT_SECONDARY,
                 ),
-                leading=ft.Icons.CALENDAR_MONTH_OUTLINED,
+                leading=ft.Icon(ft.Icons.CALENDAR_MONTH_OUTLINED),
                 maintain_state=True,
                 controls=[ft.Container(padding=8, content=schedule)],
             ),
@@ -307,7 +310,10 @@ class PolishedTestDetailsView(TestDetailsView):
                             _condition_pill(
                                 ft.Icons.SCHEDULE,
                                 "Permanência",
-                                f"{details.drying_duration_hours} h (+{details.drying_duration_tolerance_hours} h)",
+                                (
+                                    f"{details.drying_duration_hours} h "
+                                    f"(+{details.drying_duration_tolerance_hours} h)"
+                                ),
                             ),
                         ],
                     ),

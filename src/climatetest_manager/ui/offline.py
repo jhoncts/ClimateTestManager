@@ -172,7 +172,10 @@ def build_offline_view(
                                                 color="#0F172A",
                                             ),
                                             ft.Text(
-                                                "Consulta do último estado sincronizado • nenhuma alteração é permitida",
+                                                (
+                                                    "Consulta do último estado sincronizado • "
+                                                    "nenhuma alteração é permitida"
+                                                ),
                                                 size=10,
                                                 color="#64748B",
                                             ),
@@ -204,8 +207,11 @@ def build_offline_view(
                         controls=[
                             ft.Icon(ft.Icons.WIFI_OFF, color="#A66505", size=19),
                             ft.Text(
-                                f"Sem comunicação com {server_url}. O aplicativo continuará tentando "
-                                "reconectar em segundo plano. Não feche o servidor para trabalhar offline.",
+                                (
+                                    f"Sem comunicação com {server_url}. O aplicativo continuará "
+                                    "tentando reconectar em segundo plano. Não feche o servidor "
+                                    "para trabalhar offline."
+                                ),
                                 expand=True,
                                 size=10,
                                 color="#69420A",

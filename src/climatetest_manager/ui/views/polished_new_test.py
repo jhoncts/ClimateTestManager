@@ -261,7 +261,7 @@ class PolishedNewTestView(NewTestView):
                             size=9,
                             color=AppColors.TEXT_SECONDARY,
                         ),
-                        leading=ft.Icons.AIR,
+                        leading=ft.Icon(ft.Icons.AIR),
                         maintain_state=True,
                         controls=[ft.Container(padding=10, content=drying_cards)],
                     ),

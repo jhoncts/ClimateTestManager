@@ -27,10 +27,9 @@ def apply_interaction_polish(control: ft.Control) -> ft.Control:
     linguagem consistente para mouse/hover e propagamos isso pelos controles compostos.
     """
 
-    if isinstance(control, _CLICKABLE_TYPES):
-        if hasattr(control, "mouse_cursor"):
-            with suppress(Exception):
-                control.mouse_cursor = ft.MouseCursor.CLICK
+    if isinstance(control, _CLICKABLE_TYPES) and hasattr(control, "mouse_cursor"):
+        with suppress(Exception):
+            control.mouse_cursor = ft.MouseCursor.CLICK
 
     if isinstance(control, ft.Switch):
         with suppress(Exception):

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import suppress
 
 import flet as ft
 
@@ -162,10 +163,8 @@ def build_notifications_view(
         selection_text.value = "Nenhuma selecionada" if count == 0 else f"{count} selecionada(s)"
         mark_selected.disabled = count == 0 or on_mark_many_read is None
         delete_selected.disabled = count == 0 or on_dismiss_many is None
-        try:
+        with suppress(RuntimeError):
             mark_selected.page.update(mark_selected, delete_selected, selection_text)
-        except RuntimeError:
-            pass
 
     cards: list[ft.Control] = []
     for notification in notifications:

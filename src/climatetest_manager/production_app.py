@@ -361,7 +361,8 @@ class ProductionClimateTestApplication(legacy.ClimateTestApplication):
         self._active_test_id = None
         self.show_tests()
         self._show_message(
-            f"Ensaio #{test_id} removido da operação. A exclusão permaneceu registrada na auditoria."
+            f"Ensaio #{test_id} removido da operação. "
+            "A exclusão permaneceu registrada na auditoria."
         )
 
     def show_history(self) -> None:
