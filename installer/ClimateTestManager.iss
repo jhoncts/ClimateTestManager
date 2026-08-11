@@ -562,8 +562,8 @@ begin
     begin
       WizardForm.FinishedHeadingLabel.Caption := 'ClimateTest Manager pronto para uso';
       WizardForm.FinishedLabel.Caption :=
-        'A estação foi instalada e a comunicação com o servidor central foi validada.' +
-        #13#10 + #13#10 + 'Servidor: ' + ConfiguredServerUrl + #13#10 + #13#10 +
+        'A estação foi instalada e a comunicação com o servidor central foi validada.' + #13#10 + #13#10 +
+        'Servidor: ' + ConfiguredServerUrl + #13#10 + #13#10 +
         'Clique em Concluir para abrir o ClimateTest Manager.';
     end
     else
