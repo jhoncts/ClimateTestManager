@@ -62,7 +62,7 @@ if ($OutputFile) {
     if ($parent) {
         New-Item -ItemType Directory -Path $parent -Force | Out-Null
     }
-    $lines | Set-Content -LiteralPath $OutputFile -Encoding UTF8
+    $lines | Set-Content -LiteralPath $OutputFile -Encoding ascii
 }
 else {
     $lines
