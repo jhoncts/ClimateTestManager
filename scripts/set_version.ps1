@@ -1,7 +1,8 @@
 param(
     [Parameter(Mandatory = $true, Position = 0)]
     [ValidatePattern('^\d+\.\d+\.\d+$')]
-    [string]$Version
+    [string]$Version,
+    [switch]$SkipWorkflow
 )
 
 $ErrorActionPreference = "Stop"
@@ -20,11 +21,13 @@ function Replace-InFile {
         throw "Arquivo obrigatório não encontrado: $Path"
     }
     $original = Get-Content -LiteralPath $Path -Raw -Encoding UTF8
-    $updated = [regex]::Replace($original, $Pattern, $Replacement)
-    if ($updated -eq $original) {
+    if (-not [regex]::IsMatch($original, $Pattern)) {
         throw "O padrão esperado não foi encontrado em $Path. Atualize o script antes de publicar."
     }
-    Set-Content -LiteralPath $Path -Value $updated -Encoding UTF8 -NoNewline
+    $updated = [regex]::Replace($original, $Pattern, $Replacement)
+    if ($updated -ne $original) {
+        Set-Content -LiteralPath $Path -Value $updated -Encoding UTF8 -NoNewline
+    }
 }
 
 Replace-InFile `
@@ -66,19 +69,27 @@ Replace-InFile `
     -Pattern '(?m)^\$version\s*=\s*"\d+\.\d+\.\d+"' `
     -Replacement "`$version = `"$Version`""
 
-$workflowPath = ".github\workflows\release.yml"
-$workflow = Get-Content -LiteralPath $workflowPath -Raw -Encoding UTF8
-$workflow = [regex]::Replace(
-    $workflow,
-    'ClimateTestManager-v\d+\.\d+\.\d+',
-    "ClimateTestManager-v$Version"
-)
-$workflow = [regex]::Replace(
-    $workflow,
-    'ClimateTestManager-Setup-v\d+\.\d+\.\d+',
-    "ClimateTestManager-Setup-v$Version"
-)
-Set-Content -LiteralPath $workflowPath -Value $workflow -Encoding UTF8 -NoNewline
+if (-not $SkipWorkflow) {
+    $workflowPath = ".github\workflows\release.yml"
+    if (-not (Test-Path -LiteralPath $workflowPath)) {
+        throw "Arquivo obrigatório não encontrado: $workflowPath"
+    }
+    $workflow = Get-Content -LiteralPath $workflowPath -Raw -Encoding UTF8
+    if ($workflow -notmatch 'ClimateTestManager-(?:Setup-)?v\d+\.\d+\.\d+') {
+        throw "A versão esperada não foi encontrada em $workflowPath."
+    }
+    $workflow = [regex]::Replace(
+        $workflow,
+        'ClimateTestManager-v\d+\.\d+\.\d+',
+        "ClimateTestManager-v$Version"
+    )
+    $workflow = [regex]::Replace(
+        $workflow,
+        'ClimateTestManager-Setup-v\d+\.\d+\.\d+',
+        "ClimateTestManager-Setup-v$Version"
+    )
+    Set-Content -LiteralPath $workflowPath -Value $workflow -Encoding UTF8 -NoNewline
+}
 
 Write-Host "Versão do ClimateTest Manager atualizada para $Version."
 Write-Host "Execute os testes antes de criar a tag v$Version."
