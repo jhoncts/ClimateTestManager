@@ -24,13 +24,26 @@ def build_server_status_card(
 
     backup_configured = backup_directory is not None
     backup_action: list[ft.Control] = []
-    if is_admin and on_configure_backup is not None:
+    if is_admin:
         backup_action.append(
             ft.Button(
                 content=(
-                    "Alterar cópia externa" if backup_configured else "Configurar cópia externa"
+                    "Alterar cópia externa"
+                    if backup_configured and on_configure_backup is not None
+                    else (
+                        "Configurar cópia externa"
+                        if on_configure_backup is not None
+                        else "Configurar no servidor central"
+                    )
                 ),
                 icon=ft.Icons.BACKUP_OUTLINED,
+                disabled=on_configure_backup is None,
+                tooltip=(
+                    "A pasta de backup pertence ao computador servidor. Abra o ClimateTest "
+                    "Manager nele para escolher uma pasta local ou do OneDrive desse servidor."
+                    if on_configure_backup is None
+                    else "Escolher a pasta que receberá as cópias de segurança automáticas"
+                ),
                 on_click=on_configure_backup,
             )
         )
