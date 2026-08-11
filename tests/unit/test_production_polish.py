@@ -19,7 +19,11 @@ from climatetest_manager.services.climate_tests import (
 from climatetest_manager.single_instance import SingleInstanceCoordinator
 from climatetest_manager.ui.components.table17 import build_table17_preview
 from climatetest_manager.ui.offline import build_offline_view
+from climatetest_manager.ui.responsive import LayoutProfile
+from climatetest_manager.ui.shell import build_production_shell
 from climatetest_manager.ui.theme import THEME_KEYS, AppColors
+from climatetest_manager.ui.views.polished_new_test import PolishedNewTestView
+from climatetest_manager.ui.views.polished_test_details import build_polished_test_details_view
 
 
 def _registration() -> UserRegistrationCommand:
@@ -162,6 +166,53 @@ def test_all_supported_themes_build_table17_preview() -> None:
             assert isinstance(preview, ft.Control)
     finally:
         AppColors.apply_mode(original_mode)
+
+
+def test_production_shell_and_polished_views_build() -> None:
+    with _DatabaseHarness() as harness:
+        shell = build_production_shell(
+            ft.Text("Conteúdo"),
+            selected_view="dashboard",
+            on_dashboard=lambda: None,
+            on_tests=lambda: None,
+            on_new_test=lambda: None,
+            on_agenda=lambda: None,
+            on_history=lambda: None,
+            on_notifications=lambda: None,
+            on_help=lambda: None,
+            on_settings=lambda: None,
+            on_users=lambda: None,
+            on_logout=lambda: None,
+            on_github=lambda: None,
+            on_toggle_sidebar=lambda: None,
+            current_user=harness.admin,
+            layout=LayoutProfile.for_mode("regular"),
+            notification_count=3,
+        )
+        assert isinstance(shell, ft.Row)
+
+        new_test = PolishedNewTestView(on_cancel=lambda: None, on_save=lambda _command: None)
+        assert isinstance(new_test.root, ft.Column)
+
+        service = ClimateTestService(
+            harness.repository,
+            actor_provider=lambda: harness.admin.actor_label,
+        )
+        test_id = service.create(_test_command())
+        details = service.get_details(test_id)
+        details_view = build_polished_test_details_view(
+            details,
+            on_back=lambda: None,
+            on_start_chamber=lambda _value: None,
+            on_start_drying=lambda _value: None,
+            on_finish=lambda _value: None,
+            on_cancel=lambda _reason: None,
+            on_edit=lambda: None,
+            on_delete=lambda: None,
+            on_admin_delete=lambda _reason: None,
+            on_change_timestamp=lambda _name, _value, _reason: None,
+        )
+        assert isinstance(details_view, ft.Column)
 
 
 def test_offline_view_is_read_only_and_builds_with_snapshot() -> None:
