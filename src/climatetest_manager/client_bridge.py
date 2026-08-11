@@ -30,7 +30,7 @@ class DesktopToastCommand:
         )
 
     @classmethod
-    def from_json(cls, value: str) -> "DesktopToastCommand":
+    def from_json(cls, value: str) -> DesktopToastCommand:
         payload = json.loads(value)
         if not isinstance(payload, dict):
             raise ValueError("Comando de notificação inválido.")
