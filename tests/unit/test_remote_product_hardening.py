@@ -10,6 +10,7 @@ from PIL import Image
 from climatetest_manager.client_bridge import DesktopToastCommand
 from climatetest_manager.config import EmailSettings
 from climatetest_manager.services.network import get_server_identity
+from climatetest_manager.services.updates import is_newer_version, parse_release_payload
 from climatetest_manager.ui.components.dialogs import styled_dialog
 from climatetest_manager.ui.components.helpers import _optimized_profile_photo_source
 
@@ -91,3 +92,44 @@ def test_server_identity_exposes_hostname_and_addresses() -> None:
     assert identity.addresses == ("192.168.1.50",)
     assert identity.preferred_url == "http://192.168.1.50:8550"
     assert identity.hostname_url == "http://LAB-SERVER:8550"
+
+
+def test_update_parser_requires_newer_release_and_windows_installer() -> None:
+    digest = "a" * 64
+    payload: dict[str, object] = {
+        "tag_name": "v0.8.0",
+        "draft": False,
+        "prerelease": False,
+        "body": "Melhorias de estabilidade.",
+        "assets": [
+            {
+                "name": "ClimateTestManager-Setup-v0.8.0.exe",
+                "browser_download_url": "https://example.invalid/setup.exe",
+                "digest": f"sha256:{digest}",
+            },
+            {
+                "name": "ClimateTestManager-Setup-v0.8.0-SHA256.txt",
+                "browser_download_url": "https://example.invalid/setup.sha256",
+            },
+        ],
+    }
+
+    update = parse_release_payload(payload, current_version="0.7.0")
+
+    assert update is not None
+    assert update.version == "0.8.0"
+    assert update.expected_sha256 == digest
+    assert update.installer_name == "ClimateTestManager-Setup-v0.8.0.exe"
+    assert is_newer_version("0.8.0", "0.7.0") is True
+    assert is_newer_version("0.7.0", "0.7.0") is False
+
+
+def test_update_parser_ignores_prerelease() -> None:
+    payload: dict[str, object] = {
+        "tag_name": "v9.0.0",
+        "draft": False,
+        "prerelease": True,
+        "assets": [],
+    }
+
+    assert parse_release_payload(payload, current_version="0.7.0") is None
