@@ -84,10 +84,25 @@ jobs:
           Copy-Item "docs\compliance\*" $complianceDir -Recurse -Force
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
-      - name: Compile installer
+      - name: Compile installer and capture output
+        id: compile
+        continue-on-error: true
         shell: pwsh
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { $iscc = "$env:ProgramFiles\Inno Setup 6\ISCC.exe" }
-          & $iscc "installer\ClimateTestManager.iss"
-          if ($LASTEXITCODE -ne 0) { throw "ISCC exit code $LASTEXITCODE" }
+          & $iscc "installer\ClimateTestManager.iss" *>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP\inno-compile.log"
+          $code = $LASTEXITCODE
+          "exit_code=$code" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          if ($code -ne 0) { exit $code }
+      - name: Upload compiler diagnostic
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: inno-compile-diagnostic
+          if-no-files-found: warn
+          path: ${{ runner.temp }}/inno-compile.log
+      - name: Fail when compiler failed
+        if: steps.compile.outcome == 'failure'
+        shell: pwsh
+        run: throw "Inno Setup compilation failed; see diagnostic artifact."
