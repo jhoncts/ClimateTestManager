@@ -7,6 +7,7 @@ import sys
 import threading
 import urllib.error
 import urllib.request
+from contextlib import suppress
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
@@ -257,7 +258,8 @@ class _TrayController:
             self._hidden_notice_sent = True
             self.notify(
                 "ClimateTest Manager",
-                "O aplicativo continua ativo em segundo plano. Use o ícone ao lado do relógio para abrir novamente.",
+                "O aplicativo continua ativo em segundo plano. "
+                "Use o ícone ao lado do relógio para abrir novamente.",
             )
 
     async def exit_application(self) -> None:
@@ -265,10 +267,8 @@ class _TrayController:
         icon = self._icon
         self._icon = None
         if icon is not None:
-            try:
+            with suppress(Exception):
                 icon.stop()
-            except Exception:
-                pass
         self._page.window.prevent_close = False
         await self._page.window.destroy()
 
