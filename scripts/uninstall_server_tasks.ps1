@@ -19,6 +19,7 @@ Remove-ItemProperty `
     -Name "ClimateTestManagerServer"
 
 & netsh.exe advfirewall firewall delete rule name="ClimateTest Manager - Rede local" | Out-Null
+& netsh.exe advfirewall firewall delete rule name="ClimateTest Manager - Descoberta local" | Out-Null
 
 # Os dados em C:\ProgramData\ClimateTestManager são deliberadamente preservados.
 # Isso permite reinstalação/atualização sem risco de apagar o banco existente.
