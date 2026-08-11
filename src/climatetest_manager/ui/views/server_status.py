@@ -62,7 +62,8 @@ def build_server_status_card(
                                     color=AppColors.TEXT_PRIMARY,
                                 ),
                                 ft.Text(
-                                    "Informações para instalar ou diagnosticar uma estação de trabalho.",
+                                    "Informações para instalar ou diagnosticar uma "
+                                    "estação de trabalho.",
                                     size=12,
                                     color=AppColors.TEXT_SECONDARY,
                                 ),
@@ -179,7 +180,10 @@ def build_server_status_card(
                                     (
                                         str(backup_directory)
                                         if backup_configured
-                                        else "Ainda não configurada. Recomenda-se OneDrive ou outro destino protegido."
+                                        else (
+                                            "Ainda não configurada. Recomenda-se OneDrive ou "
+                                            "outro destino protegido."
+                                        )
                                     ),
                                     size=11,
                                     color=(
