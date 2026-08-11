@@ -1,4 +1,4 @@
-"""Servidor web local do ClimateTest Manager para a rede privada do laboratório."""
+"""Servidor local do ClimateTest Manager para a rede privada do laboratório."""
 
 import argparse
 import os
@@ -9,6 +9,7 @@ import flet as ft
 
 from climatetest_manager.app import main
 from climatetest_manager.client_session import enable_client_session_persistence
+from climatetest_manager.services.network import DiscoveryResponder
 
 
 def _arguments() -> argparse.Namespace:
@@ -52,14 +53,20 @@ def run_server() -> None:
     os.environ["FLET_FORCE_WEB_SERVER"] = "true"
     os.environ["FLET_SERVER_IP"] = arguments.host
     os.environ["FLET_SERVER_PORT"] = str(arguments.port)
-    ft.run(
-        main,
-        view=None,
-        host=arguments.host,
-        port=arguments.port,
-        assets_dir=str(Path(__file__).resolve().parent / "assets"),
-        no_cdn=True,
-    )
+
+    discovery = DiscoveryResponder(app_port=arguments.port)
+    discovery.start()
+    try:
+        ft.run(
+            main,
+            view=None,
+            host=arguments.host,
+            port=arguments.port,
+            assets_dir=str(Path(__file__).resolve().parent / "assets"),
+            no_cdn=True,
+        )
+    finally:
+        discovery.stop()
 
 
 if __name__ == "__main__":
