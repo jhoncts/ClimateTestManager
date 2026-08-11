@@ -12,7 +12,10 @@ from climatetest_manager.database.session import create_session_factory, initial
 from climatetest_manager.repositories.production import ProductionClimateTestRepository
 from climatetest_manager.repositories.users import UserRepository
 from climatetest_manager.services.auth import AuthenticationService, UserRegistrationCommand
-from climatetest_manager.services.climate_tests import ClimateTestService, CreateClimateTestCommand
+from climatetest_manager.services.climate_tests import (
+    ClimateTestService,
+    CreateClimateTestCommand,
+)
 from climatetest_manager.single_instance import SingleInstanceCoordinator
 from climatetest_manager.ui.components.table17 import build_table17_preview
 from climatetest_manager.ui.offline import build_offline_view
