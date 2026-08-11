@@ -19,7 +19,7 @@ from climatetest_manager.services.climate_tests import (
 from climatetest_manager.single_instance import SingleInstanceCoordinator
 from climatetest_manager.ui.components.table17 import build_table17_preview
 from climatetest_manager.ui.offline import build_offline_view
-from climatetest_manager.ui.theme import AppColors, THEME_KEYS
+from climatetest_manager.ui.theme import THEME_KEYS, AppColors
 
 
 def _registration() -> UserRegistrationCommand:
