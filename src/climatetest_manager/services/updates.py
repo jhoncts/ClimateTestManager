@@ -104,8 +104,9 @@ def parse_release_payload(payload: dict[str, object], *, current_version: str) -
     if not isinstance(assets, list):
         return None
     expected_installer = f"ClimateTestManager-Setup-v{version}.exe"
+    expected_installer_key = expected_installer.casefold()
     installer_asset = next(
-        (asset for asset in assets if _asset_name(asset).casefold() == expected_installer.casefold()),
+        (asset for asset in assets if _asset_name(asset).casefold() == expected_installer_key),
         None,
     )
     if installer_asset is None:
