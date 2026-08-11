@@ -101,9 +101,7 @@ def user_avatar(user: UserSummary, *, size: int = 38) -> ft.Container:
 
     initials = (user.first_name[:1] + user.last_name[:1]).upper()
     source = (
-        _optimized_profile_photo_source(user.profile_photo_b64)
-        if user.profile_photo_b64
-        else None
+        _optimized_profile_photo_source(user.profile_photo_b64) if user.profile_photo_b64 else None
     )
     if source:
         content: ft.Control = ft.Image(
