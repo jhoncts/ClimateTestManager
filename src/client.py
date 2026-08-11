@@ -1,6 +1,6 @@
 """Cliente desktop nativo que conecta ao servidor central do ClimateTest Manager."""
 
-import argparse
+import argparse  # noqa: I001
 import asyncio
 import os
 import sys
@@ -15,6 +15,12 @@ import flet as ft
 
 from climatetest_manager.client_bridge import DesktopToastCommand, TOAST_COMMAND_KEY
 from climatetest_manager.services.notifications import WindowsToastProvider
+from climatetest_manager.services.updates import (
+    automatic_update_checks_enabled,
+    check_for_update,
+    download_verified_update,
+    launch_installer_elevated,
+)
 
 VERSION = "0.7.0"
 DEFAULT_PORT = 8550
@@ -304,6 +310,107 @@ async def _watch_desktop_commands(page: ft.Page, tray: _TrayController) -> None:
         await asyncio.sleep(0.6)
 
 
+async def _offer_available_update(page: ft.Page, tray: _TrayController) -> None:
+    """Consulta sem bloquear a UI e oferece apenas instaladores com SHA-256 válido."""
+
+    if not automatic_update_checks_enabled():
+        return
+    update = await asyncio.to_thread(check_for_update, VERSION)
+    if update is None:
+        return
+
+    progress = ft.ProgressRing(width=20, height=20, stroke_width=2, visible=False)
+    status = ft.Text("", size=11, color="#66788A")
+    install_button: ft.Button
+    dialog: ft.AlertDialog
+
+    async def download_and_install() -> None:
+        install_button.disabled = True
+        progress.visible = True
+        status.value = "Baixando e verificando a atualização..."
+        status.color = "#66788A"
+        page.update()
+        try:
+            installer = await asyncio.to_thread(download_verified_update, update)
+            status.value = "Integridade confirmada. Solicitando permissão do Windows..."
+            page.update()
+            launched = await asyncio.to_thread(launch_installer_elevated, installer)
+            if not launched:
+                raise OSError("O Windows não iniciou o instalador com permissão administrativa.")
+        except (OSError, ValueError) as error:
+            progress.visible = False
+            install_button.disabled = False
+            status.value = f"Não foi possível atualizar: {error}"
+            status.color = "#B42318"
+            page.update()
+            return
+
+        with suppress(Exception):
+            page.pop_dialog()
+        if tray.active:
+            await tray.exit_application()
+        else:
+            await page.window.destroy()
+
+    def start_update(_event: object | None = None) -> None:
+        page.run_task(download_and_install)
+
+    notes = update.release_notes.strip()
+    notes_control: list[ft.Control] = []
+    if notes:
+        notes_control.append(
+            ft.Container(
+                border_radius=10,
+                bgcolor="#F4F7FA",
+                padding=10,
+                content=ft.Text(
+                    notes[:1200],
+                    size=10,
+                    color="#536579",
+                    max_lines=8,
+                    overflow=ft.TextOverflow.ELLIPSIS,
+                ),
+            )
+        )
+
+    install_button = ft.Button(
+        content="Baixar e instalar",
+        icon=ft.Icons.SYSTEM_UPDATE_ALT,
+        bgcolor="#087E8B",
+        color="#FFFFFF",
+        on_click=start_update,
+    )
+    dialog = ft.AlertDialog(
+        modal=True,
+        title=ft.Text("Nova atualização disponível", weight=ft.FontWeight.BOLD),
+        content=ft.Column(
+            tight=True,
+            spacing=12,
+            controls=[
+                ft.Text(
+                    f"ClimateTest Manager v{update.version} está disponível. "
+                    f"Versão instalada: v{VERSION}.",
+                    size=12,
+                ),
+                *notes_control,
+                ft.Row(spacing=10, controls=[progress, status]),
+                ft.Text(
+                    "O instalador é baixado do GitHub e só é executado depois da "
+                    "verificação do SHA-256 publicado.",
+                    size=10,
+                    color="#66788A",
+                ),
+            ],
+        ),
+        actions=[
+            ft.TextButton(content="Agora não", on_click=lambda _event: page.pop_dialog()),
+            install_button,
+        ],
+        actions_alignment=ft.MainAxisAlignment.END,
+    )
+    page.open(dialog)
+
+
 async def desktop_main(
     page: ft.Page,
     server_url: str,
@@ -427,6 +534,7 @@ async def desktop_main(
         page.update()
         if ready_file is not None:
             await asyncio.to_thread(_write_ready_marker, ready_file, server_url)
+        page.run_task(_offer_available_update, page, tray)
 
     page.run_task(reveal_when_ready)
 
