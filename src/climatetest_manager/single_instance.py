@@ -23,6 +23,18 @@ class SingleInstanceCoordinator:
         self._thread: threading.Thread | None = None
         self._stop = threading.Event()
 
+    @staticmethod
+    def _kernel32():
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.CreateMutexW.argtypes = [ctypes.c_void_p, wintypes.BOOL, wintypes.LPCWSTR]
+        kernel32.CreateMutexW.restype = wintypes.HANDLE
+        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+        kernel32.CloseHandle.restype = wintypes.BOOL
+        return kernel32
+
     def acquire_or_signal(self) -> bool:
         """Retorna True no processo principal; o secundário só sinaliza e encerra."""
 
@@ -30,20 +42,21 @@ class SingleInstanceCoordinator:
             return True
         import ctypes
 
-        kernel32 = ctypes.windll.kernel32
-        kernel32.SetLastError(0)
+        kernel32 = self._kernel32()
+        ctypes.set_last_error(0)
         handle = kernel32.CreateMutexW(None, False, _MUTEX_NAME)
         if not handle:
             # Se o mutex do Windows não puder ser usado, não bloqueie o aplicativo.
             return True
-        last_error = kernel32.GetLastError()
+        last_error = ctypes.get_last_error()
+        handle_value = int(handle)
         if last_error == _ERROR_ALREADY_EXISTS:
             with suppress(Exception):
                 self._signal_primary()
             kernel32.CloseHandle(handle)
             return False
 
-        self._mutex_handle = int(handle)
+        self._mutex_handle = handle_value
         self._start_listener()
         return True
 
@@ -110,11 +123,10 @@ class SingleInstanceCoordinator:
         self._mutex_handle = None
         if handle and sys.platform == "win32":
             import ctypes
+            from ctypes import wintypes
 
             with suppress(Exception):
-                ctypes.windll.kernel32.ReleaseMutex(handle)
-            with suppress(Exception):
-                ctypes.windll.kernel32.CloseHandle(handle)
+                self._kernel32().CloseHandle(wintypes.HANDLE(handle))
 
     def __enter__(self) -> SingleInstanceCoordinator:
         return self
