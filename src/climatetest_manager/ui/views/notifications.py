@@ -14,6 +14,8 @@ def _notification_card(
     *,
     on_mark_read: Callable[[str, int], None],
 ) -> ft.Container:
+    """Card deliberadamente simples para renderizar igual no host e em FletApp remoto."""
+
     critical = notification.severity in {
         "critical",
         "crítica",
@@ -23,7 +25,32 @@ def _notification_card(
         "alta",
     }
     accent = AppColors.DANGER if critical else AppColors.INFO
+    icon = (
+        ft.Icons.REPORT_PROBLEM_OUTLINED
+        if notification.source_kind == "incident"
+        else ft.Icons.SCHEDULE_OUTLINED
+    )
+    title_row_controls: list[ft.Control] = [
+        ft.Text(
+            notification.title,
+            size=14,
+            weight=ft.FontWeight.BOLD,
+            color=AppColors.TEXT_PRIMARY,
+        )
+    ]
+    if not notification.is_read:
+        title_row_controls.append(
+            ft.Container(
+                width=8,
+                height=8,
+                border_radius=4,
+                bgcolor=accent,
+                tooltip="Não lida",
+            )
+        )
+
     return ft.Container(
+        width=float("inf"),
         border_radius=14,
         bgcolor=AppColors.SURFACE,
         border=ft.Border.all(
@@ -31,6 +58,7 @@ def _notification_card(
             accent if not notification.is_read else AppColors.DIVIDER,
         ),
         padding=16,
+        clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
         on_click=(
             (lambda _event: on_mark_read(notification.source_kind, notification.source_id))
             if not notification.is_read
@@ -46,55 +74,31 @@ def _notification_card(
                     border_radius=12,
                     bgcolor=AppColors.DANGER_LIGHT if critical else AppColors.INFO_LIGHT,
                     alignment=ft.Alignment.CENTER,
-                    content=ft.Icon(
-                        ft.Icons.REPORT_PROBLEM_OUTLINED
-                        if notification.source_kind == "incident"
-                        else ft.Icons.SCHEDULE_OUTLINED,
-                        color=accent,
-                        size=22,
-                    ),
+                    content=ft.Icon(icon, color=accent, size=22),
                 ),
-                ft.Column(
+                ft.Container(
                     expand=True,
-                    spacing=5,
-                    controls=[
-                        ft.Row(
-                            wrap=True,
-                            controls=[
-                                ft.Text(
-                                    notification.title,
-                                    size=14,
-                                    weight=ft.FontWeight.BOLD,
-                                    color=AppColors.TEXT_PRIMARY,
-                                    expand=True,
-                                ),
-                                *(
-                                    [
-                                        ft.Container(
-                                            width=8,
-                                            height=8,
-                                            border_radius=4,
-                                            bgcolor=accent,
-                                            tooltip="Não lida",
-                                        )
-                                    ]
-                                    if not notification.is_read
-                                    else []
-                                ),
-                            ],
-                        ),
-                        ft.Text(
-                            notification.message,
-                            size=12,
-                            color=AppColors.TEXT_SECONDARY,
-                            selectable=True,
-                        ),
-                        ft.Text(
-                            format_datetime(notification.created_at),
-                            size=10,
-                            color=AppColors.TEXT_SECONDARY,
-                        ),
-                    ],
+                    content=ft.Column(
+                        spacing=6,
+                        horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+                        controls=[
+                            ft.Row(
+                                spacing=8,
+                                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                                controls=title_row_controls,
+                            ),
+                            ft.Text(
+                                notification.message,
+                                size=12,
+                                color=AppColors.TEXT_SECONDARY,
+                            ),
+                            ft.Text(
+                                format_datetime(notification.created_at),
+                                size=10,
+                                color=AppColors.TEXT_SECONDARY,
+                            ),
+                        ],
+                    ),
                 ),
             ],
         ),
@@ -109,14 +113,46 @@ def build_notifications_view(
     on_mark_all_read: Callable[[], None],
 ) -> ft.Column:
     unread = sum(not notification.is_read for notification in notifications)
+    cards: list[ft.Control]
+    if notifications:
+        cards = [
+            _notification_card(notification, on_mark_read=on_mark_read)
+            for notification in notifications
+        ]
+    else:
+        cards = [
+            ft.Container(
+                border_radius=16,
+                bgcolor=AppColors.SURFACE,
+                padding=28,
+                alignment=ft.Alignment.CENTER,
+                content=ft.Column(
+                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                    controls=[
+                        ft.Icon(
+                            ft.Icons.NOTIFICATIONS_NONE,
+                            size=34,
+                            color=AppColors.TEXT_SECONDARY,
+                        ),
+                        ft.Text(
+                            "Nenhuma notificação disponível.",
+                            color=AppColors.TEXT_SECONDARY,
+                        ),
+                    ],
+                ),
+            )
+        ]
+
     return ft.Column(
         expand=True,
         scroll=ft.ScrollMode.AUTO,
         spacing=16,
+        horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
         controls=[
             ft.Row(
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 wrap=True,
+                run_spacing=8,
                 controls=[
                     ft.Column(
                         spacing=3,
@@ -156,31 +192,6 @@ def build_notifications_view(
                     color=AppColors.TEXT_PRIMARY,
                 ),
             ),
-            *(
-                [
-                    _notification_card(notification, on_mark_read=on_mark_read)
-                    for notification in notifications
-                ]
-                if notifications
-                else [
-                    ft.Container(
-                        border_radius=16,
-                        bgcolor=AppColors.SURFACE,
-                        padding=28,
-                        alignment=ft.Alignment.CENTER,
-                        content=ft.Column(
-                            horizontal_alignment=ft.CrossAxisAlignment.CENTER,
-                            controls=[
-                                ft.Icon(
-                                    ft.Icons.NOTIFICATIONS_NONE,
-                                    size=34,
-                                    color=AppColors.TEXT_SECONDARY,
-                                ),
-                                ft.Text("Nenhuma notificação disponível."),
-                            ],
-                        ),
-                    )
-                ]
-            ),
+            *cards,
         ],
     )
