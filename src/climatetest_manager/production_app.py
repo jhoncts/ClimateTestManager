@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
@@ -13,6 +14,7 @@ from sqlalchemy import Engine
 from climatetest_manager import app as legacy
 from climatetest_manager.client_bridge import (
     load_local_theme,
+    queue_desktop_toast,
     save_local_theme,
     save_offline_snapshot,
 )
@@ -99,6 +101,12 @@ class ProductionClimateTestApplication(legacy.ClimateTestApplication):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._active_test_id: int | None = None
+        self._notification_watch_active = False
+
+    def start(self) -> None:
+        self._notification_watch_active = True
+        self._page.run_task(self._watch_local_notifications)
+        super().start()
 
     @property
     def _production_repository(self) -> ProductionClimateTestRepository:
@@ -215,6 +223,65 @@ class ProductionClimateTestApplication(legacy.ClimateTestApplication):
         except (OSError, RuntimeError, ValueError):
             # Cache é uma conveniência de disponibilidade; nunca impede a operação online.
             return
+
+    async def _watch_local_notifications(self) -> None:
+        """Transforma novos avisos da sessão em toasts no Windows da própria estação."""
+
+        try:
+            current = self._production_repository.list_user_notifications(
+                user_id=self._current_user.id,
+                is_admin=self._current_user.is_admin,
+            )
+            known = {(item.source_kind, item.source_id) for item in current}
+        except (OSError, RuntimeError, ValueError):
+            known = set()
+
+        while self._notification_watch_active:
+            await asyncio.sleep(5)
+            try:
+                current = self._production_repository.list_user_notifications(
+                    user_id=self._current_user.id,
+                    is_admin=self._current_user.is_admin,
+                )
+            except (OSError, RuntimeError, ValueError):
+                continue
+
+            current_keys = {(item.source_kind, item.source_id) for item in current}
+            pending = [
+                item
+                for item in current
+                if not item.is_read and (item.source_kind, item.source_id) not in known
+            ]
+            known = current_keys
+            for item in reversed(pending):
+                if not self._notification_watch_active:
+                    return
+                delivered = await queue_desktop_toast(
+                    self._page,
+                    item.title,
+                    item.message,
+                    command_id=f"{item.source_kind}-{item.source_id}",
+                )
+                if delivered:
+                    # O host desktop consome uma chave por vez; evita sobrescrever avisos em rajada.
+                    await asyncio.sleep(0.8)
+
+    def _test_notification(self) -> None:
+        self._page.run_task(self._send_local_test_notification)
+
+    async def _send_local_test_notification(self) -> None:
+        delivered = await queue_desktop_toast(
+            self._page,
+            "ClimateTest Manager",
+            "Notificação de teste enviada com sucesso.",
+        )
+        if delivered:
+            self._show_message("Notificação de teste enviada para este computador.")
+            return
+        self._show_message(
+            "Não foi possível entregar a notificação ao aplicativo desktop deste computador.",
+            error=True,
+        )
 
     def show_dashboard(self) -> None:
         self._prepare_theme()
@@ -524,6 +591,7 @@ class ProductionClimateTestApplication(legacy.ClimateTestApplication):
         self._render(content, selected_view="users")
 
     def _finish_signed_out(self, message: str | None = None) -> None:
+        self._notification_watch_active = False
         self._session_token = None
         self._page.run_task(_save_remembered_token, self._page, None)
         self._page.on_resize = None
