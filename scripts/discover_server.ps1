@@ -1,7 +1,8 @@
 param(
     [string]$OutputFile = "",
     [int]$TimeoutMilliseconds = 2200,
-    [int]$DiscoveryPort = 8551
+    [int]$DiscoveryPort = 8551,
+    [string]$BroadcastAddress = "255.255.255.255"
 )
 
 $ErrorActionPreference = "Stop"
@@ -12,7 +13,7 @@ try {
     $client.EnableBroadcast = $true
     $client.Client.ReceiveTimeout = 250
     $payload = [System.Text.Encoding]::UTF8.GetBytes($signature)
-    [void]$client.Send($payload, $payload.Length, "255.255.255.255", $DiscoveryPort)
+    [void]$client.Send($payload, $payload.Length, $BroadcastAddress, $DiscoveryPort)
 
     $deadline = [DateTime]::UtcNow.AddMilliseconds($TimeoutMilliseconds)
     while ([DateTime]::UtcNow -lt $deadline) {
