@@ -326,8 +326,17 @@ jobs:
               "/DIR=`"$installDir`"",
               "/LOG=`"$setupLog`""
             ) `
-            -Wait `
             -PassThru
+          if (-not $setup.WaitForExit(240000)) {
+            Stop-Process -Id $setup.Id -Force -ErrorAction SilentlyContinue
+            if (Test-Path -LiteralPath $setupLog) {
+              Write-Host "===== LOG DO INSTALADOR EM MODO SERVIDOR (TIMEOUT) ====="
+              Get-Content -LiteralPath $setupLog
+              Write-Host "===== FIM DO LOG DO INSTALADOR ====="
+            }
+            throw "Instalador do servidor não encerrou em até 4 minutos."
+          }
+          $setup.Refresh()
           if ($setup.ExitCode -ne 0) {
             if (Test-Path -LiteralPath $setupLog) {
               Write-Host "===== LOG DO INSTALADOR EM MODO SERVIDOR ====="
