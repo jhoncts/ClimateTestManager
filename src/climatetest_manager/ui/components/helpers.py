@@ -40,8 +40,12 @@ def _optimized_profile_photo_source(encoded: str) -> str | None:
 
     try:
         raw = base64.b64decode(encoded, validate=True)
-        if not raw:
-            return None
+    except ValueError:
+        return None
+    if not raw:
+        return None
+
+    try:
         with Image.open(BytesIO(raw)) as opened:
             opened.load()
             normalized = ImageOps.exif_transpose(opened)
@@ -55,8 +59,11 @@ def _optimized_profile_photo_source(encoded: str) -> str | None:
                 fitted = fitted.convert("RGBA" if "A" in fitted.getbands() else "RGB")
             output = BytesIO()
             fitted.save(output, format="WEBP", quality=82, method=6)
-    except (ValueError, OSError, UnidentifiedImageError):
-        return None
+    except (OSError, UnidentifiedImageError):
+        # Bancos antigos podem conter base64 válido que não representa uma imagem real.
+        # Mantemos um ft.Image com error_content para o cliente cair nas iniciais sem quebrar a UI.
+        return f"data:application/octet-stream;base64,{encoded}"
+
     compact = base64.b64encode(output.getvalue()).decode("ascii")
     return f"data:image/webp;base64,{compact}"
 
@@ -110,9 +117,9 @@ def user_avatar(user: UserSummary, *, size: int = 38) -> ft.Container:
             height=size,
             fit=ft.BoxFit.COVER,
             border_radius=size / 2,
-            filter_quality=ft.FilterQuality.MEDIUM,
-            cache_width=max(64, size * 2),
-            cache_height=max(64, size * 2),
+            filter_quality=ft.FilterQuality.HIGH,
+            cache_width=max(64, size * 3),
+            cache_height=max(64, size * 3),
             anti_alias=True,
             gapless_playback=True,
             error_content=ft.Text(
