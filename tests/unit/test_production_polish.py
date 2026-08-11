@@ -46,6 +46,21 @@ def _test_command() -> CreateClimateTestCommand:
     )
 
 
+def _text_values(control: ft.Control) -> list[str]:
+    values: list[str] = []
+    if isinstance(control, ft.Text) and control.value:
+        values.append(control.value)
+    child = getattr(control, "content", None)
+    if isinstance(child, ft.Control):
+        values.extend(_text_values(child))
+    children = getattr(control, "controls", None)
+    if isinstance(children, list):
+        for item in children:
+            if isinstance(item, ft.Control):
+                values.extend(_text_values(item))
+    return values
+
+
 class _DatabaseHarness:
     def __enter__(self):
         self.temporary_directory = TemporaryDirectory()
@@ -174,7 +189,10 @@ def test_offline_view_is_read_only_and_builds_with_snapshot() -> None:
     )
 
     assert isinstance(view, ft.Container)
-    assert "offline" in str(view.content).casefold()
+    rendered_text = " ".join(_text_values(view)).casefold()
+    assert "modo offline" in rendered_text
+    assert "nenhuma alteração é permitida" in rendered_text
+    assert "26800.1" in rendered_text
 
 
 def test_single_instance_is_noop_outside_windows() -> None:
