@@ -20,7 +20,7 @@ SetupIconFile=..\src\assets\brand\climatetest.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 Compression=lzma2
 SolidCompression=yes
-WizardStyle=modern
+WizardStyle=modern dynamic
 CloseApplications=yes
 RestartApplications=no
 SetupLogging=yes
@@ -35,6 +35,8 @@ Name: "{commonappdata}\ClimateTestManager\Logs"
 Name: "{commonappdata}\ClimateTestManager\Backups"
 
 [Files]
+; O arquivo temporário de descoberta fica primeiro para permitir ExtractTemporaryFile com SolidCompression.
+Source: "..\dist\ClimateTestManager-v0.7.0\discover_server.ps1"; Flags: dontcopy noencryption
 Source: "..\dist\ClimateTestManager-v0.7.0\ClimateTestManager.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\dist\ClimateTestManager-v0.7.0\ClimateTestServer.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\dist\ClimateTestManager-v0.7.0\ClimateTestNotifier.exe"; DestDir: "{app}"; Flags: ignoreversion
@@ -42,6 +44,7 @@ Source: "..\dist\ClimateTestManager-v0.7.0\climatetest.ico"; DestDir: "{app}"; F
 Source: "..\dist\ClimateTestManager-v0.7.0\LEIA-ME-PRIMEIRO.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\dist\ClimateTestManager-v0.7.0\install_server_tasks.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\dist\ClimateTestManager-v0.7.0\uninstall_server_tasks.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v0.7.0\discover_server.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\dist\ClimateTestManager-v0.7.0\documentacao-conformidade\*"; DestDir: "{app}\documentacao-conformidade"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
@@ -66,6 +69,10 @@ var
   ClientReachable: Boolean;
   ClientConfigExitCode: Integer;
   ConfiguredServerUrl: String;
+  DiscoveryAttempted: Boolean;
+  AutoDiscoveredServer: Boolean;
+  DiscoveryServerName: String;
+  DiscoveryServerIp: String;
 
 function ReadExistingServerUrl(): String;
 var
@@ -152,6 +159,113 @@ begin
   Result := NormalizeServerAddress(Address);
 end;
 
+function DelimitedField(Line: String; FieldNumber: Integer): String;
+var
+  Working: String;
+  Separator: Integer;
+  CurrentField: Integer;
+begin
+  Result := '';
+  Working := Line;
+  CurrentField := 1;
+  while CurrentField < FieldNumber do
+  begin
+    Separator := Pos('|', Working);
+    if Separator = 0 then
+      Exit;
+    Delete(Working, 1, Separator);
+    CurrentField := CurrentField + 1;
+  end;
+  Separator := Pos('|', Working);
+  if Separator > 0 then
+    Result := Copy(Working, 1, Separator - 1)
+  else
+    Result := Working;
+  Result := Trim(Result);
+end;
+
+function FirstResultLine(Value: String): String;
+var
+  BreakPosition: Integer;
+begin
+  Result := Value;
+  BreakPosition := Pos(#13, Result);
+  if BreakPosition = 0 then
+    BreakPosition := Pos(#10, Result);
+  if BreakPosition > 0 then
+    Result := Copy(Result, 1, BreakPosition - 1);
+  Result := Trim(Result);
+end;
+
+procedure RunServerDiscovery();
+var
+  PowerShellPath: String;
+  ScriptPath: String;
+  OutputPath: String;
+  Params: String;
+  ResultCode: Integer;
+  RawResults: AnsiString;
+  FirstLine: String;
+  FoundUrl: String;
+begin
+  if DiscoveryAttempted then
+    Exit;
+  DiscoveryAttempted := True;
+  AutoDiscoveredServer := False;
+  DiscoveryServerName := '';
+  DiscoveryServerIp := '';
+
+  if RequestedServerAddress() <> '' then
+    Exit;
+
+  WizardForm.StatusLabel.Caption := 'Procurando o servidor central na rede local...';
+  WizardForm.Refresh();
+  ScriptPath := ExpandConstant('{tmp}\discover_server.ps1');
+  OutputPath := ExpandConstant('{tmp}\climatetest-discovery.txt');
+  DeleteFile(OutputPath);
+  PowerShellPath := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
+  Params := '-NoProfile -ExecutionPolicy Bypass -File "' + ScriptPath +
+    '" -OutputFile "' + OutputPath + '" -TimeoutMilliseconds 2600';
+
+  if not Exec(PowerShellPath, Params, '', SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+  begin
+    AddressPage.SubCaptionLabel.Caption :=
+      'A busca automática não pôde ser iniciada. Informe abaixo o nome ou IP mostrado nas ' +
+      'Configurações do computador servidor.';
+    Exit;
+  end;
+
+  if not LoadStringFromFile(OutputPath, RawResults) then
+  begin
+    AddressPage.SubCaptionLabel.Caption :=
+      'Nenhum servidor central foi encontrado automaticamente. Confirme se ele está ligado e ' +
+      'na mesma rede; depois informe abaixo o nome ou IP exibido nas Configurações do servidor.';
+    Exit;
+  end;
+
+  FirstLine := FirstResultLine(String(RawResults));
+  FoundUrl := DelimitedField(FirstLine, 5);
+  DiscoveryServerName := DelimitedField(FirstLine, 1);
+  DiscoveryServerIp := DelimitedField(FirstLine, 2);
+  if FoundUrl = '' then
+    Exit;
+
+  AddressPage.Values[0] := FoundUrl;
+  if ResultCode = 0 then
+  begin
+    AutoDiscoveredServer := True;
+    AddressPage.SubCaptionLabel.Caption :=
+      'Servidor encontrado automaticamente: ' + DiscoveryServerName + ' (' +
+      DiscoveryServerIp + '). O instalador usará essa máquina como servidor central.';
+  end
+  else
+  begin
+    AddressPage.SubCaptionLabel.Caption :=
+      'Mais de um ClimateTest Manager foi encontrado na rede. O primeiro resultado foi ' +
+      'preenchido abaixo. Confirme o nome/IP correto antes de continuar.';
+  end;
+end;
+
 procedure InitializeWizard();
 var
   ExistingUrl: String;
@@ -163,6 +277,10 @@ begin
     FileExists(ExpandConstant('{commonappdata}\ClimateTestManager\server-mode.marker'));
   ExistingUrl := ReadExistingServerUrl();
   Role := RequestedRole();
+  DiscoveryAttempted := False;
+  AutoDiscoveredServer := False;
+
+  ExtractTemporaryFile('discover_server.ps1');
 
   RolePage := CreateInputOptionPage(
     wpSelectDir,
@@ -187,10 +305,11 @@ begin
   AddressPage := CreateInputQueryPage(
     RolePage.ID,
     'Servidor central',
-    'Informe onde está o computador servidor',
-    'Digite o nome ou IP do servidor. Ex.: CPEx-SERVER ou 192.168.0.10.'
+    'Localizar o computador servidor',
+    'O instalador procura o servidor automaticamente. Esta tela só aparece quando é necessário ' +
+    'confirmar ou informar o endereço manualmente.'
   );
-  AddressPage.Add('Nome ou IP do servidor:', False);
+  AddressPage.Add('Nome, IP ou endereço do servidor:', False);
 
   if RequestedServerAddress() <> '' then
     AddressPage.Values[0] := RequestedServerAddress()
@@ -200,7 +319,9 @@ end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
 begin
-  Result := (PageID = AddressPage.ID) and SelectedServerMode();
+  Result :=
+    (PageID = AddressPage.ID) and
+    (SelectedServerMode() or AutoDiscoveredServer);
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
@@ -208,13 +329,21 @@ var
   Value: String;
 begin
   Result := True;
+
+  if (CurPageID = RolePage.ID) and not SelectedServerMode() then
+  begin
+    if (RequestedServerAddress() = '') and (Trim(AddressPage.Values[0]) = '') then
+      RunServerDiscovery();
+  end;
+
   if (CurPageID = AddressPage.ID) and not SelectedServerMode() then
   begin
     Value := Trim(AddressPage.Values[0]);
     if Value = '' then
     begin
       MsgBox(
-        'Informe o nome ou IP do computador servidor antes de continuar.',
+        'Não foi possível localizar o servidor automaticamente. Informe o nome ou IP do ' +
+        'computador servidor. Essa informação aparece em Configurações no servidor central.',
         mbError,
         MB_OK
       );
@@ -336,6 +465,9 @@ begin
     Exit;
 
   InstallAsServer := SelectedServerMode();
+  if (not InstallAsServer) and (RequestedServerAddress() = '') and
+    (Trim(AddressPage.Values[0]) = '') then
+    RunServerDiscovery();
   ConfiguredServerUrl := CurrentServerUrl();
   ServerConfigured := False;
   ServerConfigExitCode := -1;
@@ -410,7 +542,8 @@ begin
       WizardForm.FinishedLabel.Caption :=
         'O servidor central foi instalado, iniciado e verificado. O aplicativo também respondeu ' +
         'corretamente como cliente Windows.' + #13#10 + #13#10 +
-        'Clique em Concluir para abrir o ClimateTest Manager.';
+        'As estações de trabalho poderão localizar este servidor automaticamente na rede local.' +
+        #13#10 + #13#10 + 'Clique em Concluir para abrir o ClimateTest Manager.';
     end
     else
     begin
@@ -429,8 +562,8 @@ begin
     begin
       WizardForm.FinishedHeadingLabel.Caption := 'ClimateTest Manager pronto para uso';
       WizardForm.FinishedLabel.Caption :=
-        'A estação foi instalada e a comunicação com o servidor central foi validada.' + #13#10 + #13#10 +
-        'Servidor: ' + ConfiguredServerUrl + #13#10 + #13#10 +
+        'A estação foi instalada e a comunicação com o servidor central foi validada.' +
+        #13#10 + #13#10 + 'Servidor: ' + ConfiguredServerUrl + #13#10 + #13#10 +
         'Clique em Concluir para abrir o ClimateTest Manager.';
     end
     else
