@@ -167,6 +167,7 @@ class ClientSessionApplication(_OriginalApplication):
 
     def show_settings(self) -> None:
         backup_directory = get_external_backup_directory()
+        local_server_client = app_module._local_server_client(self._page)
         content = build_managed_settings_view(
             identity=get_server_identity(),
             database_path=get_database_path(),
@@ -198,7 +199,9 @@ class ClientSessionApplication(_OriginalApplication):
             on_open_data_folder=self._open_data_folder,
             on_backup=self._backup_database,
             on_configure_backup=(
-                self._configure_backup_directory if self._current_user.is_admin else None
+                self._configure_backup_directory
+                if self._current_user.is_admin and local_server_client
+                else None
             ),
             on_report_system_incident=self._report_system_incident,
             on_resolve_system_incident=(
@@ -207,7 +210,7 @@ class ClientSessionApplication(_OriginalApplication):
             on_refresh=self.show_settings,
             on_rotate_administrator_recovery=(
                 self._rotate_administrator_recovery_code
-                if self._current_user.is_admin and app_module._local_server_client(self._page)
+                if self._current_user.is_admin and local_server_client
                 else None
             ),
         )
