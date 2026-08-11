@@ -13,7 +13,11 @@ from urllib.parse import urlsplit, urlunsplit
 
 import flet as ft
 
-from climatetest_manager.client_bridge import DesktopToastCommand, TOAST_COMMAND_KEY
+from climatetest_manager.client_bridge import (
+    DesktopToastCommand,
+    TOAST_COMMAND_KEY,
+    load_offline_snapshot,
+)
 from climatetest_manager.services.notifications import WindowsToastProvider
 from climatetest_manager.services.updates import (
     automatic_update_checks_enabled,
@@ -21,6 +25,8 @@ from climatetest_manager.services.updates import (
     download_verified_update,
     launch_installer_elevated,
 )
+from climatetest_manager.single_instance import SingleInstanceCoordinator
+from climatetest_manager.ui.offline import build_offline_view
 
 VERSION = "0.7.0"
 DEFAULT_PORT = 8550
@@ -33,6 +39,7 @@ def _arguments() -> argparse.Namespace:
     parser.add_argument("--check-only", action="store_true")
     parser.add_argument("--ready-file", default="", help=argparse.SUPPRESS)
     parser.add_argument("--no-tray", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--no-single-instance", action="store_true", help=argparse.SUPPRESS)
     return parser.parse_args()
 
 
@@ -142,6 +149,8 @@ def _splash_card(status: ft.Text, retry: ft.Button) -> ft.Container:
                         content=ft.Image(
                             src="brand/climatetest-logo.png",
                             fit=ft.BoxFit.CONTAIN,
+                            filter_quality=ft.FilterQuality.HIGH,
+                            anti_alias=True,
                             semantics_label="Logo do ClimateTest Manager",
                         ),
                     ),
@@ -310,6 +319,28 @@ async def _watch_desktop_commands(page: ft.Page, tray: _TrayController) -> None:
         await asyncio.sleep(0.6)
 
 
+async def _watch_activation_requests(
+    page: ft.Page,
+    tray: _TrayController,
+    coordinator: SingleInstanceCoordinator | None,
+) -> None:
+    """Traz a janela existente para frente quando o atalho é clicado novamente."""
+
+    if coordinator is None:
+        return
+    while True:
+        if coordinator.consume_activation_request():
+            if tray.active:
+                await tray.show_window()
+            else:
+                page.window.visible = True
+                page.window.skip_task_bar = False
+                page.update()
+                with suppress(Exception):
+                    await page.window.to_front()
+        await asyncio.sleep(0.2)
+
+
 async def _offer_available_update(page: ft.Page, tray: _TrayController) -> None:
     """Consulta sem bloquear a UI e oferece apenas instaladores com SHA-256 válido."""
 
@@ -322,7 +353,6 @@ async def _offer_available_update(page: ft.Page, tray: _TrayController) -> None:
     progress = ft.ProgressRing(width=20, height=20, stroke_width=2, visible=False)
     status = ft.Text("", size=11, color="#66788A")
     install_button: ft.Button
-    dialog: ft.AlertDialog
 
     async def download_and_install() -> None:
         install_button.disabled = True
@@ -411,14 +441,35 @@ async def _offer_available_update(page: ft.Page, tray: _TrayController) -> None:
     page.open(dialog)
 
 
+def _remote_app(server_url: str, on_error) -> ft.FletApp:
+    """Cria uma sessão nova; recriá-la evita a tela branca após perda prolongada da LAN."""
+
+    return ft.FletApp(
+        url=server_url,
+        expand=True,
+        reconnect_interval_ms=1000,
+        reconnect_timeout_ms=7000,
+        on_error=on_error,
+        app_error_message="Reconectando ao servidor central... {message}",
+        boot_screen_options={
+            "theme_mode": "light",
+            "bgcolor_light": "#EDF3F8",
+            "bgcolor_dark": "#102A43",
+            "spinner_size": 0,
+            "startup_message": "",
+        },
+    )
+
+
 async def desktop_main(
     page: ft.Page,
     server_url: str,
     *,
     ready_file: Path | None = None,
     no_tray: bool = False,
+    coordinator: SingleInstanceCoordinator | None = None,
 ) -> None:
-    """Mantém o servidor invisível e mostra somente uma janela própria do aplicativo."""
+    """Supervisiona a sessão remota e nunca deixa uma estação presa em tela branca."""
 
     _configure_page(page)
     server_url = server_url.rstrip("/")
@@ -434,6 +485,7 @@ async def desktop_main(
 
         page.window.on_event = on_window_event
         page.run_task(_watch_desktop_commands, page, tray)
+    page.run_task(_watch_activation_requests, page, tray, coordinator)
 
     status = ft.Text(
         "Conectando ao computador central...",
@@ -441,102 +493,113 @@ async def desktop_main(
         color="#66788A",
         text_align=ft.TextAlign.CENTER,
     )
-
-    async def retry_connection(_event: object | None = None) -> None:
-        retry.visible = False
-        status.value = "Conectando ao computador central..."
-        status.color = "#66788A"
-        page.update()
-        await reveal_when_ready()
-
     retry = ft.Button(
         content="Tentar novamente",
         icon=ft.Icons.REFRESH,
         visible=False,
-        on_click=retry_connection,
     )
     splash = _splash_card(status, retry)
     splash.opacity = 1
-    splash.animate_opacity = 280
-
-    embedded_app: ft.Container
-
-    def embedded_error(event: object) -> None:
-        message = str(getattr(event, "data", "") or "falha de comunicação com a interface")
-        embedded_app.opacity = 0
-        splash.visible = True
-        splash.opacity = 1
-        status.value = (
-            "O servidor respondeu, mas a interface não conseguiu ser carregada. "
-            f"Código CTM-UI-002. Detalhes: {message}"
-        )
-        status.color = "#B42318"
-        retry.visible = True
-        page.update()
-
-    embedded_app = ft.Container(
-        expand=True,
-        opacity=0,
-        animate_opacity=280,
-        content=ft.FletApp(
-            url=server_url,
-            expand=True,
-            reconnect_interval_ms=1500,
-            reconnect_timeout_ms=30000,
-            on_error=embedded_error,
-            app_error_message=(
-                "Não foi possível manter a conexão com o servidor central. "
-                "Aguarde alguns segundos ou reinicie o ClimateTest Manager. "
-                "Detalhes: {message}"
-            ),
-            boot_screen_options={
-                "theme_mode": "light",
-                "bgcolor_light": "#EDF3F8",
-                "bgcolor_dark": "#102A43",
-                "spinner_size": 0,
-                "startup_message": "",
-            },
-        ),
-    )
-    root = ft.Stack(expand=True, controls=[embedded_app, splash])
+    splash.animate_opacity = 220
+    embedded_host = ft.Container(expand=True, opacity=0, animate_opacity=180)
+    offline_host = ft.Container(expand=True, visible=False)
+    root = ft.Stack(expand=True, controls=[embedded_host, offline_host, splash])
     page.add(root)
     page.update()
 
-    async def reveal_when_ready() -> None:
-        ready = False
-        for attempt in range(1, 16):
-            ready = await asyncio.to_thread(_server_available, server_url)
-            if ready:
-                break
-            status.value = f"Aguardando o servidor central... tentativa {attempt}/15"
-            page.update()
-            await asyncio.sleep(0.7)
+    state = {"online": False, "reconnecting": False, "update_checked": False, "failures": 0}
 
+    async def show_offline() -> None:
+        snapshot = await load_offline_snapshot(page)
+        offline_host.content = build_offline_view(
+            snapshot,
+            server_url=server_url,
+            on_retry=lambda _event: page.run_task(reconnect),
+        )
+        state["online"] = False
+        state["reconnecting"] = False
+        embedded_host.opacity = 0
+        offline_host.visible = True
+        splash.visible = False
+        page.update()
+
+    async def handle_remote_error(_event: object | None = None) -> None:
+        # A sessão embutida pode emitir erro antes do watchdog perceber a queda.
+        await asyncio.sleep(0.15)
+        if not await asyncio.to_thread(_server_available, server_url):
+            await show_offline()
+        else:
+            await reconnect(force=True)
+
+    async def reconnect(_event: object | None = None, *, force: bool = False) -> None:
+        if state["reconnecting"]:
+            return
+        state["reconnecting"] = True
+        splash.visible = True
+        splash.opacity = 1
+        retry.visible = False
+        offline_host.visible = False
+        status.value = "Reconectando ao computador central..."
+        status.color = "#66788A"
+        page.update()
+
+        ready = force or await asyncio.to_thread(_server_available, server_url)
         if not ready:
-            status.value = (
-                "Servidor indisponível. Confirme se o computador central está ligado e conectado "
-                f"à rede. Servidor configurado: {server_url}. Código CTM-CLI-001."
-            )
-            status.color = "#B42318"
-            retry.visible = True
-            page.update()
+            state["reconnecting"] = False
+            await show_offline()
             return
 
-        status.value = "Servidor encontrado. Abrindo o ClimateTest Manager..."
+        status.value = "Servidor encontrado. Restaurando a interface..."
         status.color = "#087E8B"
+        embedded_host.content = _remote_app(server_url, handle_remote_error)
+        embedded_host.opacity = 1
+        state["online"] = True
+        state["failures"] = 0
         page.update()
-        await asyncio.sleep(0.9)
-        embedded_app.opacity = 1
+        await asyncio.sleep(0.75)
         splash.opacity = 0
         page.update()
-        await asyncio.sleep(0.35)
+        await asyncio.sleep(0.2)
         splash.visible = False
+        state["reconnecting"] = False
         page.update()
         if ready_file is not None:
             await asyncio.to_thread(_write_ready_marker, ready_file, server_url)
-        page.run_task(_offer_available_update, page, tray)
+        if not state["update_checked"]:
+            state["update_checked"] = True
+            page.run_task(_offer_available_update, page, tray)
 
-    page.run_task(reveal_when_ready)
+    retry.on_click = lambda _event: page.run_task(reconnect)
+
+    async def initial_connection() -> None:
+        for attempt in range(1, 11):
+            if await asyncio.to_thread(_server_available, server_url):
+                await reconnect(force=True)
+                return
+            status.value = f"Aguardando o servidor central... tentativa {attempt}/10"
+            page.update()
+            await asyncio.sleep(0.6)
+        await show_offline()
+
+    async def connection_watchdog() -> None:
+        """Detecta perda e retorno da LAN sem depender do estado interno do WebView/FletApp."""
+
+        while True:
+            await asyncio.sleep(2.5)
+            available = await asyncio.to_thread(_server_available, server_url)
+            if available:
+                state["failures"] = 0
+                if not state["online"] and not state["reconnecting"]:
+                    await reconnect(force=True)
+                continue
+            if not state["online"]:
+                continue
+            state["failures"] = int(state["failures"]) + 1
+            if state["failures"] >= 2:
+                await show_offline()
+
+    page.run_task(initial_connection)
+    page.run_task(connection_watchdog)
 
 
 def _build_page_handler(
@@ -544,6 +607,7 @@ def _build_page_handler(
     *,
     ready_file: Path | None = None,
     no_tray: bool = False,
+    coordinator: SingleInstanceCoordinator | None = None,
 ):
     """Devolve um handler realmente assíncrono para que o Flet aguarde a montagem da página."""
 
@@ -553,6 +617,7 @@ def _build_page_handler(
             server_url,
             ready_file=ready_file,
             no_tray=no_tray,
+            coordinator=coordinator,
         )
 
     return page_handler
@@ -568,16 +633,27 @@ def main() -> None:
     if arguments.check_only:
         raise SystemExit(0 if _server_available(server_url, timeout=3) else 20)
 
+    coordinator: SingleInstanceCoordinator | None = None
+    if not arguments.no_single_instance:
+        coordinator = SingleInstanceCoordinator()
+        if not coordinator.acquire_or_signal():
+            return
+
     ready_file = Path(arguments.ready_file).expanduser() if arguments.ready_file.strip() else None
     assets_directory = Path(__file__).resolve().parent / "assets"
-    ft.run(
-        _build_page_handler(
-            server_url,
-            ready_file=ready_file,
-            no_tray=arguments.no_tray,
-        ),
-        assets_dir=str(assets_directory),
-    )
+    try:
+        ft.run(
+            _build_page_handler(
+                server_url,
+                ready_file=ready_file,
+                no_tray=arguments.no_tray,
+                coordinator=coordinator,
+            ),
+            assets_dir=str(assets_directory),
+        )
+    finally:
+        if coordinator is not None:
+            coordinator.close()
 
 
 if __name__ == "__main__":
