@@ -122,7 +122,6 @@ class SingleInstanceCoordinator:
         handle = self._mutex_handle
         self._mutex_handle = None
         if handle and sys.platform == "win32":
-            import ctypes
             from ctypes import wintypes
 
             with suppress(Exception):
