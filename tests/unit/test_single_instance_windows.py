@@ -14,9 +14,15 @@ def test_second_windows_instance_signals_primary_instead_of_opening_again() -> N
         assert primary.acquire_or_signal() is True
         assert secondary.acquire_or_signal() is False
 
+        signaled = False
         deadline = time.monotonic() + 3.0
-        while time.monotonic() < deadline and not primary.consume_activation_request():
+        while time.monotonic() < deadline:
+            if primary.consume_activation_request():
+                signaled = True
+                break
             time.sleep(0.05)
+
+        assert signaled is True
         assert primary.consume_activation_request() is False
         assert primary.activation_requested.is_set() is False
     finally:
