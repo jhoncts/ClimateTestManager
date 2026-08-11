@@ -48,15 +48,28 @@ class EmailSettings:
     use_tls: bool = True
 
     @property
-    def is_configured(self) -> bool:
+    def has_credentials(self) -> bool:
+        """Indica se já é possível testar o SMTP, mesmo com automação desligada."""
+
         return bool(
-            self.enabled
-            and self.host
+            self.host
             and self.sender
             and self.username
             and self.password
             and 1 <= self.port <= 65535
         )
+
+    @property
+    def is_configured(self) -> bool:
+        """Compatibilidade: configuração significa credenciais completas."""
+
+        return self.has_credentials
+
+    @property
+    def automatic_enabled(self) -> bool:
+        """Indica se as credenciais existem e o envio automático foi habilitado."""
+
+        return self.enabled and self.has_credentials
 
 
 def normalize_smtp_password(host: str, password: str) -> str:
