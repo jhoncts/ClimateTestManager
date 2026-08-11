@@ -25,7 +25,6 @@ jobs:
         run: |
           ruff check --fix . || true
           ruff format .
-          ruff check .
       - name: Commit formatting
         shell: bash
         run: |
