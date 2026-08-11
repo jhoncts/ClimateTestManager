@@ -1,6 +1,9 @@
 """Regressões encontradas durante o primeiro uso real em rede local."""
 
 import base64
+import json
+import socket
+import time
 from io import BytesIO
 from unittest.mock import patch
 
@@ -9,7 +12,11 @@ from PIL import Image
 
 from climatetest_manager.client_bridge import DesktopToastCommand
 from climatetest_manager.config import EmailSettings
-from climatetest_manager.services.network import get_server_identity
+from climatetest_manager.services.network import (
+    DISCOVERY_REQUEST,
+    DiscoveryResponder,
+    get_server_identity,
+)
 from climatetest_manager.services.updates import is_newer_version, parse_release_payload
 from climatetest_manager.ui.components.dialogs import styled_dialog
 from climatetest_manager.ui.components.helpers import _optimized_profile_photo_source
@@ -92,6 +99,32 @@ def test_server_identity_exposes_hostname_and_addresses() -> None:
     assert identity.addresses == ("192.168.1.50",)
     assert identity.preferred_url == "http://192.168.1.50:8550"
     assert identity.hostname_url == "http://LAB-SERVER:8550"
+
+
+def test_discovery_responder_answers_signed_local_probe() -> None:
+    probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    probe.bind(("127.0.0.1", 0))
+    discovery_port = probe.getsockname()[1]
+    probe.close()
+
+    responder = DiscoveryResponder(app_port=18552, discovery_port=discovery_port)
+    responder.start()
+    time.sleep(0.08)
+
+    client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        client.settimeout(1.5)
+        client.sendto(DISCOVERY_REQUEST, ("127.0.0.1", discovery_port))
+        data, _remote = client.recvfrom(2048)
+    finally:
+        client.close()
+        responder.stop()
+
+    payload = json.loads(data.decode("utf-8"))
+    assert payload["service"] == "ClimateTestManager"
+    assert payload["protocol"] == 1
+    assert payload["port"] == 18552
+    assert payload["hostname"]
 
 
 def test_update_parser_requires_newer_release_and_windows_installer() -> None:
