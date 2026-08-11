@@ -1,0 +1,137 @@
+name: v0.8.0 temporary fixups
+
+on:
+  push:
+    branches:
+      - "feat/v0.8.0-production-polish"
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/v0.8.0-production-polish
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Apply targeted fixes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def update(path: str, replacements: list[tuple[str, str]]) -> None:
+              file = Path(path)
+              text = file.read_text(encoding="utf-8")
+              original = text
+              for old, new in replacements:
+                  text = text.replace(old, new)
+              if text != original:
+                  file.write_text(text, encoding="utf-8")
+
+          update(
+              "src/climatetest_manager/production_app.py",
+              [
+                  ('"deadline": item.deadline,', '"deadline": item.deadline_condition,'),
+                  (
+                      'f"Ensaio #{test_id} removido da operação. A exclusão permaneceu registrada na auditoria."',
+                      'f"Ensaio #{test_id} removido da operação. "\n'
+                      '            "A exclusão permaneceu registrada na auditoria."',
+                  ),
+              ],
+          )
+          update(
+              "src/climatetest_manager/ui/interaction.py",
+              [
+                  (
+                      'if isinstance(control, _CLICKABLE_TYPES):\n'
+                      '        if hasattr(control, "mouse_cursor"):\n'
+                      '            with suppress(Exception):\n'
+                      '                control.mouse_cursor = ft.MouseCursor.CLICK',
+                      'if isinstance(control, _CLICKABLE_TYPES) and hasattr(control, "mouse_cursor"):\n'
+                      '        with suppress(Exception):\n'
+                      '            control.mouse_cursor = ft.MouseCursor.CLICK',
+                  ),
+              ],
+          )
+          update(
+              "src/climatetest_manager/ui/offline.py",
+              [
+                  (
+                      '"Consulta do último estado sincronizado • nenhuma alteração é permitida",',
+                      '("Consulta do último estado sincronizado • "\n'
+                      '                                             "nenhuma alteração é permitida"),',
+                  ),
+                  (
+                      'f"Sem comunicação com {server_url}. O aplicativo continuará tentando "\n'
+                      '                                "reconectar em segundo plano. Não feche o servidor para trabalhar offline.",',
+                      '(f"Sem comunicação com {server_url}. O aplicativo continuará "\n'
+                      '                                 "tentando reconectar em segundo plano. Não feche o servidor "\n'
+                      '                                 "para trabalhar offline."),',
+                  ),
+              ],
+          )
+          notifications = Path("src/climatetest_manager/ui/views/notifications.py")
+          text = notifications.read_text(encoding="utf-8")
+          if "from contextlib import suppress" not in text:
+              text = text.replace(
+                  "from collections.abc import Callable\n",
+                  "from collections.abc import Callable\nfrom contextlib import suppress\n",
+              )
+          text = text.replace(
+              '        try:\n'
+              '            mark_selected.page.update(mark_selected, delete_selected, selection_text)\n'
+              '        except RuntimeError:\n'
+              '            pass',
+              '        with suppress(RuntimeError):\n'
+              '            mark_selected.page.update(mark_selected, delete_selected, selection_text)',
+          )
+          notifications.write_text(text, encoding="utf-8")
+
+          update(
+              "src/climatetest_manager/ui/views/polished_test_details.py",
+              [
+                  (
+                      'f"{details.chamber_duration_hours} h (+{details.chamber_duration_tolerance_hours} h)",',
+                      '(f"{details.chamber_duration_hours} h "\n'
+                      '                     f"(+{details.chamber_duration_tolerance_hours} h)"),',
+                  ),
+                  (
+                      'f"{details.drying_duration_hours} h (+{details.drying_duration_tolerance_hours} h)",',
+                      '(f"{details.drying_duration_hours} h "\n'
+                      '                                 f"(+{details.drying_duration_tolerance_hours} h)"),',
+                  ),
+                  ('leading=ft.Icons.HISTORY,', 'leading=ft.Icon(ft.Icons.HISTORY),'),
+                  ('leading=ft.Icons.CALENDAR_MONTH_OUTLINED,', 'leading=ft.Icon(ft.Icons.CALENDAR_MONTH_OUTLINED),'),
+              ],
+          )
+          update(
+              "src/climatetest_manager/ui/views/polished_new_test.py",
+              [
+                  ('leading=ft.Icons.AIR,', 'leading=ft.Icon(ft.Icons.AIR),'),
+              ],
+          )
+          update(
+              "src/climatetest_manager/ui/components/table17.py",
+              [('min_height=58 if not header else 42,', 'height=58 if not header else 42,')],
+          )
+          PY
+          python -m pip install ruff==0.15.22
+          ruff check --fix . || true
+          ruff format .
+      - name: Commit fixes
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git commit -m "fix: ajustar lint e compatibilidade da v0.8.0"
+          git push origin HEAD:feat/v0.8.0-production-polish
