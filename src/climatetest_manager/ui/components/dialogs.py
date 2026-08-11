@@ -6,6 +6,7 @@ from contextlib import suppress
 import flet as ft
 
 from climatetest_manager.domain.audit import MAX_REASON_LENGTH
+from climatetest_manager.ui.interaction import apply_interaction_polish
 from climatetest_manager.ui.theme import AppColors
 
 OTHER_REASON = "Outros"
@@ -158,7 +159,7 @@ def styled_dialog(
     """Monta a superfície visual comum de todos os diálogos da aplicação."""
 
     _enable_remote_value_sync(content)
-    return ft.AlertDialog(
+    dialog = ft.AlertDialog(
         modal=True,
         scrollable=scrollable,
         bgcolor=AppColors.SURFACE,
@@ -172,6 +173,7 @@ def styled_dialog(
         actions=actions,
         actions_alignment=ft.MainAxisAlignment.END,
     )
+    return apply_interaction_polish(dialog)  # type: ignore[return-value]
 
 
 class ReasonSelector:
