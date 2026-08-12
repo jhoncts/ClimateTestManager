@@ -21,7 +21,7 @@ class ClientR5Tests(unittest.TestCase):
         request = urlopen.call_args.args[0]
         self.assertEqual(
             request.full_url,
-            "http://127.0.0.1:8550/assets/server-build.txt",
+            "http://127.0.0.1:8550/server-build.txt",
         )
 
     def test_missing_marker_is_treated_as_incompatible_server(self) -> None:
