@@ -138,25 +138,30 @@ def _cell(
     )
 
 
-def _row(rule: _RuleRow, active_rule_id: str | None) -> ft.Row:
-    return ft.Row(
-        spacing=0,
-        vertical_alignment=ft.CrossAxisAlignment.STRETCH,
-        controls=[
-            _cell(rule.epls, width=150),
-            _cell(rule.ts_band, width=155),
-            ft.Container(
-                expand=True,
-                content=_cell(rule.option_a, active=active_rule_id == rule.rule_a),
-            ),
-            ft.Container(
-                expand=True,
-                content=_cell(
-                    rule.option_b,
-                    active=bool(rule.rule_b and active_rule_id == rule.rule_b),
+def _row(rule: _RuleRow, active_rule_id: str | None) -> ft.Container:
+    row_active = active_rule_id in {rule.rule_a, rule.rule_b}
+    return ft.Container(
+        border=(ft.Border.all(2, AppColors.PRIMARY) if row_active else None),
+        bgcolor=AppColors.PRIMARY_LIGHT if row_active else None,
+        content=ft.Row(
+            spacing=0,
+            vertical_alignment=ft.CrossAxisAlignment.STRETCH,
+            controls=[
+                _cell(rule.epls, width=150, active=row_active),
+                _cell(rule.ts_band, width=155, active=row_active),
+                ft.Container(
+                    expand=True,
+                    content=_cell(rule.option_a, active=active_rule_id == rule.rule_a),
                 ),
-            ),
-        ],
+                ft.Container(
+                    expand=True,
+                    content=_cell(
+                        rule.option_b,
+                        active=bool(rule.rule_b and active_rule_id == rule.rule_b),
+                    ),
+                ),
+            ],
+        ),
     )
 
 

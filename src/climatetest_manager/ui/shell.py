@@ -44,10 +44,10 @@ def build_production_shell(
         border_radius=12,
         bgcolor=AppColors.SURFACE,
         border=ft.Border.all(1, AppColors.GLASS_BORDER),
-        padding=3,
+        padding=1,
         alignment=ft.Alignment.CENTER,
         content=ft.Image(
-            src="brand/climatetest-logo.png",
+            src="brand/climatetest-logo-ui.png",
             fit=ft.BoxFit.CONTAIN,
             filter_quality=ft.FilterQuality.HIGH,
             anti_alias=True,
@@ -210,8 +210,6 @@ def build_production_shell(
         width=layout.sidebar_width,
         bgcolor=AppColors.NAV_BACKGROUND,
         padding=ft.Padding.all(layout.sidebar_padding),
-        animate_offset=ft.Animation(150, ft.AnimationCurve.EASE_OUT_CUBIC),
-        animate_opacity=ft.Animation(120, ft.AnimationCurve.EASE_OUT),
         content=ft.Column(
             spacing=8,
             horizontal_alignment=(

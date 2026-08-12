@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from contextlib import suppress
+from inspect import iscoroutinefunction
 
 import flet as ft
 
@@ -18,18 +19,71 @@ _CLICKABLE_TYPES = (
     ft.Radio,
     ft.Dropdown,
 )
+_EVENT_NAMES = ("on_click", "on_change", "on_select", "on_hover", "on_submit")
+
+
+def _activate_control_theme(control: ft.Control) -> None:
+    """Restaura a paleta do dispositivo antes de qualquer callback tardio."""
+
+    with suppress(Exception):
+        page = control.page
+        mode = getattr(page, "_climatetest_theme_mode", None)
+        if mode:
+            AppColors.apply_mode(str(mode))
+
+
+def _theme_aware_handler(control: ft.Control, handler):
+    if handler is None or getattr(handler, "_climatetest_theme_aware", False):
+        return handler
+    if iscoroutinefunction(handler):
+
+        async def wrapped(event=None):
+            _activate_control_theme(control)
+            return await handler(event)
+
+    else:
+
+        def wrapped(event=None):
+            _activate_control_theme(control)
+            return handler(event)
+
+    wrapped._climatetest_theme_aware = True
+    return wrapped
+
+
+def _wrap_events(control: ft.Control) -> None:
+    for event_name in _EVENT_NAMES:
+        with suppress(Exception):
+            handler = getattr(control, event_name, None)
+            if callable(handler):
+                setattr(control, event_name, _theme_aware_handler(control, handler))
+
+
+def _polish_button(control: ft.Control) -> None:
+    with suppress(Exception):
+        control.mouse_cursor = ft.MouseCursor.CLICK
+    if not isinstance(control, (ft.Button, ft.TextButton, ft.IconButton)):
+        return
+    with suppress(Exception):
+        if control.style is None:
+            control.style = ft.ButtonStyle(
+                overlay_color={
+                    ft.ControlState.HOVERED: AppColors.INTERACTIVE_HOVER,
+                    ft.ControlState.PRESSED: AppColors.INTERACTIVE_PRESSED,
+                },
+                elevation={
+                    ft.ControlState.HOVERED: 3,
+                    ft.ControlState.PRESSED: 0,
+                },
+            )
 
 
 def apply_interaction_polish(control: ft.Control) -> ft.Control:
-    """Aplica cursor de clique e estados visuais sem reescrever cada tela.
+    """Aplica cursor, hover e contexto de tema sem transformar/reescalar texto ou ícones."""
 
-    O Flet já fornece estados Material para os botões. Aqui nós apenas garantimos uma
-    linguagem consistente para mouse/hover e propagamos isso pelos controles compostos.
-    """
-
-    if isinstance(control, _CLICKABLE_TYPES) and hasattr(control, "mouse_cursor"):
-        with suppress(Exception):
-            control.mouse_cursor = ft.MouseCursor.CLICK
+    _wrap_events(control)
+    if isinstance(control, _CLICKABLE_TYPES):
+        _polish_button(control)
 
     if isinstance(control, ft.Switch):
         with suppress(Exception):
@@ -70,7 +124,7 @@ def hoverable_navigation_surface(
     on_click: Callable[[], None] | None,
     badge_count: int = 0,
 ) -> ft.Container:
-    """Item lateral nítido e estável, sem escalar texto ou ícones durante o hover."""
+    """Item lateral com baseline folgado e sem animações que rasterizem as letras."""
 
     nav_selected = AppColors.NAV_SELECTED
     nav_hover = AppColors.NAV_HOVER
@@ -81,20 +135,21 @@ def hoverable_navigation_surface(
     label_control = ft.Text(
         label,
         size=13,
+        height=1.35,
         weight=ft.FontWeight.BOLD if selected else ft.FontWeight.W_500,
         color=selected_color,
         visible=not compact,
         no_wrap=True,
+        max_lines=1,
     )
     icon_control = ft.Icon(icon, size=icon_size, color=selected_color)
     surface = ft.Container(
-        height=46,
+        height=52,
         border_radius=12,
         bgcolor=nav_selected if selected else None,
-        padding=ft.Padding.symmetric(horizontal=12 if not compact else 8, vertical=8),
+        padding=ft.Padding.symmetric(horizontal=12 if not compact else 8, vertical=9),
         alignment=ft.Alignment.CENTER if compact else ft.Alignment.CENTER_LEFT,
         tooltip=label if compact else None,
-        animate=ft.Animation(120, ft.AnimationCurve.EASE_OUT_CUBIC),
         on_click=(lambda _event: on_click()) if on_click else None,
         badge=(
             ft.Badge(
@@ -107,6 +162,7 @@ def hoverable_navigation_surface(
         ),
         content=ft.Row(
             alignment=ft.MainAxisAlignment.CENTER if compact else ft.MainAxisAlignment.START,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
             spacing=0 if compact else 11,
             controls=[icon_control, label_control],
         ),
@@ -130,7 +186,7 @@ def hoverable_navigation_surface(
             surface.update()
 
     if on_click is not None:
-        surface.on_hover = on_hover
+        surface.on_hover = _theme_aware_handler(surface, on_hover)
         with suppress(Exception):
             surface.mouse_cursor = ft.MouseCursor.CLICK
     return surface
@@ -143,11 +199,7 @@ def glass_surface(
     radius: int = 18,
     accent: bool = False,
 ) -> ft.Container:
-    """Simula um material translúcido discreto para cartões de apoio.
-
-    Não tenta reproduzir blur real do compositor do Windows. A intenção é manter o efeito
-    visual leve e previsível em estações com hardware diferente.
-    """
+    """Material leve e previsível, sem blur ou transformações que reduzam nitidez."""
 
     return ft.Container(
         border_radius=radius,

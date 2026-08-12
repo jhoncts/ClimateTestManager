@@ -79,8 +79,8 @@ class PolishedNewTestView(NewTestView):
                         spacing=12,
                         run_spacing=10,
                         controls=[
-                            ft.Container(col={"xs": 12, "sm": 8}, content=self.process_number),
-                            ft.Container(col={"xs": 12, "sm": 4}, content=self.sample_quantity),
+                            ft.Container(col={"xs": 12, "sm": 7}, content=self.process_number),
+                            ft.Container(col={"xs": 12, "sm": 5}, content=self.sample_quantity),
                         ],
                     ),
                     self.product,
@@ -272,7 +272,7 @@ class PolishedNewTestView(NewTestView):
             padding=18,
         )
 
-    def _build(self) -> ft.ListView:
+    def _build(self) -> ft.Column:
         left: list[ft.Control] = [self._identity_panel(), self._notes_panel()]
         if self._details:
             left.append(
@@ -332,9 +332,11 @@ class PolishedNewTestView(NewTestView):
                 ),
             ],
         )
-        return ft.ListView(
+        return ft.Column(
             expand=True,
+            scroll=ft.ScrollMode.AUTO,
             spacing=16,
+            horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
             controls=[
                 header,
                 self.error_banner,

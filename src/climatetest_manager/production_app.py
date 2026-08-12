@@ -82,6 +82,7 @@ async def _load_remembered_token(page: ft.Page) -> str | None:
 def _configure_page(page: ft.Page, theme_mode: str) -> None:
     mode = AppColors.normalize_mode(theme_mode)
     AppColors.apply_mode(mode)
+    page._climatetest_theme_mode = mode
     page.title = "ClimateTest Manager"
     page.theme_mode = ft.ThemeMode.DARK if _dark_palette(mode) else ft.ThemeMode.LIGHT
     page.theme = legacy._application_theme()
@@ -117,6 +118,7 @@ class ProductionClimateTestApplication(legacy.ClimateTestApplication):
     def _prepare_theme(self) -> None:
         self._theme_mode = AppColors.normalize_mode(self._theme_mode)
         AppColors.apply_mode(self._theme_mode)
+        self._page._climatetest_theme_mode = self._theme_mode
         self._page.theme_mode = (
             ft.ThemeMode.DARK if _dark_palette(self._theme_mode) else ft.ThemeMode.LIGHT
         )
@@ -262,6 +264,12 @@ class ProductionClimateTestApplication(legacy.ClimateTestApplication):
                     item.message,
                     command_id=f"{item.source_kind}-{item.source_id}",
                 )
+                if item.source_kind == "incident" and self._current_user.is_admin:
+                    self._prepare_theme()
+                    first_line = (
+                        item.message.splitlines()[0] if item.message else "Nova falha registrada"
+                    )
+                    self._show_message(f"{item.title}: {first_line}")
                 if delivered:
                     # O host desktop consome uma chave por vez; evita sobrescrever avisos em rajada.
                     await asyncio.sleep(0.8)

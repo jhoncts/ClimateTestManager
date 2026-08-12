@@ -1,5 +1,6 @@
 """Configuração da janela principal da aplicação."""
 
+import asyncio
 import ipaddress
 import os
 from collections.abc import Callable
@@ -61,6 +62,7 @@ from climatetest_manager.services.notifications import (
     EmailDeliveryReceipt,
     EmailNotificationProvider,
     WindowsToastProvider,
+    deliver_pending_incident_emails,
 )
 from climatetest_manager.ui.components import (
     dialog_actions,
@@ -97,6 +99,7 @@ from climatetest_manager.ui.views.tests_list import build_tests_list_view
 from climatetest_manager.ui.views.users import build_users_view
 
 _SERVER_CONTEXT_LOCK = Lock()
+_INCIDENT_EMAIL_LOCK = Lock()
 _SERVER_ENGINE: Engine | None = None
 _SERVER_REPOSITORY: ClimateTestRepository | None = None
 _SERVER_AUTH_SERVICE: AuthenticationService | None = None
@@ -886,9 +889,32 @@ class ClimateTestApplication:
                 immediate_action=immediate_action,
                 reported_by=self._current_user.actor_label,
             )
+            self._page.run_task(self._deliver_incident_email_queue)
         except (OSError, ValueError) as error:
             return str(error)
         return None
+
+    async def _deliver_incident_email_queue(self) -> None:
+        """Tenta o e-mail logo após o registro sem bloquear a janela do operador."""
+
+        try:
+            await asyncio.to_thread(self._deliver_incident_email_queue_sync)
+        except Exception:
+            # A tarefa agendada continua sendo a retentativa auditável.
+            return
+
+    def _deliver_incident_email_queue_sync(self) -> None:
+        with _INCIDENT_EMAIL_LOCK:
+            settings = load_email_settings()
+            if not settings.automatic_enabled:
+                return
+            recipients = self._auth_service.notification_admin_emails()
+            if not recipients:
+                return
+            deliver_pending_incident_emails(
+                self._repository,
+                EmailNotificationProvider(settings, recipients),
+            )
 
     def _resolve_system_incident(
         self,

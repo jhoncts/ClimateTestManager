@@ -192,7 +192,8 @@ def test_production_shell_and_polished_views_build() -> None:
         assert isinstance(shell, ft.Row)
 
         new_test = PolishedNewTestView(on_cancel=lambda: None, on_save=lambda _command: None)
-        assert isinstance(new_test.root, ft.ListView)
+        assert isinstance(new_test.root, ft.Column)
+        assert new_test.root.scroll == ft.ScrollMode.AUTO
 
         service = ClimateTestService(
             harness.repository,
@@ -212,7 +213,8 @@ def test_production_shell_and_polished_views_build() -> None:
             on_admin_delete=lambda _reason: None,
             on_change_timestamp=lambda _name, _value, _reason: None,
         )
-        assert isinstance(details_view, ft.ListView)
+        assert isinstance(details_view, ft.Column)
+        assert details_view.scroll == ft.ScrollMode.AUTO
 
 
 def test_offline_view_is_read_only_and_builds_with_snapshot() -> None:

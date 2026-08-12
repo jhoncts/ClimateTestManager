@@ -461,10 +461,23 @@ class DashboardView:
             )
         )
         if self._read_only:
-            button = ft.Button(
-                content=ft.Text("Somente leitura", no_wrap=True, max_lines=1),
-                icon=ft.Icons.VISIBILITY_OUTLINED,
-                disabled=True,
+            button = ft.Container(
+                border_radius=18,
+                bgcolor=AppColors.INFO_LIGHT,
+                padding=ft.Padding.symmetric(horizontal=12, vertical=8),
+                content=ft.Row(
+                    tight=True,
+                    spacing=7,
+                    controls=[
+                        ft.Icon(ft.Icons.VISIBILITY_OUTLINED, size=18, color=AppColors.INFO),
+                        ft.Text(
+                            "Consulta",
+                            no_wrap=True,
+                            weight=ft.FontWeight.BOLD,
+                            color=AppColors.INFO,
+                        ),
+                    ],
+                ),
             )
         return ft.Container(
             col={"xs": 12, "lg": 6},

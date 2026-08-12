@@ -7,7 +7,7 @@ from contextvars import ContextVar
 THEME_OPTIONS = (
     ("light", "Claro", "Leve e neutro"),
     ("amber", "Âmbar", "Laranja, branco e grafite com alto contraste"),
-    ("ice", "Gelo", "Claro frio em azul e branco"),
+    ("lavender", "Lavanda", "Lilás claro com contraste técnico"),
     ("dark", "Escuro", "Confortável em ambientes com pouca luz"),
     ("graphite", "Grafite", "Escuro neutro com menos saturação"),
     ("ocean", "Oceano", "Azul profundo com destaque técnico"),
@@ -73,34 +73,34 @@ _PALETTES: dict[str, dict[str, str]] = {
         "INTERACTIVE_PRESSED": "#2AD85F00",
         "ACCENT_GLOW": "#34D85F00",
     },
-    "ice": {
-        "PRIMARY": "#1677A6",
-        "PRIMARY_LIGHT": "#DDF2FA",
-        "PAGE_BACKGROUND": "#F0F7FA",
-        "NAV_BACKGROUND": "#FFFFFF",
-        "NAV_SELECTED": "#D9F0F8",
-        "NAV_HOVER": "#EDF8FC",
-        "NAV_TEXT": "#40566A",
+    "lavender": {
+        "PRIMARY": "#6D5BD0",
+        "PRIMARY_LIGHT": "#E9E4FF",
+        "PAGE_BACKGROUND": "#F4F1FB",
+        "NAV_BACKGROUND": "#FCFBFF",
+        "NAV_SELECTED": "#E9E3FF",
+        "NAV_HOVER": "#F1EDFF",
+        "NAV_TEXT": "#514A68",
         "SURFACE": "#FFFFFF",
-        "TEXT_PRIMARY": "#102433",
-        "TEXT_SECONDARY": "#60788B",
-        "DIVIDER": "#D7E7EF",
-        "WARNING": "#C26A00",
-        "WARNING_LIGHT": "#FFF0D8",
-        "DANGER": "#C93643",
-        "DANGER_LIGHT": "#FCE4E7",
-        "INFO": "#2867B2",
-        "INFO_LIGHT": "#E0ECFA",
-        "DRYING": "#7460B7",
-        "DRYING_LIGHT": "#ECE9F8",
+        "TEXT_PRIMARY": "#201B33",
+        "TEXT_SECONDARY": "#716A86",
+        "DIVIDER": "#E3DDF0",
+        "WARNING": "#B56A00",
+        "WARNING_LIGHT": "#FFF0D5",
+        "DANGER": "#C63E57",
+        "DANGER_LIGHT": "#FCE4EA",
+        "INFO": "#4866B1",
+        "INFO_LIGHT": "#E4EAF8",
+        "DRYING": "#8B5FC7",
+        "DRYING_LIGHT": "#EFE4FA",
         "WHITE": "#FFFFFF",
         "GLASS_SURFACE": "#F7FFFFFF",
-        "GLASS_SURFACE_ACCENT": "#F2F4FBFE",
-        "GLASS_BORDER": "#A9CDE2EC",
-        "SURFACE_SHADOW": "#17102433",
-        "INTERACTIVE_HOVER": "#181677A6",
-        "INTERACTIVE_PRESSED": "#2B1677A6",
-        "ACCENT_GLOW": "#341677A6",
+        "GLASS_SURFACE_ACCENT": "#F3FBF9FF",
+        "GLASS_BORDER": "#B5DDD6ED",
+        "SURFACE_SHADOW": "#18201B33",
+        "INTERACTIVE_HOVER": "#1C6D5BD0",
+        "INTERACTIVE_PRESSED": "#306D5BD0",
+        "ACCENT_GLOW": "#386D5BD0",
     },
     "dark": {
         "PRIMARY": "#42D7C8",
@@ -245,6 +245,8 @@ class AppColors(metaclass=_AppColorsMeta):
     @classmethod
     def normalize_mode(cls, mode: str | None) -> str:
         normalized = (mode or "light").strip().casefold()
+        if normalized == "ice":
+            normalized = "lavender"
         return normalized if normalized in THEME_KEYS else "light"
 
     @classmethod

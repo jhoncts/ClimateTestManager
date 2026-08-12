@@ -4,7 +4,7 @@ from datetime import datetime
 
 from climatetest_manager.services.auth import UserSummary
 from climatetest_manager.ui.formatters import format_datetime
-from climatetest_manager.ui.theme import THEME_OPTIONS
+from climatetest_manager.ui.theme import THEME_OPTIONS, AppColors
 
 
 def _user(role: str) -> UserSummary:
@@ -38,4 +38,5 @@ def test_operator_operates_and_viewer_is_read_only() -> None:
 
 def test_theme_catalog_has_three_light_and_three_dark_options() -> None:
     keys = [item[0] for item in THEME_OPTIONS]
-    assert keys == ["light", "amber", "ice", "dark", "graphite", "ocean"]
+    assert keys == ["light", "amber", "lavender", "dark", "graphite", "ocean"]
+    assert AppColors.normalize_mode("ice") == "lavender"

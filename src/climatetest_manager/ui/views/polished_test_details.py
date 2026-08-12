@@ -174,9 +174,11 @@ class PolishedTestDetailsView(TestDetailsView):
                 ),
             ],
         )
-        return ft.ListView(
+        return ft.Column(
             expand=True,
+            scroll=ft.ScrollMode.AUTO,
             spacing=15,
+            horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
             controls=[
                 header,
                 self._summary_panel(),
