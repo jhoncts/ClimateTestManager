@@ -70,10 +70,14 @@ def hoverable_navigation_surface(
     on_click: Callable[[], None] | None,
     badge_count: int = 0,
 ) -> ft.Container:
-    """Cria um item de menu com resposta suave ao mouse e sem poluição visual."""
+    """Item lateral nítido e estável, sem escalar texto ou ícones durante o hover."""
 
-    base_bg = AppColors.NAV_SELECTED if selected else AppColors.NAV_BACKGROUND
-    selected_color = AppColors.PRIMARY if selected else AppColors.NAV_TEXT
+    nav_selected = AppColors.NAV_SELECTED
+    nav_hover = AppColors.NAV_HOVER
+    nav_text = AppColors.NAV_TEXT
+    primary = AppColors.PRIMARY
+    text_primary = AppColors.TEXT_PRIMARY
+    selected_color = primary if selected else nav_text
     label_control = ft.Text(
         label,
         size=13,
@@ -86,12 +90,11 @@ def hoverable_navigation_surface(
     surface = ft.Container(
         height=46,
         border_radius=12,
-        bgcolor=base_bg,
+        bgcolor=nav_selected if selected else None,
         padding=ft.Padding.symmetric(horizontal=12 if not compact else 8, vertical=8),
         alignment=ft.Alignment.CENTER if compact else ft.Alignment.CENTER_LEFT,
         tooltip=label if compact else None,
-        animate=ft.Animation(150, ft.AnimationCurve.EASE_OUT_CUBIC),
-        animate_scale=ft.Animation(130, ft.AnimationCurve.EASE_OUT),
+        animate=ft.Animation(120, ft.AnimationCurve.EASE_OUT_CUBIC),
         on_click=(lambda _event: on_click()) if on_click else None,
         badge=(
             ft.Badge(
@@ -110,19 +113,19 @@ def hoverable_navigation_surface(
     )
 
     def on_hover(event: ft.HoverEvent) -> None:
+        hovering = event.data == "true"
         if selected:
-            surface.bgcolor = AppColors.NAV_SELECTED
-            surface.scale = 1.01 if event.data == "true" else 1.0
-        elif event.data == "true":
-            surface.bgcolor = AppColors.NAV_HOVER
-            surface.scale = 1.012
-            icon_control.color = AppColors.PRIMARY
-            label_control.color = AppColors.TEXT_PRIMARY
+            surface.bgcolor = nav_selected
+            icon_control.color = primary
+            label_control.color = primary
+        elif hovering:
+            surface.bgcolor = nav_hover
+            icon_control.color = primary
+            label_control.color = text_primary
         else:
-            surface.bgcolor = AppColors.NAV_BACKGROUND
-            surface.scale = 1.0
-            icon_control.color = AppColors.NAV_TEXT
-            label_control.color = AppColors.NAV_TEXT
+            surface.bgcolor = None
+            icon_control.color = nav_text
+            label_control.color = nav_text
         with suppress(RuntimeError):
             surface.update()
 

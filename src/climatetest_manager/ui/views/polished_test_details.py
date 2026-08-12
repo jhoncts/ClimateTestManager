@@ -70,10 +70,12 @@ class PolishedTestDetailsView(TestDetailsView):
         on_change_timestamp,
         on_admin_delete: Callable[[str], None] | None = None,
         on_advance_for_testing=None,
+        read_only: bool = False,
     ) -> None:
         self._polished_on_back = on_back
         self._polished_on_edit = on_edit
         self._polished_admin_delete = on_admin_delete
+        self._read_only = read_only
         super().__init__(
             details,
             on_back=on_back,
@@ -90,14 +92,16 @@ class PolishedTestDetailsView(TestDetailsView):
 
     def _build_polished_root(self) -> ft.Column:
         details = self._details
-        header_actions: list[ft.Control] = [
-            ft.Button(
-                content="Corrigir dados",
-                icon=ft.Icons.EDIT_OUTLINED,
-                on_click=lambda _event: self._polished_on_edit(),
+        header_actions: list[ft.Control] = []
+        if not self._read_only:
+            header_actions.append(
+                ft.Button(
+                    content="Corrigir dados",
+                    icon=ft.Icons.EDIT_OUTLINED,
+                    on_click=lambda _event: self._polished_on_edit(),
+                )
             )
-        ]
-        if any(
+        if not self._read_only and any(
             (
                 details.chamber_started_at,
                 details.chamber_ended_at,
@@ -170,11 +174,9 @@ class PolishedTestDetailsView(TestDetailsView):
                 ),
             ],
         )
-        return ft.Column(
+        return ft.ListView(
             expand=True,
-            scroll=ft.ScrollMode.AUTO,
             spacing=15,
-            horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
             controls=[
                 header,
                 self._summary_panel(),
@@ -342,6 +344,20 @@ class PolishedTestDetailsView(TestDetailsView):
 
     def _action_panel(self) -> ft.Container:
         details = self._details
+        if self._read_only:
+            return glass_surface(
+                ft.Row(
+                    spacing=9,
+                    controls=[
+                        ft.Icon(ft.Icons.VISIBILITY_OUTLINED, color=AppColors.INFO),
+                        ft.Text(
+                            "Perfil de consulta: informações disponíveis somente para leitura.",
+                            color=AppColors.TEXT_SECONDARY,
+                        ),
+                    ],
+                ),
+                padding=16,
+            )
         active = {"Aguardando", "Na Câmara", "Em Secagem"}
         if details.situation not in active:
             return glass_surface(
@@ -503,5 +519,5 @@ class PolishedTestDetailsView(TestDetailsView):
         )
 
 
-def build_polished_test_details_view(details: ClimateTestDetails, **kwargs) -> ft.Column:
+def build_polished_test_details_view(details: ClimateTestDetails, **kwargs) -> ft.Control:
     return PolishedTestDetailsView(details, **kwargs).root

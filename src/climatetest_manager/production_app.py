@@ -146,7 +146,7 @@ class ProductionClimateTestApplication(legacy.ClimateTestApplication):
             selected_view=self._selected_view,
             on_dashboard=self.show_dashboard,
             on_tests=self.show_tests,
-            on_new_test=self.show_new_test if self._current_user.is_admin else None,
+            on_new_test=self.show_new_test if self._current_user.can_operate else None,
             on_agenda=self.show_agenda,
             on_history=self.show_history,
             on_notifications=self.show_notifications,
@@ -285,13 +285,7 @@ class ProductionClimateTestApplication(legacy.ClimateTestApplication):
 
     def show_dashboard(self) -> None:
         self._prepare_theme()
-        create_callback = (
-            self.show_new_test
-            if self._current_user.is_admin
-            else lambda: self._show_message(
-                "Somente administradores podem cadastrar novos ensaios.", error=True
-            )
-        )
+        create_callback = self.show_new_test if self._current_user.can_operate else None
         content = build_dashboard(
             self._service.dashboard_summary(),
             self._service.list_dashboard_tests(),
@@ -300,12 +294,13 @@ class ProductionClimateTestApplication(legacy.ClimateTestApplication):
             on_select=self.show_details,
             on_pause_resource=self._pause_resource,
             on_resume_resource=self._resume_resource,
+            read_only=self._current_user.is_viewer,
         )
         self._render(content, selected_view="dashboard")
 
     def show_new_test(self) -> None:
-        if not self._current_user.is_admin:
-            self._show_message("Somente administradores podem cadastrar novos ensaios.", error=True)
+        if not self._current_user.can_operate:
+            self._show_message("Este perfil possui acesso somente para consulta.", error=True)
             return
         if self._selected_view == "new_test" and self._new_test_view is not None:
             return
@@ -319,16 +314,14 @@ class ProductionClimateTestApplication(legacy.ClimateTestApplication):
         self._render(view.root, selected_view="new_test")
 
     def _save_test(self, command) -> None:
-        if not self._current_user.is_admin:
-            self._show_message("Somente administradores podem cadastrar novos ensaios.", error=True)
+        if not self._current_user.can_operate:
+            self._show_message("Este perfil possui acesso somente para consulta.", error=True)
             return
         super()._save_test(command)
 
     def show_edit_test(self, test_id: int) -> None:
-        if not self._current_user.is_admin:
-            self._show_message(
-                "Somente administradores podem corrigir o cadastro do ensaio.", error=True
-            )
+        if not self._current_user.can_operate:
+            self._show_message("Este perfil possui acesso somente para consulta.", error=True)
             return
         self._prepare_theme()
         view = PolishedNewTestView(
@@ -343,13 +336,7 @@ class ProductionClimateTestApplication(legacy.ClimateTestApplication):
         content = build_tests_list_view(
             self._service.list_tests(),
             on_select=self.show_details,
-            on_new_test=(
-                self.show_new_test
-                if self._current_user.is_admin
-                else lambda: self._show_message(
-                    "Somente administradores podem cadastrar novos ensaios.", error=True
-                )
-            ),
+            on_new_test=(self.show_new_test if self._current_user.can_operate else None),
             on_export=self._export_csv,
         )
         self._render(content, selected_view="tests")
@@ -361,6 +348,7 @@ class ProductionClimateTestApplication(legacy.ClimateTestApplication):
         content = build_polished_test_details_view(
             details,
             on_back=self.show_tests,
+            read_only=self._current_user.is_viewer,
             on_start_chamber=lambda value: self._perform(
                 test_id,
                 lambda: self._service.start_chamber(test_id, value),
@@ -524,7 +512,9 @@ class ProductionClimateTestApplication(legacy.ClimateTestApplication):
             on_configure_backup=(
                 self._configure_backup_directory if self._current_user.is_admin else None
             ),
-            on_report_system_incident=self._report_system_incident,
+            on_report_system_incident=(
+                self._report_system_incident if self._current_user.can_operate else None
+            ),
             on_resolve_system_incident=(
                 self._resolve_system_incident if self._current_user.is_admin else None
             ),

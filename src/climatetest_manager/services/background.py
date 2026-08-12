@@ -1,6 +1,5 @@
-"""Instalação explícita do agente local de notificações no Windows."""
+"""Controle seguro da tarefa de notificações criada pelo instalador Windows."""
 
-import os
 import subprocess
 import sys
 from pathlib import Path
@@ -16,7 +15,7 @@ def _project_root() -> Path:
 
 
 def _notification_action(data_directory: str = "") -> str:
-    """Resolve um executável silencioso tanto no pacote quanto no desenvolvimento."""
+    """Resolve o executável silencioso para diagnóstico e desenvolvimento."""
 
     candidates: list[tuple[Path, Path | None]] = []
     if getattr(sys, "frozen", False):
@@ -26,10 +25,7 @@ def _notification_action(data_directory: str = "") -> str:
     project_root = _project_root()
     candidates.extend(
         [
-            (
-                project_root / "dist" / "ClimateTestManager-v0.6.0" / "ClimateTestNotifier.exe",
-                None,
-            ),
+            (project_root / "dist" / "ClimateTestManager-v0.8.0" / "ClimateTestNotifier.exe", None),
             (project_root / "dist" / "ClimateTestNotifier.exe", None),
             (
                 project_root / ".venv" / "Scripts" / "pythonw.exe",
@@ -47,8 +43,29 @@ def _notification_action(data_directory: str = "") -> str:
             parts.extend(["--data-directory", f'"{data_directory}"'])
         return " ".join(parts)
     raise RuntimeError(
-        "O notificador silencioso não foi encontrado. Gere ou reinstale os executáveis."
+        "O notificador silencioso não foi encontrado. Repare a instalação do aplicativo."
     )
+
+
+def _query_task_xml() -> bytes | str | None:
+    result = subprocess.run(
+        ["schtasks.exe", "/Query", "/TN", TASK_NAME, "/XML"],
+        capture_output=True,
+        check=False,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
+    return result.stdout if result.returncode == 0 else None
+
+
+def _task_exists() -> bool:
+    result = subprocess.run(
+        ["schtasks.exe", "/Query", "/TN", TASK_NAME],
+        capture_output=True,
+        text=True,
+        check=False,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
+    return result.returncode == 0
 
 
 def notification_task_installed() -> bool:
@@ -56,15 +73,9 @@ def notification_task_installed() -> bool:
 
     if sys.platform != "win32":
         return False
-    result = subprocess.run(
-        ["schtasks.exe", "/Query", "/TN", TASK_NAME, "/XML"],
-        capture_output=True,
-        check=False,
-        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-    )
-    if result.returncode != 0:
+    task_xml_output = _query_task_xml()
+    if task_xml_output is None:
         return False
-    task_xml_output = result.stdout
     if isinstance(task_xml_output, bytes) and not task_xml_output.startswith(
         (b"\xff\xfe", b"\xfe\xff", b"<\x00", b"\x00<")
     ):
@@ -80,33 +91,31 @@ def notification_task_installed() -> bool:
 
 
 def configure_notification_task(*, enable: bool) -> None:
-    """Cria ou remove diretamente a tarefa após uma ação consciente do usuário."""
+    """Ativa ou desativa a tarefa existente sem trocar usuário, SID ou credenciais."""
 
     if sys.platform != "win32":
         raise RuntimeError("Os avisos em segundo plano estão disponíveis somente no Windows.")
-    data_directory = os.getenv("CLIMATETEST_DATA_DIR", "").strip()
     if enable and is_synced_directory(get_data_directory()):
         raise RuntimeError(
             "O banco SQLite ativo não deve ficar no OneDrive. "
             "Use o OneDrive somente para as cópias de segurança."
         )
-    if enable:
-        command = [
-            "schtasks.exe",
-            "/Create",
-            "/TN",
-            TASK_NAME,
-            "/SC",
-            "MINUTE",
-            "/MO",
-            "5",
-            "/TR",
-            _notification_action(data_directory),
-            "/IT",
-            "/F",
-        ]
-    else:
-        command = ["schtasks.exe", "/Delete", "/TN", TASK_NAME, "/F"]
+    if not _task_exists():
+        if not enable:
+            return
+        raise RuntimeError(
+            "A tarefa de notificações do Windows não foi encontrada. "
+            "Execute novamente o instalador do ClimateTest Manager e escolha "
+            "Reparar/Atualizar; seus dados serão preservados."
+        )
+
+    command = [
+        "schtasks.exe",
+        "/Change",
+        "/TN",
+        TASK_NAME,
+        "/ENABLE" if enable else "/DISABLE",
+    ]
     result = subprocess.run(
         command,
         capture_output=True,
@@ -115,5 +124,17 @@ def configure_notification_task(*, enable: bool) -> None:
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
     if result.returncode != 0:
-        message = result.stderr.strip() or result.stdout.strip() or "Falha desconhecida."
-        raise RuntimeError(message)
+        detail = result.stderr.strip() or result.stdout.strip()
+        suffix = f" Detalhe do Windows: {detail}" if detail else ""
+        raise RuntimeError(
+            "O Windows não conseguiu alterar o estado da tarefa de notificações. "
+            "Repare a instalação para restaurar a tarefa sem alterar seus dados." + suffix
+        )
+    if enable:
+        subprocess.run(
+            ["schtasks.exe", "/Run", "/TN", TASK_NAME],
+            capture_output=True,
+            text=True,
+            check=False,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )

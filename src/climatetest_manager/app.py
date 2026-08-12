@@ -61,7 +61,6 @@ from climatetest_manager.services.notifications import (
     EmailDeliveryReceipt,
     EmailNotificationProvider,
     WindowsToastProvider,
-    deliver_pending_incident_emails,
 )
 from climatetest_manager.ui.components import (
     dialog_actions,
@@ -866,8 +865,10 @@ class ClimateTestApplication:
         description: str,
         immediate_action: str,
     ) -> str | None:
-        """Registra uma falha sem ocultar o relato original do operador."""
+        """Persiste a falha imediatamente; alertas externos são processados em segundo plano."""
 
+        if not self._current_user.can_operate:
+            return "Este perfil possui acesso somente para consulta."
         try:
             reason = incident_reason(reason_code)
         except ValueError as error:
@@ -887,27 +888,6 @@ class ClimateTestApplication:
             )
         except (OSError, ValueError) as error:
             return str(error)
-        email_settings = load_email_settings()
-        if email_settings.is_configured:
-            recipients = self._auth_service.notification_admin_emails()
-            provider = EmailNotificationProvider(email_settings, recipients) if recipients else None
-            _delivered, failed = deliver_pending_incident_emails(
-                self._repository,
-                provider,
-            )
-            if failed:
-                self._show_message(
-                    "Falha registrada. O e-mail ao administrador ficou pendente "
-                    "para nova tentativa.",
-                    error=True,
-                )
-                return None
-            self._show_message("Falha registrada e encaminhada ao administrador.")
-        else:
-            self._show_message(
-                "Falha registrada na central do administrador. O e-mail será enviado "
-                "quando o SMTP for configurado."
-            )
         return None
 
     def _resolve_system_incident(

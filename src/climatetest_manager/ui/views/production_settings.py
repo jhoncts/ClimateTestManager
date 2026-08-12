@@ -76,8 +76,7 @@ def _theme_card(theme_mode: str, on_theme_change: Callable[[str], None]) -> ft.C
                                 color=AppColors.TEXT_PRIMARY,
                             ),
                             ft.Text(
-                                "A escolha fica salva somente neste dispositivo. Alterar o tema "
-                                "aqui não muda o servidor nem outras estações.",
+                                "Escolha o estilo visual da interface.",
                                 size=11,
                                 color=AppColors.TEXT_SECONDARY,
                             ),
@@ -99,7 +98,7 @@ def _theme_card(theme_mode: str, on_theme_change: Callable[[str], None]) -> ft.C
 def _replace_incident_dialog(
     content: ft.Control,
     *,
-    on_report_system_incident: Callable[[str, str, str], str | None],
+    on_report_system_incident: Callable[[str, str, str], str | None] | None,
     on_refresh: Callable[[], None],
 ) -> None:
     target = next(
@@ -189,11 +188,20 @@ def _replace_incident_dialog(
             progress.visible = True
             error.value = ""
             page.update(save_button, progress, error)
-            result = on_report_system_incident(
-                reason_selector.value or "other",
-                description_value,
-                action_value,
-            )
+            try:
+                result = on_report_system_incident(
+                    reason_selector.value or "other",
+                    description_value,
+                    action_value,
+                )
+            except Exception as exc:
+                submitted = False
+                save_button.disabled = False
+                save_button.content = "Salvar registro"
+                progress.visible = False
+                error.value = f"Não foi possível concluir o registro: {exc}"
+                page.update(save_button, progress, error)
+                return
             if result:
                 submitted = False
                 save_button.disabled = False
@@ -204,6 +212,16 @@ def _replace_incident_dialog(
                 return
             page.pop_dialog()
             on_refresh()
+            page.show_dialog(
+                ft.SnackBar(
+                    content=(
+                        "Falha registrada. O administrador foi avisado e o e-mail será "
+                        "processado em segundo plano."
+                    ),
+                    bgcolor=AppColors.PRIMARY,
+                    show_close_icon=True,
+                )
+            )
 
         save_button.on_click = confirm
         dialog = styled_dialog(
@@ -280,7 +298,7 @@ def build_production_settings_view(
     on_resolve_system_incident: Callable[[int, str], str | None] | None,
     on_refresh: Callable[[], None],
     on_rotate_administrator_recovery: Callable[[], str] | None = None,
-) -> ft.Column:
+) -> ft.Control:
     """Monta as configurações de servidor mantendo preferências visuais locais."""
 
     content = build_settings_view(
@@ -307,13 +325,25 @@ def build_production_settings_view(
         on_open_data_folder=on_open_data_folder,
         on_backup=on_backup,
         on_configure_backup=on_configure_backup,
-        on_report_system_incident=on_report_system_incident,
+        on_report_system_incident=(
+            on_report_system_incident or (lambda *_args: "Perfil somente leitura.")
+        ),
         on_resolve_system_incident=on_resolve_system_incident,
         on_refresh=on_refresh,
         on_rotate_administrator_recovery=on_rotate_administrator_recovery,
         allow_theme_change=True,
         managed_server_mode=True,
     )
+
+    # Remove o cartão antigo de aparência; a seleção de seis temas abaixo é a única fonte visual.
+    content.controls = [
+        control
+        for control in content.controls
+        if not any(
+            isinstance(child, ft.Text) and child.value == "A escolha fica salva neste computador."
+            for child in _walk(control)
+        )
+    ]
 
     # Remove o switch antigo para não manter duas fontes de verdade para aparência.
     for control in _walk(content):
@@ -327,6 +357,8 @@ def build_production_settings_view(
                 control.disabled = notifications_enabled
             elif label == "Testar notificação":
                 control.disabled = False
+            elif label == "Registrar falha" and on_report_system_incident is None:
+                control.visible = False
 
     infrastructure = build_server_status_card(
         identity,
@@ -337,10 +369,11 @@ def build_production_settings_view(
     # Cabeçalho e conta ficam primeiro. Aparência e infraestrutura aparecem antes das integrações.
     content.controls.insert(2, _theme_card(theme_mode, on_theme_change))
     content.controls.insert(3, infrastructure)
-    _replace_incident_dialog(
-        content,
-        on_report_system_incident=on_report_system_incident,
-        on_refresh=on_refresh,
-    )
-    apply_interaction_polish(content)
-    return content
+    if on_report_system_incident is not None:
+        _replace_incident_dialog(
+            content,
+            on_report_system_incident=on_report_system_incident,
+            on_refresh=on_refresh,
+        )
+    root = ft.ListView(expand=True, spacing=20, controls=list(content.controls))
+    return apply_interaction_polish(root)  # type: ignore[return-value]

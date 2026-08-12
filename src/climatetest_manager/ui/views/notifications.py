@@ -22,8 +22,6 @@ def _notification_card(
     on_mark_read: Callable[[str, int], None],
     on_dismiss: Callable[[str, int], None] | None,
 ) -> ft.Container:
-    """Card compacto, selecionável e estável em sessões Flet remotas."""
-
     critical = notification.severity in {
         "critical",
         "crítica",
@@ -49,13 +47,7 @@ def _notification_card(
     ]
     if not notification.is_read:
         title_controls.append(
-            ft.Container(
-                width=8,
-                height=8,
-                border_radius=4,
-                bgcolor=accent,
-                tooltip="Não lida",
-            )
+            ft.Container(width=8, height=8, border_radius=4, bgcolor=accent, tooltip="Não lida")
         )
 
     action_controls: list[ft.Control] = []
@@ -66,8 +58,7 @@ def _notification_card(
                 icon_size=18,
                 tooltip="Marcar como lida",
                 on_click=lambda _event: on_mark_read(
-                    notification.source_kind,
-                    notification.source_id,
+                    notification.source_kind, notification.source_id
                 ),
             )
         )
@@ -78,8 +69,7 @@ def _notification_card(
                 icon_size=18,
                 tooltip="Remover da minha central",
                 on_click=lambda _event: on_dismiss(
-                    notification.source_kind,
-                    notification.source_id,
+                    notification.source_kind, notification.source_id
                 ),
             )
         )
@@ -118,7 +108,10 @@ def _notification_card(
                             no_wrap=False,
                         ),
                         ft.Text(
-                            format_datetime(notification.created_at),
+                            format_datetime(
+                                notification.created_at,
+                                assume_utc=notification.source_kind == "incident",
+                            ),
                             size=9,
                             color=AppColors.TEXT_SECONDARY,
                         ),
@@ -140,15 +133,15 @@ def build_notifications_view(
     on_mark_many_read: Callable[[list[NotificationKey]], None] | None = None,
     on_dismiss: Callable[[str, int], None] | None = None,
     on_dismiss_many: Callable[[list[NotificationKey]], None] | None = None,
-) -> ft.Column:
-    """Monta uma central com ações em lote sem apagar o evento técnico original."""
+) -> ft.ListView:
+    """Monta uma central com seleção individual e opção explícita de selecionar todas."""
 
     unread = sum(not notification.is_read for notification in notifications)
     selected: set[NotificationKey] = set()
+    checkboxes: dict[NotificationKey, ft.Checkbox] = {}
+    select_all = ft.Checkbox(label="Selecionar todas", value=False, disabled=not notifications)
     mark_selected = ft.Button(
-        content="Marcar selecionadas como lidas",
-        icon=ft.Icons.DONE_ALL,
-        disabled=True,
+        content="Marcar selecionadas como lidas", icon=ft.Icons.DONE_ALL, disabled=True
     )
     delete_selected = ft.Button(
         content="Remover selecionadas",
@@ -163,15 +156,17 @@ def build_notifications_view(
         selection_text.value = "Nenhuma selecionada" if count == 0 else f"{count} selecionada(s)"
         mark_selected.disabled = count == 0 or on_mark_many_read is None
         delete_selected.disabled = count == 0 or on_dismiss_many is None
+        select_all.value = bool(notifications) and count == len(notifications)
         with suppress(RuntimeError):
-            mark_selected.page.update(mark_selected, delete_selected, selection_text)
+            select_all.page.update(select_all, mark_selected, delete_selected, selection_text)
 
     cards: list[ft.Control] = []
     for notification in notifications:
         key = (notification.source_kind, notification.source_id)
         checkbox = ft.Checkbox(value=False, tooltip="Selecionar")
+        checkboxes[key] = checkbox
 
-        def select_item(_event: object | None = None, *, item_key=key, item=checkbox) -> None:
+        def select_item(_event=None, *, item_key=key, item=checkbox) -> None:
             if item.value:
                 selected.add(item_key)
             else:
@@ -188,6 +183,19 @@ def build_notifications_view(
             )
         )
 
+    def toggle_all(_event=None) -> None:
+        target = bool(select_all.value)
+        selected.clear()
+        for key, checkbox in checkboxes.items():
+            checkbox.value = target
+            if target:
+                selected.add(key)
+        with suppress(RuntimeError):
+            select_all.page.update(*checkboxes.values())
+        refresh_selection()
+
+    select_all.on_change = toggle_all
+
     if not notifications:
         cards = [
             ft.Container(
@@ -201,35 +209,24 @@ def build_notifications_view(
                     spacing=6,
                     controls=[
                         ft.Icon(
-                            ft.Icons.NOTIFICATIONS_NONE,
-                            size=34,
-                            color=AppColors.TEXT_SECONDARY,
+                            ft.Icons.NOTIFICATIONS_NONE, size=34, color=AppColors.TEXT_SECONDARY
                         ),
-                        ft.Text(
-                            "Nenhuma notificação disponível.",
-                            color=AppColors.TEXT_SECONDARY,
-                        ),
+                        ft.Text("Nenhuma notificação disponível.", color=AppColors.TEXT_SECONDARY),
                     ],
                 ),
             )
         ]
 
-    def mark_selected_click(_event: object | None = None) -> None:
-        if on_mark_many_read is not None and selected:
-            on_mark_many_read(list(selected))
+    mark_selected.on_click = lambda _event: (
+        on_mark_many_read(list(selected)) if on_mark_many_read is not None and selected else None
+    )
+    delete_selected.on_click = lambda _event: (
+        on_dismiss_many(list(selected)) if on_dismiss_many is not None and selected else None
+    )
 
-    def delete_selected_click(_event: object | None = None) -> None:
-        if on_dismiss_many is not None and selected:
-            on_dismiss_many(list(selected))
-
-    mark_selected.on_click = mark_selected_click
-    delete_selected.on_click = delete_selected_click
-
-    root = ft.Column(
+    root = ft.ListView(
         expand=True,
-        scroll=ft.ScrollMode.AUTO,
         spacing=13,
-        horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
         controls=[
             ft.Row(
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
@@ -288,7 +285,7 @@ def build_notifications_view(
                         spacing=8,
                         wrap=True,
                         run_spacing=6,
-                        controls=[mark_selected, delete_selected],
+                        controls=[select_all, mark_selected, delete_selected],
                     )
                 ]
                 if notifications

@@ -162,7 +162,7 @@ class NewTestView:
             max_length=160,
         )
         self.sample_quantity = _field(
-            "Quantidade de amostras *",
+            "Qtd. de amostras *",
             hint="Ex.: 2",
             max_length=2,
         )

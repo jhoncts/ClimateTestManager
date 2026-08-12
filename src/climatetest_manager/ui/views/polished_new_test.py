@@ -67,23 +67,23 @@ class PolishedNewTestView(NewTestView):
     def _identity_panel(self) -> ft.Container:
         return glass_surface(
             ft.Column(
-                spacing=14,
+                spacing=12,
                 horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
                 controls=[
                     section_heading(
                         "Identificação do ensaio",
                         "Dados essenciais do processo e das amostras.",
                     ),
+                    self.client,
                     ft.ResponsiveRow(
                         spacing=12,
                         run_spacing=10,
                         controls=[
-                            ft.Container(col={"xs": 12, "md": 8}, content=self.client),
-                            ft.Container(col={"xs": 12, "md": 4}, content=self.process_number),
-                            ft.Container(col={"xs": 12, "md": 9}, content=self.product),
-                            ft.Container(col={"xs": 12, "md": 3}, content=self.sample_quantity),
+                            ft.Container(col={"xs": 12, "sm": 8}, content=self.process_number),
+                            ft.Container(col={"xs": 12, "sm": 4}, content=self.sample_quantity),
                         ],
                     ),
+                    self.product,
                 ],
             ),
             padding=18,
@@ -272,7 +272,7 @@ class PolishedNewTestView(NewTestView):
             padding=18,
         )
 
-    def _build(self) -> ft.Column:
+    def _build(self) -> ft.ListView:
         left: list[ft.Control] = [self._identity_panel(), self._notes_panel()]
         if self._details:
             left.append(
@@ -332,11 +332,9 @@ class PolishedNewTestView(NewTestView):
                 ),
             ],
         )
-        return ft.Column(
+        return ft.ListView(
             expand=True,
-            scroll=ft.ScrollMode.AUTO,
             spacing=16,
-            horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
             controls=[
                 header,
                 self.error_banner,

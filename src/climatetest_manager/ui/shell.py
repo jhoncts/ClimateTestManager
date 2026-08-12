@@ -97,19 +97,24 @@ def build_production_shell(
     navigation = [
         ("Dashboard", ft.Icons.DASHBOARD_OUTLINED, "dashboard", on_dashboard, 0),
         ("Ensaios", ft.Icons.LIST_ALT_OUTLINED, "tests", on_tests, 0),
-        ("Novo ensaio", ft.Icons.ADD_CIRCLE_OUTLINE, "new_test", on_new_test, 0),
-        ("Agenda", ft.Icons.CALENDAR_MONTH_OUTLINED, "agenda", on_agenda, 0),
-        ("Atividades", ft.Icons.HISTORY, "history", on_history, 0),
-        (
-            "Notificações",
-            ft.Icons.NOTIFICATIONS_OUTLINED,
-            "notifications",
-            on_notifications,
-            notification_count,
-        ),
-        ("Guia de uso", ft.Icons.HELP_OUTLINE, "help", on_help, 0),
-        ("Configurações", ft.Icons.SETTINGS_OUTLINED, "settings", on_settings, 0),
     ]
+    if on_new_test is not None:
+        navigation.append(("Novo ensaio", ft.Icons.ADD_CIRCLE_OUTLINE, "new_test", on_new_test, 0))
+    navigation.extend(
+        [
+            ("Agenda", ft.Icons.CALENDAR_MONTH_OUTLINED, "agenda", on_agenda, 0),
+            ("Atividades", ft.Icons.HISTORY, "history", on_history, 0),
+            (
+                "Notificações",
+                ft.Icons.NOTIFICATIONS_OUTLINED,
+                "notifications",
+                on_notifications,
+                notification_count,
+            ),
+            ("Guia de uso", ft.Icons.HELP_OUTLINE, "help", on_help, 0),
+            ("Configurações", ft.Icons.SETTINGS_OUTLINED, "settings", on_settings, 0),
+        ]
+    )
     if on_users is not None:
         navigation.append(("Usuários", ft.Icons.GROUPS_OUTLINED, "users", on_users, 0))
 

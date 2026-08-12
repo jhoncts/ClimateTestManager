@@ -87,15 +87,10 @@ class BackgroundTaskTests(unittest.TestCase):
         ):
             self.assertFalse(notification_task_installed())
 
-    def test_configures_task_only_after_explicit_call(self) -> None:
+    def test_enables_existing_task_without_recreating_principal(self) -> None:
         result = SimpleNamespace(returncode=0, stdout="", stderr="")
         with (
             patch("climatetest_manager.services.background.sys.platform", "win32"),
-            patch.dict("os.environ", {}, clear=True),
-            patch(
-                "climatetest_manager.services.background._notification_action",
-                return_value='"C:\\Aplicativo\\ClimateTestNotifier.exe"',
-            ),
             patch(
                 "climatetest_manager.services.background.subprocess.run",
                 return_value=result,
@@ -103,10 +98,9 @@ class BackgroundTaskTests(unittest.TestCase):
         ):
             configure_notification_task(enable=True)
 
-        command = run.call_args.args[0]
-        self.assertEqual(command[0], "schtasks.exe")
-        self.assertIn("/Create", command)
-        self.assertIn('"C:\\Aplicativo\\ClimateTestNotifier.exe"', command)
+        commands = [call.args[0] for call in run.call_args_list]
+        self.assertTrue(any("/ENABLE" in command for command in commands))
+        self.assertFalse(any("/Create" in command for command in commands))
 
     def test_rejects_background_configuration_outside_windows(self) -> None:
         with (
@@ -126,7 +120,7 @@ class BackgroundTaskTests(unittest.TestCase):
         ):
             configure_notification_task(enable=True)
 
-    def test_removes_task_directly_without_powershell(self) -> None:
+    def test_disables_existing_task_without_deleting_it(self) -> None:
         result = SimpleNamespace(returncode=0, stdout="", stderr="")
         with (
             patch("climatetest_manager.services.background.sys.platform", "win32"),
@@ -137,9 +131,9 @@ class BackgroundTaskTests(unittest.TestCase):
         ):
             configure_notification_task(enable=False)
 
-        command = run.call_args.args[0]
-        self.assertEqual(command[0], "schtasks.exe")
-        self.assertIn("/Delete", command)
+        commands = [call.args[0] for call in run.call_args_list]
+        self.assertTrue(any("/DISABLE" in command for command in commands))
+        self.assertFalse(any("/Delete" in command for command in commands))
 
     def test_scheduled_action_uses_no_console_executable(self) -> None:
         executable = Path("C:/Aplicativo/ClimateTestNotifier.exe")

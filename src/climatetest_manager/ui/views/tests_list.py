@@ -48,7 +48,7 @@ class TestsListView:
         tests: list[ClimateTestListItem],
         *,
         on_select: Callable[[int], None],
-        on_new_test: Callable[[], None],
+        on_new_test: Callable[[], None] | None,
         on_export: Callable[[list[ClimateTestListItem]], Awaitable[None]],
     ) -> None:
         self._tests = tests
@@ -112,12 +112,18 @@ class TestsListView:
                                     icon=ft.Icons.DOWNLOAD,
                                     on_click=self._export_matching,
                                 ),
-                                ft.Button(
-                                    content="Novo ensaio",
-                                    icon=ft.Icons.ADD,
-                                    bgcolor=AppColors.PRIMARY,
-                                    color=AppColors.WHITE,
-                                    on_click=lambda _event: on_new_test(),
+                                *(
+                                    [
+                                        ft.Button(
+                                            content="Novo ensaio",
+                                            icon=ft.Icons.ADD,
+                                            bgcolor=AppColors.PRIMARY,
+                                            color=AppColors.WHITE,
+                                            on_click=lambda _event: on_new_test(),
+                                        )
+                                    ]
+                                    if on_new_test is not None
+                                    else []
                                 ),
                             ],
                         ),
@@ -284,7 +290,7 @@ def build_tests_list_view(
     tests: list[ClimateTestListItem],
     *,
     on_select: Callable[[int], None],
-    on_new_test: Callable[[], None],
+    on_new_test: Callable[[], None] | None,
     on_export: Callable[[list[ClimateTestListItem]], Awaitable[None]],
 ) -> ft.Column:
     """Cria uma lista nova com pesquisa e filtro."""

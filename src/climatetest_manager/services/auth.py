@@ -49,11 +49,23 @@ class UserSummary:
 
     @property
     def role_label(self) -> str:
-        return "Administrador" if self.role == "admin" else "Operador"
+        if self.is_admin:
+            return "Administrador"
+        if self.is_viewer:
+            return "Consulta"
+        return "Operador"
 
     @property
     def is_admin(self) -> bool:
         return self.role == "admin"
+
+    @property
+    def is_viewer(self) -> bool:
+        return self.role == "viewer"
+
+    @property
+    def can_operate(self) -> bool:
+        return self.role in {"admin", "operator"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -328,7 +340,7 @@ class AuthenticationService:
         ) = self._validated_identity(command)
         password = _validate_password(command.password, command.password_confirmation)
         role = forced_role or command.role
-        if role not in {"admin", "operator"}:
+        if role not in {"admin", "operator", "viewer"}:
             raise AuthenticationError("Perfil de usuário inválido.")
         return UserRecord(
             username=username,
@@ -442,7 +454,7 @@ class AuthenticationService:
         current = self._repository.get(user_id)
         if current is None:
             raise AuthenticationError(f"Usuário #{user_id} não encontrado.")
-        if command.role not in {"admin", "operator"}:
+        if command.role not in {"admin", "operator", "viewer"}:
             raise AuthenticationError("Perfil de usuário inválido.")
         if user_id == actor.id and not command.is_active:
             raise AuthenticationError("Você não pode desativar a própria conta.")

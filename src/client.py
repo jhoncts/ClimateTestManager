@@ -33,6 +33,18 @@ DEFAULT_PORT = 8550
 SERVER_CONFIG_FILENAME = "server.url"
 
 
+def _enable_high_dpi() -> None:
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except Exception:
+        with suppress(Exception):
+            ctypes.windll.user32.SetProcessDPIAware()
+
+
 def _arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument("--url", default="")
@@ -624,6 +636,7 @@ def _build_page_handler(
 
 
 def main() -> None:
+    _enable_high_dpi()
     arguments = _arguments()
     try:
         server_url = _resolve_server_url(arguments.url)

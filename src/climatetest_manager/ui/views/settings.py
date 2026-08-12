@@ -769,12 +769,11 @@ def build_settings_view(
 
         resolve_button.on_click = show_resolution_dialog
         details: list[ft.Control] = [
-            ft.Text(incident.description, size=12, selectable=True),
+            ft.Text(incident.description, size=12),
             ft.Text(
                 f"Ação imediata: {incident.immediate_action}",
                 size=11,
                 color=AppColors.TEXT_SECONDARY,
-                selectable=True,
             ),
         ]
         if incident.corrective_action:
@@ -827,7 +826,7 @@ def build_settings_view(
                     ),
                     ft.Text(
                         f"Registrada por {incident.reported_by} em "
-                        f"{format_datetime(incident.reported_at)}",
+                        f"{format_datetime(incident.reported_at, assume_utc=True)}",
                         size=10,
                         color=AppColors.TEXT_SECONDARY,
                     ),
