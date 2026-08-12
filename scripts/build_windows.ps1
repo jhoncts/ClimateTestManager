@@ -30,20 +30,40 @@ Copy-Item `
     (Join-Path $assetsStage "icons\loading-animation.png") `
     -Force
 
-.\.venv\Scripts\flet.exe pack src/client.py `
-    --name ClimateTestManager `
-    --icon "src\assets\brand\climatetest.ico" `
-    --add-data "$assetsStage;assets" `
-    --product-name "ClimateTest Manager" `
-    --product-version $version `
-    --file-version "$version.0" `
-    --file-description "Cliente desktop do ClimateTest Manager" `
-    --company-name "ClimateTest Manager" `
-    --copyright "Copyright (c) 2026 Jhon Cleiton" `
-    --distpath $releaseDir `
-    --yes
-if ($LASTEXITCODE -ne 0) {
-    throw "Falha ao empacotar ClimateTestManager.exe."
+# O Flet baixa o runtime desktop na primeira execução. Em runners do GitHub essa
+# transferência pode ser encerrada remotamente de forma transitória. Uma falha de
+# rede não deve invalidar um release cujo código e testes já passaram, portanto o
+# empacotamento é tentado novamente com espera curta e crescente.
+$packSucceeded = $false
+$packAttempts = 3
+for ($attempt = 1; $attempt -le $packAttempts; $attempt++) {
+    Write-Host "Empacotando ClimateTestManager.exe (tentativa $attempt de $packAttempts)..."
+    .\.venv\Scripts\flet.exe pack src/client.py `
+        --name ClimateTestManager `
+        --icon "src\assets\brand\climatetest.ico" `
+        --add-data "$assetsStage;assets" `
+        --product-name "ClimateTest Manager" `
+        --product-version $version `
+        --file-version "$version.0" `
+        --file-description "Cliente desktop do ClimateTest Manager" `
+        --company-name "ClimateTest Manager" `
+        --copyright "Copyright (c) 2026 Jhon Cleiton" `
+        --distpath $releaseDir `
+        --yes
+
+    if ($LASTEXITCODE -eq 0) {
+        $packSucceeded = $true
+        break
+    }
+
+    if ($attempt -lt $packAttempts) {
+        $waitSeconds = 8 * $attempt
+        Write-Warning "Empacotamento Flet falhou. Nova tentativa em $waitSeconds segundos."
+        Start-Sleep -Seconds $waitSeconds
+    }
+}
+if (-not $packSucceeded) {
+    throw "Falha ao empacotar ClimateTestManager.exe apos $packAttempts tentativas."
 }
 
 .\.venv\Scripts\python.exe -m PyInstaller src/server.py `
