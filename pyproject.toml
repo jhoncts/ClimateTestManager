@@ -42,6 +42,7 @@ addopts = "--strict-markers --cov=climatetest_manager --cov-report=term-missing"
 target-version = "py312"
 line-length = 100
 src = ["src", "tests"]
+extend-exclude = ["src/climatetest_manager/round3_runtime.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
