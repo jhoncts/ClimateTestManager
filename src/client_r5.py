@@ -10,15 +10,20 @@ import flet as ft
 
 import client as legacy
 
+APP_VERSION = "0.8.1"
 BUILD_REVISION = "R5-20260812"
 BUILD_MARKER_PATH = "/assets/server-build.txt"
+
+# Toda a infraestrutura de janela, bandeja, atualização e reconexão continua no
+# cliente validado, mas a versão exposta ao atualizador deve ser a deste release.
+legacy.VERSION = APP_VERSION
 
 
 def _server_build(server_url: str, *, timeout: float = 2.0) -> str:
     request = urllib.request.Request(
         server_url.rstrip("/") + BUILD_MARKER_PATH,
         method="GET",
-        headers={"User-Agent": f"ClimateTestManager/{BUILD_REVISION}"},
+        headers={"User-Agent": f"ClimateTestManager/{APP_VERSION}-{BUILD_REVISION}"},
     )
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
@@ -54,9 +59,9 @@ def _diagnostic_page(page: ft.Page, server_url: str, found_build: str) -> None:
                             color="#102A43",
                         ),
                         ft.Text(
-                            "Esta estação está com a correção R5, mas o computador central "
-                            "ainda não está executando a mesma versão. Para evitar telas antigas "
-                            "ou inconsistentes, a conexão foi bloqueada.",
+                            "Esta estação está com a versão 0.8.1, mas o computador central "
+                            "ainda não está executando a mesma interface validada. Para evitar "
+                            "telas antigas ou inconsistentes, a conexão foi bloqueada.",
                             size=13,
                             color="#536579",
                         ),
@@ -94,7 +99,7 @@ def _diagnostic_page(page: ft.Page, server_url: str, found_build: str) -> None:
                             color="#B42318",
                         ),
                         ft.Text(
-                            f"Cliente desktop 0.8.0 • build {BUILD_REVISION}",
+                            f"Cliente desktop {APP_VERSION} • build {BUILD_REVISION}",
                             size=10,
                             color="#8292A3",
                         ),
