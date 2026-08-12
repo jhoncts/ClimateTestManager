@@ -8,7 +8,7 @@ from pathlib import Path
 import flet as ft
 
 from climatetest_manager.client_session import enable_client_session_persistence
-from climatetest_manager.production_app import main
+from climatetest_manager.round3_runtime import main
 from climatetest_manager.services.network import DiscoveryResponder
 
 
