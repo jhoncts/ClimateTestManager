@@ -1,0 +1,242 @@
+name: Apply round 2 real-world fixes
+
+on:
+  push:
+    branches:
+      - feat/v0.8.0-production-polish
+
+permissions:
+  contents: write
+
+jobs:
+  patch-test-commit:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev]'
+      - name: Apply second-round fixes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          def read(path):
+              return Path(path).read_text(encoding='utf-8')
+
+          def write(path, text):
+              Path(path).write_text(text, encoding='utf-8')
+
+          def replace_once(path, old, new):
+              text = read(path)
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f'{path}: expected one match, found {count}: {old[:120]!r}')
+              write(path, text.replace(old, new, 1))
+
+          def regex_once(path, pattern, replacement):
+              text = read(path)
+              result, count = re.subn(pattern, replacement, text, count=1, flags=re.S)
+              if count != 1:
+                  raise RuntimeError(f'{path}: regex expected one match, found {count}: {pattern[:120]!r}')
+              write(path, result)
+
+          # Distinct third light theme, with migration from the previous internal key "ice".
+          replace_once(
+              'src/climatetest_manager/ui/theme.py',
+              '    ("ice", "Gelo", "Claro frio em azul e branco"),\n',
+              '    ("lavender", "Lavanda", "Lilás claro com contraste técnico"),\n',
+          )
+          regex_once(
+              'src/climatetest_manager/ui/theme.py',
+              r'    "ice": \{.*?\n    \},\n    "dark": \{',
+              '''    "lavender": {\n        "PRIMARY": "#6D5BD0",\n        "PRIMARY_LIGHT": "#E9E4FF",\n        "PAGE_BACKGROUND": "#F4F1FB",\n        "NAV_BACKGROUND": "#FCFBFF",\n        "NAV_SELECTED": "#E9E3FF",\n        "NAV_HOVER": "#F1EDFF",\n        "NAV_TEXT": "#514A68",\n        "SURFACE": "#FFFFFF",\n        "TEXT_PRIMARY": "#201B33",\n        "TEXT_SECONDARY": "#716A86",\n        "DIVIDER": "#E3DDF0",\n        "WARNING": "#B56A00",\n        "WARNING_LIGHT": "#FFF0D5",\n        "DANGER": "#C63E57",\n        "DANGER_LIGHT": "#FCE4EA",\n        "INFO": "#4866B1",\n        "INFO_LIGHT": "#E4EAF8",\n        "DRYING": "#8B5FC7",\n        "DRYING_LIGHT": "#EFE4FA",\n        "WHITE": "#FFFFFF",\n        "GLASS_SURFACE": "#F7FFFFFF",\n        "GLASS_SURFACE_ACCENT": "#F3FBF9FF",\n        "GLASS_BORDER": "#B5DDD6ED",\n        "SURFACE_SHADOW": "#18201B33",\n        "INTERACTIVE_HOVER": "#1C6D5BD0",\n        "INTERACTIVE_PRESSED": "#306D5BD0",\n        "ACCENT_GLOW": "#386D5BD0",\n    },\n    "dark": {''',
+          )
+          replace_once(
+              'src/climatetest_manager/ui/theme.py',
+              '''        normalized = (mode or "light").strip().casefold()\n        return normalized if normalized in THEME_KEYS else "light"\n''',
+              '''        normalized = (mode or "light").strip().casefold()\n        if normalized == "ice":\n            normalized = "lavender"\n        return normalized if normalized in THEME_KEYS else "light"\n''',
+          )
+
+          # Keep the current device theme available to every later event callback/dialog.
+          replace_once(
+              'src/climatetest_manager/production_app.py',
+              '''    AppColors.apply_mode(mode)\n    page.title = "ClimateTest Manager"\n''',
+              '''    AppColors.apply_mode(mode)\n    setattr(page, "_climatetest_theme_mode", mode)\n    page.title = "ClimateTest Manager"\n''',
+          )
+          replace_once(
+              'src/climatetest_manager/production_app.py',
+              '''        AppColors.apply_mode(self._theme_mode)\n        self._page.theme_mode = (\n''',
+              '''        AppColors.apply_mode(self._theme_mode)\n        setattr(self._page, "_climatetest_theme_mode", self._theme_mode)\n        self._page.theme_mode = (\n''',
+          )
+
+          # Interaction layer: hand cursor, theme-aware callbacks and hover feedback without scaling/rasterizing text.
+          write(
+              'src/climatetest_manager/ui/interaction.py',
+              '''"""Polimento de interação aplicado de forma consistente em toda a interface."""\n\nfrom __future__ import annotations\n\nfrom collections.abc import Callable\nfrom contextlib import suppress\nfrom inspect import iscoroutinefunction\n\nimport flet as ft\n\nfrom climatetest_manager.ui.theme import AppColors\n\n_CLICKABLE_TYPES = (\n    ft.Button,\n    ft.TextButton,\n    ft.IconButton,\n    ft.Switch,\n    ft.Checkbox,\n    ft.Radio,\n    ft.Dropdown,\n)\n_EVENT_NAMES = (\"on_click\", \"on_change\", \"on_select\", \"on_hover\", \"on_submit\")\n\n\ndef _activate_control_theme(control: ft.Control) -> None:\n    \"\"\"Restaura a paleta do dispositivo antes de qualquer callback tardio.\"\"\"\n\n    with suppress(Exception):\n        page = control.page\n        mode = getattr(page, \"_climatetest_theme_mode\", None)\n        if mode:\n            AppColors.apply_mode(str(mode))\n\n\ndef _theme_aware_handler(control: ft.Control, handler):\n    if handler is None or getattr(handler, \"_climatetest_theme_aware\", False):\n        return handler\n    if iscoroutinefunction(handler):\n\n        async def wrapped(event):\n            _activate_control_theme(control)\n            return await handler(event)\n\n    else:\n\n        def wrapped(event):\n            _activate_control_theme(control)\n            return handler(event)\n\n    setattr(wrapped, \"_climatetest_theme_aware\", True)\n    return wrapped\n\n\ndef _wrap_events(control: ft.Control) -> None:\n    for event_name in _EVENT_NAMES:\n        with suppress(Exception):\n            handler = getattr(control, event_name, None)\n            if callable(handler):\n                setattr(control, event_name, _theme_aware_handler(control, handler))\n\n\ndef _polish_button(control: ft.Control) -> None:\n    with suppress(Exception):\n        control.mouse_cursor = ft.MouseCursor.CLICK\n    if not isinstance(control, (ft.Button, ft.TextButton, ft.IconButton)):\n        return\n    with suppress(Exception):\n        if control.style is None:\n            control.style = ft.ButtonStyle(\n                overlay_color={\n                    ft.ControlState.HOVERED: AppColors.INTERACTIVE_HOVER,\n                    ft.ControlState.PRESSED: AppColors.INTERACTIVE_PRESSED,\n                },\n                elevation={\n                    ft.ControlState.HOVERED: 3,\n                    ft.ControlState.PRESSED: 0,\n                },\n            )\n\n\ndef apply_interaction_polish(control: ft.Control) -> ft.Control:\n    \"\"\"Aplica cursor, hover e contexto de tema sem transformar/reescalar texto ou ícones.\"\"\"\n\n    _wrap_events(control)\n    if isinstance(control, _CLICKABLE_TYPES):\n        _polish_button(control)\n\n    if isinstance(control, ft.Switch):\n        with suppress(Exception):\n            control.hover_color = AppColors.INTERACTIVE_HOVER\n            control.overlay_color = {\n                ft.ControlState.HOVERED: AppColors.INTERACTIVE_HOVER,\n                ft.ControlState.PRESSED: AppColors.INTERACTIVE_PRESSED,\n            }\n\n    if isinstance(control, ft.Container) and control.on_click is not None:\n        with suppress(Exception):\n            control.ink = True\n            control.mouse_cursor = ft.MouseCursor.CLICK\n\n    child = getattr(control, \"content\", None)\n    if isinstance(child, ft.Control):\n        apply_interaction_polish(child)\n    children = getattr(control, \"controls\", None)\n    if isinstance(children, list):\n        for item in children:\n            if isinstance(item, ft.Control):\n                apply_interaction_polish(item)\n    actions = getattr(control, \"actions\", None)\n    if isinstance(actions, list):\n        for item in actions:\n            if isinstance(item, ft.Control):\n                apply_interaction_polish(item)\n    return control\n\n\ndef hoverable_navigation_surface(\n    *,\n    label: str,\n    icon: ft.IconData,\n    selected: bool,\n    compact: bool,\n    icon_size: int,\n    on_click: Callable[[], None] | None,\n    badge_count: int = 0,\n) -> ft.Container:\n    \"\"\"Item lateral com baseline folgado e sem animações que rasterizem as letras.\"\"\"\n\n    nav_selected = AppColors.NAV_SELECTED\n    nav_hover = AppColors.NAV_HOVER\n    nav_text = AppColors.NAV_TEXT\n    primary = AppColors.PRIMARY\n    text_primary = AppColors.TEXT_PRIMARY\n    selected_color = primary if selected else nav_text\n    label_control = ft.Text(\n        label,\n        size=13,\n        height=1.35,\n        weight=ft.FontWeight.BOLD if selected else ft.FontWeight.W_500,\n        color=selected_color,\n        visible=not compact,\n        no_wrap=True,\n        max_lines=1,\n    )\n    icon_control = ft.Icon(icon, size=icon_size, color=selected_color)\n    surface = ft.Container(\n        height=52,\n        border_radius=12,\n        bgcolor=nav_selected if selected else None,\n        padding=ft.Padding.symmetric(horizontal=12 if not compact else 8, vertical=9),\n        alignment=ft.Alignment.CENTER if compact else ft.Alignment.CENTER_LEFT,\n        tooltip=label if compact else None,\n        on_click=(lambda _event: on_click()) if on_click else None,\n        badge=(\n            ft.Badge(\n                label=str(min(badge_count, 99)),\n                bgcolor=AppColors.DANGER,\n                text_color=AppColors.WHITE,\n            )\n            if badge_count\n            else None\n        ),\n        content=ft.Row(\n            alignment=ft.MainAxisAlignment.CENTER if compact else ft.MainAxisAlignment.START,\n            vertical_alignment=ft.CrossAxisAlignment.CENTER,\n            spacing=0 if compact else 11,\n            controls=[icon_control, label_control],\n        ),\n    )\n\n    def on_hover(event: ft.HoverEvent) -> None:\n        hovering = event.data == \"true\"\n        if selected:\n            surface.bgcolor = nav_selected\n            icon_control.color = primary\n            label_control.color = primary\n        elif hovering:\n            surface.bgcolor = nav_hover\n            icon_control.color = primary\n            label_control.color = text_primary\n        else:\n            surface.bgcolor = None\n            icon_control.color = nav_text\n            label_control.color = nav_text\n        with suppress(RuntimeError):\n            surface.update()\n\n    if on_click is not None:\n        surface.on_hover = _theme_aware_handler(surface, on_hover)\n        with suppress(Exception):\n            surface.mouse_cursor = ft.MouseCursor.CLICK\n    return surface\n\n\ndef glass_surface(\n    content: ft.Control,\n    *,\n    padding: int = 18,\n    radius: int = 18,\n    accent: bool = False,\n) -> ft.Container:\n    \"\"\"Material leve e previsível, sem blur ou transformações que reduzam nitidez.\"\"\"\n\n    return ft.Container(\n        border_radius=radius,\n        bgcolor=AppColors.GLASS_SURFACE_ACCENT if accent else AppColors.GLASS_SURFACE,\n        border=ft.Border.all(1, AppColors.GLASS_BORDER),\n        padding=padding,\n        shadow=ft.BoxShadow(\n            blur_radius=22,\n            spread_radius=0,\n            color=AppColors.SURFACE_SHADOW,\n            offset=ft.Offset(0, 7),\n        ),\n        content=content,\n    )\n''',
+          )
+
+          # Use a dedicated downsampled asset for small UI rendering and stop rasterizing the whole sidebar.
+          replace_once(
+              'src/climatetest_manager/ui/shell.py',
+              '            src="brand/climatetest-logo.png",\n',
+              '            src="brand/climatetest-logo-ui.png",\n',
+          )
+          replace_once(
+              'src/climatetest_manager/ui/shell.py',
+              '        padding=3,\n',
+              '        padding=1,\n',
+          )
+          replace_once(
+              'src/climatetest_manager/ui/shell.py',
+              '''        animate_offset=ft.Animation(150, ft.AnimationCurve.EASE_OUT_CUBIC),\n        animate_opacity=ft.Animation(120, ft.AnimationCurve.EASE_OUT),\n''',
+              '',
+          )
+
+          # Form labels keep full semantic wording and enough responsive width for future translations.
+          replace_once(
+              'src/climatetest_manager/ui/views/new_test.py',
+              '            "Qtd. de amostras *",\n',
+              '            "Quantidade de amostras *",\n',
+          )
+          replace_once(
+              'src/climatetest_manager/ui/views/polished_new_test.py',
+              '                            ft.Container(col={"xs": 12, "sm": 8}, content=self.process_number),\n                            ft.Container(col={"xs": 12, "sm": 4}, content=self.sample_quantity),\n',
+              '                            ft.Container(col={"xs": 12, "sm": 7}, content=self.process_number),\n                            ft.Container(col={"xs": 12, "sm": 5}, content=self.sample_quantity),\n',
+          )
+
+          # Avoid nested virtualized ListViews, which caused blank/infinite scrolling in real Windows sessions.
+          replace_once(
+              'src/climatetest_manager/ui/views/polished_new_test.py',
+              '    def _build(self) -> ft.ListView:\n',
+              '    def _build(self) -> ft.Column:\n',
+          )
+          replace_once(
+              'src/climatetest_manager/ui/views/polished_new_test.py',
+              '''        return ft.ListView(\n            expand=True,\n            spacing=16,\n            controls=[\n''',
+              '''        return ft.Column(\n            expand=True,\n            scroll=ft.ScrollMode.AUTO,\n            spacing=16,\n            horizontal_alignment=ft.CrossAxisAlignment.STRETCH,\n            controls=[\n''',
+          )
+          replace_once(
+              'src/climatetest_manager/ui/views/polished_test_details.py',
+              '    def _build_polished_root(self) -> ft.Column:\n',
+              '    def _build_polished_root(self) -> ft.Column:\n',
+          )
+          replace_once(
+              'src/climatetest_manager/ui/views/polished_test_details.py',
+              '''        return ft.ListView(\n            expand=True,\n            spacing=15,\n            controls=[\n''',
+              '''        return ft.Column(\n            expand=True,\n            scroll=ft.ScrollMode.AUTO,\n            spacing=15,\n            horizontal_alignment=ft.CrossAxisAlignment.STRETCH,\n            controls=[\n''',
+          )
+
+          # Read-only equipment status is informational, not a disabled action button.
+          regex_once(
+              'src/climatetest_manager/ui/views/dashboard.py',
+              r'''        if self\._read_only:\n            button = ft\.Button\(\n                content=ft\.Text\("Somente leitura", no_wrap=True, max_lines=1\),\n                icon=ft\.Icons\.VISIBILITY_OUTLINED,\n                disabled=True,\n            \)''',
+              '''        if self._read_only:\n            button = ft.Container(\n                border_radius=18,\n                bgcolor=AppColors.INFO_LIGHT,\n                padding=ft.Padding.symmetric(horizontal=12, vertical=8),\n                content=ft.Row(\n                    tight=True,\n                    spacing=7,\n                    controls=[\n                        ft.Icon(ft.Icons.VISIBILITY_OUTLINED, size=18, color=AppColors.INFO),\n                        ft.Text(\n                            "Consulta",\n                            no_wrap=True,\n                            weight=ft.FontWeight.BOLD,\n                            color=AppColors.INFO,\n                        ),\n                    ],\n                ),\n            )''',
+          )
+
+          # Outline the whole applicable Table 17 row and keep the exact selected alternative stronger.
+          regex_once(
+              'src/climatetest_manager/ui/components/table17.py',
+              r'''def _row\(rule: _RuleRow, active_rule_id: str \| None\) -> ft\.Row:\n    return ft\.Row\(.*?\n    \)\n\n\ndef build_table17_preview''',
+              '''def _row(rule: _RuleRow, active_rule_id: str | None) -> ft.Container:\n    row_active = active_rule_id in {rule.rule_a, rule.rule_b}\n    return ft.Container(\n        border=(ft.Border.all(2, AppColors.PRIMARY) if row_active else None),\n        bgcolor=AppColors.PRIMARY_LIGHT if row_active else None,\n        content=ft.Row(\n            spacing=0,\n            vertical_alignment=ft.CrossAxisAlignment.STRETCH,\n            controls=[\n                _cell(rule.epls, width=150, active=row_active),\n                _cell(rule.ts_band, width=155, active=row_active),\n                ft.Container(\n                    expand=True,\n                    content=_cell(rule.option_a, active=active_rule_id == rule.rule_a),\n                ),\n                ft.Container(\n                    expand=True,\n                    content=_cell(\n                        rule.option_b,\n                        active=bool(rule.rule_b and active_rule_id == rule.rule_b),\n                    ),\n                ),\n            ],\n        ),\n    )\n\n\ndef build_table17_preview''',
+          )
+
+          # Send incident e-mail immediately in a background thread, while the scheduled notifier remains fallback.
+          replace_once(
+              'src/climatetest_manager/app.py',
+              'import ipaddress\n',
+              'import asyncio\nimport ipaddress\n',
+          )
+          replace_once(
+              'src/climatetest_manager/app.py',
+              '''    EmailNotificationProvider,\n    WindowsToastProvider,\n)\n''',
+              '''    EmailNotificationProvider,\n    WindowsToastProvider,\n    deliver_pending_incident_emails,\n)\n''',
+          )
+          replace_once(
+              'src/climatetest_manager/app.py',
+              '_SERVER_CONTEXT_LOCK = Lock()\n',
+              '_SERVER_CONTEXT_LOCK = Lock()\n_INCIDENT_EMAIL_LOCK = Lock()\n',
+          )
+          replace_once(
+              'src/climatetest_manager/app.py',
+              '''            self._repository.report_system_incident(\n                reason_code=reason.code,\n                category=reason.label,\n                severity=reason.severity,\n                description=description,\n                immediate_action=immediate_action,\n                reported_by=self._current_user.actor_label,\n            )\n''',
+              '''            self._repository.report_system_incident(\n                reason_code=reason.code,\n                category=reason.label,\n                severity=reason.severity,\n                description=description,\n                immediate_action=immediate_action,\n                reported_by=self._current_user.actor_label,\n            )\n            self._page.run_task(self._deliver_incident_email_queue)\n''',
+          )
+          replace_once(
+              'src/climatetest_manager/app.py',
+              '''        return None\n\n    def _resolve_system_incident(\n''',
+              '''        return None\n\n    async def _deliver_incident_email_queue(self) -> None:\n        \"\"\"Tenta o e-mail logo após o registro sem bloquear a janela do operador.\"\"\"\n\n        try:\n            await asyncio.to_thread(self._deliver_incident_email_queue_sync)\n        except Exception:\n            # A tarefa agendada continua sendo a retentativa auditável.\n            return\n\n    def _deliver_incident_email_queue_sync(self) -> None:\n        with _INCIDENT_EMAIL_LOCK:\n            settings = load_email_settings()\n            if not settings.automatic_enabled:\n                return\n            recipients = self._auth_service.notification_admin_emails()\n            if not recipients:\n                return\n            deliver_pending_incident_emails(\n                self._repository,\n                EmailNotificationProvider(settings, recipients),\n            )\n\n    def _resolve_system_incident(\n''',
+          )
+
+          # Admin session gets an in-app alert as soon as the polling loop sees a new incident.
+          replace_once(
+              'src/climatetest_manager/production_app.py',
+              '''                if delivered:\n                    # O host desktop consome uma chave por vez; evita sobrescrever avisos em rajada.\n                    await asyncio.sleep(0.8)\n''',
+              '''                if item.source_kind == "incident" and self._current_user.is_admin:\n                    self._prepare_theme()\n                    first_line = item.message.splitlines()[0] if item.message else "Nova falha registrada"\n                    self._show_message(f"{item.title}: {first_line}")\n                if delivered:\n                    # O host desktop consome uma chave por vez; evita sobrescrever avisos em rajada.\n                    await asyncio.sleep(0.8)\n''',
+          )
+
+          # Regression tests mirror the corrected roots/theme catalog.
+          replace_once(
+              'tests/unit/test_feedback_hotfix.py',
+              '    assert keys == ["light", "amber", "ice", "dark", "graphite", "ocean"]\n',
+              '    assert keys == ["light", "amber", "lavender", "dark", "graphite", "ocean"]\n    assert AppColors.normalize_mode("ice") == "lavender"\n',
+          )
+          replace_once(
+              'tests/unit/test_feedback_hotfix.py',
+              'from climatetest_manager.ui.theme import THEME_OPTIONS\n',
+              'from climatetest_manager.ui.theme import THEME_OPTIONS, AppColors\n',
+          )
+          replace_once(
+              'tests/unit/test_production_polish.py',
+              '        assert isinstance(new_test.root, ft.ListView)\n',
+              '        assert isinstance(new_test.root, ft.Column)\n        assert new_test.root.scroll == ft.ScrollMode.AUTO\n',
+          )
+          replace_once(
+              'tests/unit/test_production_polish.py',
+              '        assert isinstance(details_view, ft.ListView)\n',
+              '        assert isinstance(details_view, ft.Column)\n        assert details_view.scroll == ft.ScrollMode.AUTO\n',
+          )
+          PY
+      - name: Generate sharp UI logo
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from PIL import Image, ImageFilter
+
+          source = Path('src/assets/brand/climatetest-logo.png')
+          target = Path('src/assets/brand/climatetest-logo-ui.png')
+          with Image.open(source) as image:
+              image = image.convert('RGBA')
+              image = image.resize((256, 256), Image.Resampling.LANCZOS)
+              image = image.filter(ImageFilter.UnsharpMask(radius=0.6, percent=125, threshold=2))
+              image.save(target, format='PNG', optimize=True)
+          PY
+      - name: Format
+        run: python -m ruff format src tests
+      - name: Lint
+        run: python -m ruff check src tests
+      - name: Test
+        run: python -m pytest
+      - name: Commit fixes
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src tests
+          git commit -m "fix: corrigir UX, rolagem, alertas e nitidez da v0.8.0"
+          git push
