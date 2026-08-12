@@ -4,8 +4,8 @@ from pathlib import Path
 
 import flet as ft
 
-from climatetest_manager.app import main
 from climatetest_manager.client_session import enable_client_session_persistence
+from climatetest_manager.round3_runtime import main
 
 if __name__ == "__main__":
     enable_client_session_persistence()
