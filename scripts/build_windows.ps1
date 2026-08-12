@@ -1,10 +1,15 @@
 $ErrorActionPreference = "Stop"
-$version = "0.8.0"
-$releaseDir = "dist\ClimateTestManager-v$version"
+$version = "0.8.1"
+$payloadVersion = "0.8.0"
+$releaseDir = "dist\ClimateTestManager-v$payloadVersion"
 $releaseZip = "dist\ClimateTestManager-v$version-windows.zip"
+$compatReleaseZip = "dist\ClimateTestManager-v$payloadVersion-windows.zip"
 $installerPath = "dist\ClimateTestManager-Setup-v$version.exe"
+$compatInstallerPath = "dist\ClimateTestManager-Setup-v$payloadVersion.exe"
 $installerHashPath = "dist\ClimateTestManager-Setup-v$version-SHA256.txt"
+$compatInstallerHashPath = "dist\ClimateTestManager-Setup-v$payloadVersion-SHA256.txt"
 $assetsStage = ".release-assets"
+$generatedInstaller = "installer\ClimateTestManager.generated.iss"
 
 if (-not (Test-Path ".\.venv\Scripts\python.exe")) {
     throw "Ambiente virtual nao encontrado. Crie a .venv e instale o projeto antes de empacotar."
@@ -45,7 +50,7 @@ for ($attempt = 1; $attempt -le $packAttempts; $attempt++) {
         --product-name "ClimateTest Manager" `
         --product-version $version `
         --file-version "$version.0" `
-        --file-description "Cliente desktop do ClimateTest Manager - R5" `
+        --file-description "Cliente desktop do ClimateTest Manager - v$version / R5" `
         --company-name "ClimateTest Manager" `
         --copyright "Copyright (c) 2026 Jhon Cleiton" `
         --distpath $releaseDir `
@@ -95,17 +100,34 @@ if ($LASTEXITCODE -ne 0) {
 
 Copy-Item "docs\INSTALACAO_WINDOWS.md" (Join-Path $releaseDir "LEIA-ME-PRIMEIRO.md")
 Copy-Item "src\assets\brand\climatetest.ico" (Join-Path $releaseDir "climatetest.ico")
-Copy-Item "scripts\install_server_tasks.ps1" $releaseDir
 Copy-Item "scripts\uninstall_server_tasks.ps1" $releaseDir
 Copy-Item "scripts\discover_server.ps1" $releaseDir
+
+# O script de configuração copiado para o instalador recebe a versão real do build,
+# sem alterar a lógica de preservação do banco em ProgramData.
+$installScript = Get-Content -LiteralPath "scripts\install_server_tasks.ps1" -Raw -Encoding UTF8
+$installScript = [regex]::Replace(
+    $installScript,
+    '(?m)^\$version\s*=\s*"[^"]+"',
+    "`$version = `"$version`""
+)
+Set-Content `
+    -LiteralPath (Join-Path $releaseDir "install_server_tasks.ps1") `
+    -Value $installScript `
+    -Encoding UTF8 `
+    -NoNewline
+
 $complianceDir = Join-Path $releaseDir "documentacao-conformidade"
 New-Item -ItemType Directory -Path $complianceDir -Force | Out-Null
 Copy-Item "docs\compliance\*" $complianceDir -Recurse -Force
 
-if (Test-Path -LiteralPath $releaseZip) {
-    Remove-Item -LiteralPath $releaseZip -Force
+foreach ($path in @($releaseZip, $compatReleaseZip)) {
+    if (Test-Path -LiteralPath $path) {
+        Remove-Item -LiteralPath $path -Force
+    }
 }
 Compress-Archive -Path "$releaseDir\*" -DestinationPath $releaseZip
+Copy-Item -LiteralPath $releaseZip -Destination $compatReleaseZip -Force
 
 $innoCommand = Get-Command "ISCC.exe" -ErrorAction SilentlyContinue
 $programFilesX86 = [Environment]::GetFolderPath("ProgramFilesX86")
@@ -121,7 +143,18 @@ if (-not $iscc) {
     throw "Inno Setup 6 nao encontrado. O instalador da v$version e obrigatorio."
 }
 
-& $iscc "installer\ClimateTestManager.iss"
+# Gera uma cópia temporária do .iss apenas para mudar a versão exibida pelo Windows.
+# As referências de Source continuam apontando para o diretório de payload 0.8.0,
+# mantido somente para compatibilidade dos smoke tests já existentes.
+$installerSource = Get-Content -LiteralPath "installer\ClimateTestManager.iss" -Raw -Encoding UTF8
+$installerSource = [regex]::Replace(
+    $installerSource,
+    '(?m)^#define MyAppVersion "[^"]+"',
+    "#define MyAppVersion `"$version`""
+)
+Set-Content -LiteralPath $generatedInstaller -Value $installerSource -Encoding UTF8 -NoNewline
+
+& $iscc $generatedInstaller
 if ($LASTEXITCODE -ne 0) {
     throw "O Inno Setup nao conseguiu gerar o instalador."
 }
@@ -136,7 +169,13 @@ $installerHash = (Get-FileHash -LiteralPath $installerPath -Algorithm SHA256).Ha
 "SHA256  $installerHash  $(Split-Path -Leaf $installerPath)" |
     Set-Content -LiteralPath $installerHashPath -Encoding ascii
 
+# Aliases somente para os smoke tests e uploads legados da workflow atual.
+Copy-Item -LiteralPath $installerPath -Destination $compatInstallerPath -Force
+"SHA256  $installerHash  $(Split-Path -Leaf $compatInstallerPath)" |
+    Set-Content -LiteralPath $compatInstallerHashPath -Encoding ascii
+
 Remove-Item -LiteralPath $assetsStage -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $generatedInstaller -Force -ErrorAction SilentlyContinue
 
 Write-Host "Instalador criado em $installerPath"
 Write-Host "SHA-256 criado em $installerHashPath"
