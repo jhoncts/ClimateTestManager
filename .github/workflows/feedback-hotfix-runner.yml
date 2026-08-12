@@ -40,10 +40,47 @@ jobs:
               raise RuntimeError('role applicator marker not found')
           script = script.replace(old_role, new_role, 1)
           script = script.replace('onboarding_completed_at=None,', 'onboarding_completed=False,')
-          # Algumas correções atingem dois blocos idênticos de produção. O aplicador continua
-          # exigindo pelo menos uma ocorrência, mas permite substituir uma por vez.
           script = script.replace('if count != 1:', 'if count < 1:')
           exec(compile(script, '<feedback-hotfix>', 'exec'), {'__name__': '__main__'})
+          PY
+      - name: Polish generated code
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          def patch(path, old, new):
+              file = Path(path)
+              text = file.read_text(encoding='utf-8')
+              if old not in text:
+                  raise RuntimeError(f'polish marker not found in {path}')
+              file.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          patch(
+              'src/client.py',
+              '''    except Exception:\n        try:\n            ctypes.windll.user32.SetProcessDPIAware()\n        except Exception:\n            pass\n''',
+              '''    except Exception:\n        with suppress(Exception):\n            ctypes.windll.user32.SetProcessDPIAware()\n''',
+          )
+          patch(
+              'src/climatetest_manager/services/background.py',
+              '''            "O banco SQLite ativo não deve ficar no OneDrive. Use o OneDrive somente para as cópias de segurança."\n''',
+              '''            "O banco SQLite ativo não deve ficar no OneDrive. "\n            "Use o OneDrive somente para as cópias de segurança."\n''',
+          )
+          patch(
+              'src/climatetest_manager/services/background.py',
+              '''            "A tarefa de notificações do Windows não foi encontrada. Execute novamente o instalador "\n            "do ClimateTest Manager e escolha Reparar/Atualizar; seus dados serão preservados."\n''',
+              '''            "A tarefa de notificações do Windows não foi encontrada. "\n            "Execute novamente o instalador do ClimateTest Manager e escolha "\n            "Reparar/Atualizar; seus dados serão preservados."\n''',
+          )
+          patch(
+              'src/climatetest_manager/ui/views/production_settings.py',
+              '''                    content="Falha registrada. O administrador foi avisado e o e-mail será processado em segundo plano.",\n''',
+              '''                    content=(\n                        "Falha registrada. O administrador foi avisado e o e-mail será "\n                        "processado em segundo plano."\n                    ),\n''',
+          )
+          patch(
+              'src/climatetest_manager/ui/views/users.py',
+              '''                        "Administradores gerenciam contas. Operadores executam todas as funções técnicas. "\n                        "O perfil Consulta acompanha ensaios e detalhes sem alterar a operação.",\n''',
+              '''                        "Administradores gerenciam contas. Operadores executam todas as "\n                        "funções técnicas. O perfil Consulta acompanha ensaios e detalhes "\n                        "sem alterar a operação.",\n''',
+          )
           PY
       - name: Install project
         run: |
