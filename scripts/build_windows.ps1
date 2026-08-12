@@ -38,14 +38,14 @@ $packSucceeded = $false
 $packAttempts = 3
 for ($attempt = 1; $attempt -le $packAttempts; $attempt++) {
     Write-Host "Empacotando ClimateTestManager.exe (tentativa $attempt de $packAttempts)..."
-    .\.venv\Scripts\flet.exe pack src/client.py `
+    .\.venv\Scripts\flet.exe pack src/client_r5.py `
         --name ClimateTestManager `
         --icon "src\assets\brand\climatetest.ico" `
         --add-data "$assetsStage;assets" `
         --product-name "ClimateTest Manager" `
         --product-version $version `
         --file-version "$version.0" `
-        --file-description "Cliente desktop do ClimateTest Manager" `
+        --file-description "Cliente desktop do ClimateTest Manager - R5" `
         --company-name "ClimateTest Manager" `
         --copyright "Copyright (c) 2026 Jhon Cleiton" `
         --distpath $releaseDir `
