@@ -13,6 +13,23 @@ from climatetest_manager.round5_runtime import BUILD_REVISION, StableDetailsView
 from climatetest_manager.services.climate_tests import ClimateTestService, CreateClimateTestCommand
 
 
+def _walk(control: ft.Control):
+    yield control
+    content = getattr(control, "content", None)
+    if isinstance(content, ft.Control):
+        yield from _walk(content)
+    for child in getattr(control, "controls", ()) or ():
+        if isinstance(child, ft.Control):
+            yield from _walk(child)
+
+
+def _has_revision(root: ft.Control) -> bool:
+    return any(
+        isinstance(control, ft.Text) and BUILD_REVISION in (control.value or "")
+        for control in _walk(root)
+    )
+
+
 class Round5RuntimeTests(unittest.TestCase):
     def test_new_test_has_one_scroll_owner_and_no_list_view_root(self) -> None:
         view = StableNewTestView(on_cancel=lambda: None, on_save=lambda _command: None)
@@ -20,7 +37,7 @@ class Round5RuntimeTests(unittest.TestCase):
         self.assertIsInstance(view.root, ft.Column)
         self.assertEqual(view.root.scroll, ft.ScrollMode.AUTO)
         self.assertNotIsInstance(view.root, ft.ListView)
-        self.assertTrue(any(BUILD_REVISION in str(control) for control in view.root.controls))
+        self.assertTrue(_has_revision(view.root))
 
     def test_details_uses_simple_scroll_root_and_keeps_operational_panels(self) -> None:
         with TemporaryDirectory() as temporary_directory:
@@ -57,7 +74,7 @@ class Round5RuntimeTests(unittest.TestCase):
                 self.assertIsInstance(view.root, ft.Column)
                 self.assertEqual(view.root.scroll, ft.ScrollMode.AUTO)
                 self.assertGreaterEqual(len(view.root.controls), 7)
-                self.assertTrue(any(BUILD_REVISION in str(control) for control in view.root.controls))
+                self.assertTrue(_has_revision(view.root))
             finally:
                 engine.dispose()
 
