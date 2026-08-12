@@ -1,0 +1,62 @@
+name: Run real-world feedback hotfix
+
+on:
+  push:
+    branches:
+      - feat/v0.8.0-production-polish
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-test:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Apply corrected patch script
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          workflow = Path('.github/workflows/feedback-hotfix.yml').read_text(encoding='utf-8')
+          start_marker = "          python - <<'PY'\n"
+          end_marker = "\n          PY\n"
+          start = workflow.index(start_marker) + len(start_marker)
+          end = workflow.index(end_marker, start)
+          lines = workflow[start:end].splitlines()
+          script = "\n".join(line[10:] if line.startswith('          ') else line for line in lines) + "\n"
+
+          script = script.replace(
+              '''    @property\n    def role_label(self) -> str:\n        return "Administrador" if self.is_admin else "Operador"\n\n    @property\n    def is_admin(self) -> bool:\n        return self.role == "admin"\n''',
+              '''    @property\n    def role_label(self) -> str:\n        return "Administrador" if self.role == "admin" else "Operador"\n\n    @property\n    def is_admin(self) -> bool:\n        return self.role == "admin"\n''',
+          )
+          script = script.replace('onboarding_completed_at=None,', 'onboarding_completed=False,')
+          exec(compile(script, '<feedback-hotfix>', 'exec'), {'__name__': '__main__'})
+          PY
+      - name: Install project
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev]'
+      - name: Format
+        run: python -m ruff format src tests
+      - name: Lint
+        run: python -m ruff check src tests
+      - name: Test
+        run: python -m pytest
+      - name: Commit fixes
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add pyproject.toml src tests
+          git diff --cached --quiet && exit 0
+          git commit -m 'fix: corrigir problemas encontrados no teste real da v0.8.0'
+          git push origin HEAD:feat/v0.8.0-production-polish
