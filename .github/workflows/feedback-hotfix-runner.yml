@@ -53,7 +53,7 @@ jobs:
               file = Path(path)
               text = file.read_text(encoding='utf-8')
               if old not in text:
-                  raise RuntimeError(f'polish marker not found in {path}')
+                  raise RuntimeError(f'polish marker not found in {path}: {old[:70]!r}')
               file.write_text(text.replace(old, new, 1), encoding='utf-8')
 
           patch(
@@ -80,6 +80,23 @@ jobs:
               'src/climatetest_manager/ui/views/users.py',
               '''                        "Administradores gerenciam contas. Operadores executam todas as funções técnicas. "\n                        "O perfil Consulta acompanha ensaios e detalhes sem alterar a operação.",\n''',
               '''                        "Administradores gerenciam contas. Operadores executam todas as "\n                        "funções técnicas. O perfil Consulta acompanha ensaios e detalhes "\n                        "sem alterar a operação.",\n''',
+          )
+          # A validação de papéis aceita viewer, mas viewer nunca pode executar operações.
+          patch(
+              'src/climatetest_manager/services/auth.py',
+              '''        return self.role in {"admin", "operator", "viewer"}\n''',
+              '''        return self.role in {"admin", "operator"}\n''',
+          )
+          # As telas passaram deliberadamente a usar ListView para impedir o scroll vazio infinito.
+          patch(
+              'tests/unit/test_production_polish.py',
+              '''        assert isinstance(new_test.root, ft.Column)\n''',
+              '''        assert isinstance(new_test.root, ft.ListView)\n''',
+          )
+          patch(
+              'tests/unit/test_production_polish.py',
+              '''        assert isinstance(details_view, ft.Column)\n''',
+              '''        assert isinstance(details_view, ft.ListView)\n''',
           )
           PY
       - name: Install project
