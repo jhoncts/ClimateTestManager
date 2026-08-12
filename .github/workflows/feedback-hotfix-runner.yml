@@ -34,10 +34,11 @@ jobs:
           lines = workflow[start:end].splitlines()
           script = "\n".join(line[10:] if line.startswith('          ') else line for line in lines) + "\n"
 
-          script = script.replace(
-              '''    @property\n    def role_label(self) -> str:\n        return "Administrador" if self.is_admin else "Operador"\n\n    @property\n    def is_admin(self) -> bool:\n        return self.role == "admin"\n''',
-              '''    @property\n    def role_label(self) -> str:\n        return "Administrador" if self.role == "admin" else "Operador"\n\n    @property\n    def is_admin(self) -> bool:\n        return self.role == "admin"\n''',
-          )
+          old_role = 'return "Administrador" if self.is_admin else "Operador"'
+          new_role = 'return "Administrador" if self.role == "admin" else "Operador"'
+          if old_role not in script:
+              raise RuntimeError('role applicator marker not found')
+          script = script.replace(old_role, new_role, 1)
           script = script.replace('onboarding_completed_at=None,', 'onboarding_completed=False,')
           exec(compile(script, '<feedback-hotfix>', 'exec'), {'__name__': '__main__'})
           PY
