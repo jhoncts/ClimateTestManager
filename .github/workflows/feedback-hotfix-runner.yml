@@ -40,6 +40,9 @@ jobs:
               raise RuntimeError('role applicator marker not found')
           script = script.replace(old_role, new_role, 1)
           script = script.replace('onboarding_completed_at=None,', 'onboarding_completed=False,')
+          # Algumas correções atingem dois blocos idênticos de produção. O aplicador continua
+          # exigindo pelo menos uma ocorrência, mas permite substituir uma por vez.
+          script = script.replace('if count != 1:', 'if count < 1:')
           exec(compile(script, '<feedback-hotfix>', 'exec'), {'__name__': '__main__'})
           PY
       - name: Install project
