@@ -12,7 +12,7 @@ import client as legacy
 
 APP_VERSION = "0.8.1"
 BUILD_REVISION = "R5-20260812"
-BUILD_MARKER_PATH = "/assets/server-build.txt"
+BUILD_MARKER_PATH = "/server-build.txt"
 
 # Toda a infraestrutura de janela, bandeja, atualização e reconexão continua no
 # cliente validado, mas a versão exposta ao atualizador deve ser a deste release.
