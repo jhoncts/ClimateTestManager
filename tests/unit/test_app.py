@@ -145,8 +145,8 @@ class ApplicationTests(unittest.TestCase):
             try:
                 application.start()
                 self.assertIsInstance(page.controls[0], ft.AnimatedSwitcher)
-                self.assertEqual(page.controls[0].duration, 0)
-                self.assertEqual(page.controls[0].reverse_duration, 0)
+                self.assertEqual(page.controls[0].duration, 180)
+                self.assertEqual(page.controls[0].reverse_duration, 140)
                 self.assertIsInstance(page.controls[0].content, ft.Container)
                 dashboard_content = application._current_content
                 application._handle_resize(SimpleNamespace(width=900))
