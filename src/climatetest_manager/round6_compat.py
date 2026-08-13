@@ -104,3 +104,6 @@ def navigation_surface(
 def install() -> None:
     shell_module.hoverable_navigation_surface = navigation_surface
     dialogs_module.apply_interaction_polish = apply_interaction_polish
+
+
+install()
