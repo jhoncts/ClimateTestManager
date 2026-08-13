@@ -37,7 +37,10 @@ class R6NewTestView(RefinedNewTestView):
             apply_interaction_polish(
                 styled_dialog(
                     title="Tabela 17 — condição aplicada",
-                    subtitle="A linha e a alternativa usadas no cálculo são destacadas automaticamente",
+                    subtitle=(
+                        "A linha e a alternativa usadas no cálculo são "
+                        "destacadas automaticamente"
+                    ),
                     icon=ft.Icons.TABLE_CHART_OUTLINED,
                     content=ft.Container(
                         width=1020,
