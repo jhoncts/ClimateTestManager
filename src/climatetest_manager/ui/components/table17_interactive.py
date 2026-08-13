@@ -64,7 +64,10 @@ def _epl_selector(
             alignment=ft.Alignment.CENTER,
             border_radius=8,
             bgcolor=AppColors.PRIMARY_LIGHT if selected else AppColors.SURFACE,
-            border=ft.Border.all(2 if selected else 1, AppColors.PRIMARY if selected else AppColors.DIVIDER),
+            border=ft.Border.all(
+                2 if selected else 1,
+                AppColors.PRIMARY if selected else AppColors.DIVIDER,
+            ),
             opacity=1 if enabled else 0.42,
             tooltip=(
                 f"EPL {epl} selecionado"
@@ -73,7 +76,6 @@ def _epl_selector(
                 if enabled
                 else "Informe o Ts antes de selecionar o EPL"
             ),
-            mouse_cursor=ft.MouseCursor.CLICK if enabled else ft.MouseCursor.BASIC,
             on_click=(lambda _event, value=epl: on_select_epl(value)) if enabled else None,
             content=ft.Text(
                 epl,
@@ -125,7 +127,6 @@ def _text_cell(
         opacity=0.38 if disabled else 1,
         alignment=ft.Alignment.CENTER_LEFT,
         tooltip=tooltip,
-        mouse_cursor=ft.MouseCursor.CLICK if interactive else ft.MouseCursor.BASIC,
         on_click=(lambda _event: on_click()) if interactive else None,
         animate=ft.Animation(140, ft.AnimationCurve.EASE_OUT_CUBIC),
         content=ft.Text(
@@ -182,7 +183,9 @@ def build_interactive_table17(
                 border=ft.Border.all(1, AppColors.DIVIDER),
             )
 
-        option_a_enabled = bool(group_selected and row_matches and TestOption.A.value in valid_options)
+        option_a_enabled = bool(
+            group_selected and row_matches and TestOption.A.value in valid_options
+        )
         option_b_enabled = bool(
             group_selected
             and row_matches
@@ -250,8 +253,14 @@ def build_interactive_table17(
                     controls=[
                         _text_cell("EPL", width=116, header=True),
                         _text_cell("Temperatura de serviço Ts", width=170, header=True),
-                        ft.Container(width=347, content=_text_cell("Condição do ensaio • A", header=True)),
-                        ft.Container(width=347, content=_text_cell("Condição do ensaio • B", header=True)),
+                        ft.Container(
+                            width=347,
+                            content=_text_cell("Condição do ensaio • A", header=True),
+                        ),
+                        ft.Container(
+                            width=347,
+                            content=_text_cell("Condição do ensaio • B", header=True),
+                        ),
                     ],
                 ),
                 *rows,
