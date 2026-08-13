@@ -6,7 +6,10 @@ import flet as ft
 
 from climatetest_manager import production_app
 from climatetest_manager.round4_runtime import _force_scroll_top
-from climatetest_manager.round6_runtime import RefinedNewTestView, apply_interaction_polish
+from climatetest_manager.round6_runtime import (
+    RefinedNewTestView,
+    apply_interaction_polish,
+)
 from climatetest_manager.ui.components import styled_dialog
 from climatetest_manager.ui.components.table17 import build_table17_preview
 from climatetest_manager.ui.theme import AppColors
