@@ -7,24 +7,19 @@ from pathlib import Path
 
 import flet as ft
 
-from climatetest_manager import (
-    round4_runtime,
-    round6_compat,
-    round6_email,
-    round6_runtime,
-    round6_table17,
-)
+from climatetest_manager import round4_runtime, round6_compat, round6_email, round6_runtime
 from climatetest_manager.client_session import enable_client_session_persistence
-from climatetest_manager.round6_runtime import main
 from climatetest_manager.services.network import DiscoveryResponder
 
-# O refresh de notificações da rodada 3 já foi validado em uso real. A R6 altera
-# somente composição/UX e preserva esse comportamento estável.
 round4_runtime._App._refresh_shell_frame = round4_runtime._original_refresh_shell_frame
 round6_runtime.install_round6_fixes()
 round6_compat.install()
 round6_email.install()
-round6_table17.install()
+
+from climatetest_manager import round7_runtime  # noqa: E402
+from climatetest_manager.round7_runtime import main  # noqa: E402
+
+round7_runtime.install_round7_fixes()
 
 
 def _arguments() -> argparse.Namespace:
@@ -37,13 +32,6 @@ def _arguments() -> argparse.Namespace:
 
 
 def _ensure_standard_streams() -> None:
-    """Garante streams válidos quando o executável foi empacotado com --noconsole.
-
-    No Windows, o PyInstaller pode definir sys.stdout/sys.stderr como None em executáveis
-    sem console. O Uvicorn consulta ``isatty()`` nesses streams durante a configuração do
-    logging; sem esta proteção o servidor encerra antes mesmo de abrir a porta HTTP.
-    """
-
     if sys.stdin is None:
         sys.stdin = open(os.devnull, encoding="utf-8")  # noqa: SIM115
     if sys.stdout is None:
