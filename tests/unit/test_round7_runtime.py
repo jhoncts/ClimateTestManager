@@ -5,7 +5,7 @@ from decimal import Decimal
 
 import flet as ft
 
-from climatetest_manager.round7_runtime import CleanNewTestView, TABLE17_MODE
+from climatetest_manager.round7_runtime import TABLE17_MODE, CleanNewTestView
 from climatetest_manager.ui.components.table17_interactive import ts_band_label
 from climatetest_manager.ui.responsive import LayoutProfile
 
