@@ -111,7 +111,7 @@ def _text_cell(
     interactive = on_click is not None and not disabled
     return ft.Container(
         width=width,
-        min_height=48 if header else 72,
+        height=48 if header else 72,
         padding=ft.Padding.symmetric(horizontal=10, vertical=8),
         bgcolor=(
             AppColors.PRIMARY_LIGHT
