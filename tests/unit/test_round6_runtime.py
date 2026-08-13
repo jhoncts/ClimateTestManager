@@ -14,6 +14,7 @@ from climatetest_manager.round6_runtime import (
     _compact_incident_panel,
     apply_interaction_polish,
 )
+from climatetest_manager.round6_table17 import R6NewTestView
 from climatetest_manager.ui.theme import AppColors
 
 
@@ -37,17 +38,22 @@ def _texts(root: ft.Control) -> list[str]:
 
 class Round6RuntimeTests(unittest.TestCase):
     def test_new_test_keeps_single_page_scroll_owner_and_compact_two_columns(self) -> None:
-        view = RefinedNewTestView(on_cancel=lambda: None, on_save=lambda _command: None)
+        view = R6NewTestView(on_cancel=lambda: None, on_save=lambda _command: None)
 
         self.assertIsInstance(view.root, ft.Column)
         self.assertEqual(view.root.scroll, ft.ScrollMode.AUTO)
-        scrollables = [control for control in _walk(view.root) if isinstance(control, ft.ScrollableControl)]
+        scrollables = [
+            control
+            for control in _walk(view.root)
+            if isinstance(control, ft.ScrollableControl)
+        ]
         self.assertEqual(scrollables, [view.root])
         all_text = _texts(view.root)
         self.assertTrue(any(BUILD_REVISION in value for value in all_text))
         self.assertIn("Tabela 17 — alternativa aplicada", all_text)
         self.assertIn("Alternativa A", all_text)
         self.assertIn("Alternativa B", all_text)
+        self.assertIn("Visualizar Tabela 17 completa", all_text)
 
     def test_table17_highlight_tracks_selected_option_without_new_scroll_region(self) -> None:
         view = RefinedNewTestView(on_cancel=lambda: None, on_save=lambda _command: None)
