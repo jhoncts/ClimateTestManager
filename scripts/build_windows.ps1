@@ -1,5 +1,5 @@
 $ErrorActionPreference = "Stop"
-$version = "0.8.1"
+$version = "0.8.2"
 $payloadVersion = "0.8.0"
 $releaseDir = "dist\ClimateTestManager-v$payloadVersion"
 $releaseZip = "dist\ClimateTestManager-v$version-windows.zip"
@@ -43,14 +43,14 @@ $packSucceeded = $false
 $packAttempts = 3
 for ($attempt = 1; $attempt -le $packAttempts; $attempt++) {
     Write-Host "Empacotando ClimateTestManager.exe (tentativa $attempt de $packAttempts)..."
-    .\.venv\Scripts\flet.exe pack src/client_r5.py `
+    .\.venv\Scripts\flet.exe pack src/client_r6.py `
         --name ClimateTestManager `
         --icon "src\assets\brand\climatetest.ico" `
         --add-data "$assetsStage;assets" `
         --product-name "ClimateTest Manager" `
         --product-version $version `
         --file-version "$version.0" `
-        --file-description "Cliente desktop do ClimateTest Manager - v$version / R5" `
+        --file-description "Cliente desktop do ClimateTest Manager - v$version / R6" `
         --company-name "ClimateTest Manager" `
         --copyright "Copyright (c) 2026 Jhon Cleiton" `
         --distpath $releaseDir `
