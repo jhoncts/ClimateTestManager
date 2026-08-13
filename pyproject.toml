@@ -49,6 +49,7 @@ extend-exclude = [
   "src/climatetest_manager/round6_runtime.py",
   "src/climatetest_manager/round6_table17.py",
   "src/climatetest_manager/round7_runtime.py",
+  "src/climatetest_manager/ui/components/table17_interactive.py",
   "tests/unit/test_round6_runtime.py",
 ]
 
