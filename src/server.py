@@ -7,15 +7,15 @@ from pathlib import Path
 
 import flet as ft
 
-from climatetest_manager import round4_runtime, round5_runtime
+from climatetest_manager import round4_runtime, round6_runtime
 from climatetest_manager.client_session import enable_client_session_persistence
-from climatetest_manager.round5_runtime import main
+from climatetest_manager.round6_runtime import main
 from climatetest_manager.services.network import DiscoveryResponder
 
-# A atualização de notificações da rodada 3 já foi validada em uso real. A rodada 5
-# atua somente nas telas críticas e não substitui esse comportamento estável.
+# O refresh de notificações da rodada 3 já foi validado em uso real. A R6 altera
+# somente composição/UX e preserva esse comportamento estável.
 round4_runtime._App._refresh_shell_frame = round4_runtime._original_refresh_shell_frame
-round5_runtime.install_round5_fixes()
+round6_runtime.install_round6_fixes()
 
 
 def _arguments() -> argparse.Namespace:
