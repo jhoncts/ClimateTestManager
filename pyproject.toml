@@ -47,6 +47,8 @@ extend-exclude = [
   "src/climatetest_manager/round4_runtime.py",
   "src/climatetest_manager/round5_runtime.py",
   "src/climatetest_manager/round6_runtime.py",
+  "src/climatetest_manager/round6_table17.py",
+  "tests/unit/test_round6_runtime.py",
 ]
 
 [tool.ruff.lint]
