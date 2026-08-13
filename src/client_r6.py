@@ -1,4 +1,4 @@
-"""Cliente R6 com verificação explícita da versão do servidor central."""
+"""Cliente desktop com verificação explícita da versão do servidor central."""
 
 from __future__ import annotations
 
@@ -10,11 +10,10 @@ import flet as ft
 
 import client as legacy
 
-APP_VERSION = "0.8.2"
-BUILD_REVISION = "R6-20260813"
+APP_VERSION = "0.8.3"
+BUILD_REVISION = "R7-20260813"
 BUILD_MARKER_PATH = "/server-build.txt"
 
-# A infraestrutura validada de janela, bandeja, atualização e reconexão é mantida.
 legacy.VERSION = APP_VERSION
 
 
@@ -58,9 +57,9 @@ def _diagnostic_page(page: ft.Page, server_url: str, found_build: str) -> None:
                             color="#102A43",
                         ),
                         ft.Text(
-                            "Esta estação está com a versão 0.8.2, mas o computador central "
-                            "ainda não está executando a mesma interface validada. Para evitar "
-                            "telas antigas ou inconsistentes, a conexão foi bloqueada.",
+                            "Esta estação está com a versão 0.8.3, mas o computador central "
+                            "ainda não está executando a mesma versão. A conexão foi bloqueada "
+                            "para evitar telas antigas ou inconsistentes.",
                             size=13,
                             color="#536579",
                         ),
@@ -77,30 +76,17 @@ def _diagnostic_page(page: ft.Page, server_url: str, found_build: str) -> None:
                                         weight=ft.FontWeight.BOLD,
                                         color="#102A43",
                                     ),
-                                    ft.Text(
-                                        f"Esperado: {BUILD_REVISION}",
-                                        size=11,
-                                        color="#536579",
-                                    ),
-                                    ft.Text(
-                                        f"Encontrado: {found}",
-                                        size=11,
-                                        color="#536579",
-                                    ),
+                                    ft.Text(f"Esperado: {BUILD_REVISION}", size=11, color="#536579"),
+                                    ft.Text(f"Encontrado: {found}", size=11, color="#536579"),
                                 ],
                             ),
                         ),
                         ft.Text(
-                            "Instale primeiro o mesmo instalador no computador servidor, "
-                            "escolhendo “Servidor central”. Depois abra esta estação novamente.",
+                            "Atualize primeiro o computador servidor com este mesmo instalador "
+                            "e depois abra novamente a estação.",
                             size=12,
                             weight=ft.FontWeight.BOLD,
                             color="#B42318",
-                        ),
-                        ft.Text(
-                            f"Cliente desktop {APP_VERSION} • build {BUILD_REVISION}",
-                            size=10,
-                            color="#8292A3",
                         ),
                     ],
                 ),
