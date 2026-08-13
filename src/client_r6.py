@@ -76,8 +76,16 @@ def _diagnostic_page(page: ft.Page, server_url: str, found_build: str) -> None:
                                         weight=ft.FontWeight.BOLD,
                                         color="#102A43",
                                     ),
-                                    ft.Text(f"Esperado: {BUILD_REVISION}", size=11, color="#536579"),
-                                    ft.Text(f"Encontrado: {found}", size=11, color="#536579"),
+                                    ft.Text(
+                                        f"Esperado: {BUILD_REVISION}",
+                                        size=11,
+                                        color="#536579",
+                                    ),
+                                    ft.Text(
+                                        f"Encontrado: {found}",
+                                        size=11,
+                                        color="#536579",
+                                    ),
                                 ],
                             ),
                         ),
