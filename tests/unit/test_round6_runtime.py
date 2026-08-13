@@ -33,9 +33,7 @@ def _texts(root: ft.Control) -> list[str]:
     for control in _walk(root):
         if isinstance(control, ft.Text):
             values.append(control.value or "")
-        elif isinstance(control, (ft.Button, ft.TextButton)) and isinstance(
-            control.content, str
-        ):
+        elif isinstance(control, (ft.Button, ft.TextButton)) and isinstance(control.content, str):
             values.append(control.content)
     return values
 
