@@ -29,11 +29,15 @@ def _walk(control: ft.Control):
 
 
 def _texts(root: ft.Control) -> list[str]:
-    return [
-        control.value or ""
-        for control in _walk(root)
-        if isinstance(control, ft.Text)
-    ]
+    values: list[str] = []
+    for control in _walk(root):
+        if isinstance(control, ft.Text):
+            values.append(control.value or "")
+        elif isinstance(control, (ft.Button, ft.TextButton)) and isinstance(
+            control.content, str
+        ):
+            values.append(control.content)
+    return values
 
 
 class Round6RuntimeTests(unittest.TestCase):
@@ -45,7 +49,7 @@ class Round6RuntimeTests(unittest.TestCase):
         scrollables = [
             control
             for control in _walk(view.root)
-            if isinstance(control, ft.ScrollableControl)
+            if getattr(control, "scroll", None) is not None
         ]
         self.assertEqual(scrollables, [view.root])
         all_text = _texts(view.root)
