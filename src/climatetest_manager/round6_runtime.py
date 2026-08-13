@@ -116,7 +116,7 @@ def _navigation_surface(
     icon_control = ft.Icon(icon, size=icon_size, color=selected_color)
     badge = ft.Container(
         visible=badge_count > 0,
-        min_width=20,
+        width=22,
         height=20,
         padding=ft.Padding.symmetric(horizontal=5),
         border_radius=10,

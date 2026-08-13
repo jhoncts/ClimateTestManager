@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 from xml.etree import ElementTree
 
+from climatetest_manager import __version__
 from climatetest_manager.config import get_data_directory, is_synced_directory
 
 TASK_NAME = "ClimateTestManager-Notifications"
@@ -25,7 +26,13 @@ def _notification_action(data_directory: str = "") -> str:
     project_root = _project_root()
     candidates.extend(
         [
-            (project_root / "dist" / "ClimateTestManager-v0.8.0" / "ClimateTestNotifier.exe", None),
+            (
+                project_root
+                / "dist"
+                / f"ClimateTestManager-v{__version__}"
+                / "ClimateTestNotifier.exe",
+                None,
+            ),
             (project_root / "dist" / "ClimateTestNotifier.exe", None),
             (
                 project_root / ".venv" / "Scripts" / "pythonw.exe",

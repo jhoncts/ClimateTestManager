@@ -297,7 +297,10 @@ def build_settings_view(
         use_tls = ft.Switch(label="Usar conexão TLS", value=email_settings.use_tls)
         enabled = ft.Switch(
             label="Enviar e-mails automáticos",
-            value=email_settings.enabled,
+            # Na primeira configuração o comportamento esperado é salvar e já
+            # ativar os alertas. Uma conta existente que foi desativada de forma
+            # explícita continua respeitando essa escolha.
+            value=email_settings.enabled or not email_settings.has_credentials,
         )
         error_text = ft.Text("", size=11, color=AppColors.DANGER)
         page = email_button.page

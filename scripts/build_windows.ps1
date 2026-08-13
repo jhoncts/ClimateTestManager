@@ -1,13 +1,9 @@
 $ErrorActionPreference = "Stop"
-$version = "0.8.3"
-$payloadVersion = "0.8.0"
-$releaseDir = "dist\ClimateTestManager-v$payloadVersion"
+$version = "0.8.4"
+$releaseDir = "dist\ClimateTestManager-v$version"
 $releaseZip = "dist\ClimateTestManager-v$version-windows.zip"
-$compatReleaseZip = "dist\ClimateTestManager-v$payloadVersion-windows.zip"
 $installerPath = "dist\ClimateTestManager-Setup-v$version.exe"
-$compatInstallerPath = "dist\ClimateTestManager-Setup-v$payloadVersion.exe"
 $installerHashPath = "dist\ClimateTestManager-Setup-v$version-SHA256.txt"
-$compatInstallerHashPath = "dist\ClimateTestManager-Setup-v$payloadVersion-SHA256.txt"
 $assetsStage = ".release-assets"
 $generatedInstaller = "installer\ClimateTestManager.generated.iss"
 
@@ -23,7 +19,7 @@ Copy-Item "src\assets\brand\climatetest-logo.png" (Join-Path $assetsStage "icons
 
 $packSucceeded = $false
 for ($attempt = 1; $attempt -le 3; $attempt++) {
-    .\.venv\Scripts\flet.exe pack src/client_r6.py --name ClimateTestManager --icon "src\assets\brand\climatetest.ico" --add-data "$assetsStage;assets" --product-name "ClimateTest Manager" --product-version $version --file-version "$version.0" --file-description "Cliente desktop do ClimateTest Manager - v$version / R7" --company-name "ClimateTest Manager" --copyright "Copyright (c) 2026 Jhon Cleiton" --distpath $releaseDir --yes
+    .\.venv\Scripts\flet.exe pack src/client_r6.py --name ClimateTestManager --icon "src\assets\brand\climatetest.ico" --add-data "$assetsStage;assets" --product-name "ClimateTest Manager" --product-version $version --file-version "$version.0" --file-description "Cliente desktop do ClimateTest Manager - v$version / R8" --company-name "ClimateTest Manager" --copyright "Copyright (c) 2026 Jhon Cleiton" --distpath $releaseDir --yes
     if ($LASTEXITCODE -eq 0) { $packSucceeded = $true; break }
     if ($attempt -lt 3) { Start-Sleep -Seconds (8 * $attempt) }
 }
@@ -45,9 +41,8 @@ $complianceDir = Join-Path $releaseDir "documentacao-conformidade"
 New-Item -ItemType Directory -Path $complianceDir -Force | Out-Null
 Copy-Item "docs\compliance\*" $complianceDir -Recurse -Force
 
-foreach ($path in @($releaseZip, $compatReleaseZip)) { if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Force } }
+if (Test-Path -LiteralPath $releaseZip) { Remove-Item -LiteralPath $releaseZip -Force }
 Compress-Archive -Path "$releaseDir\*" -DestinationPath $releaseZip
-Copy-Item -LiteralPath $releaseZip -Destination $compatReleaseZip -Force
 
 $innoCommand = Get-Command "ISCC.exe" -ErrorAction SilentlyContinue
 $programFilesX86 = [Environment]::GetFolderPath("ProgramFilesX86")
@@ -63,8 +58,6 @@ if (-not (Test-Path -LiteralPath $installerPath)) { throw "O build terminou sem 
 
 $installerHash = (Get-FileHash -LiteralPath $installerPath -Algorithm SHA256).Hash.ToLowerInvariant()
 "SHA256  $installerHash  $(Split-Path -Leaf $installerPath)" | Set-Content -LiteralPath $installerHashPath -Encoding ascii
-Copy-Item -LiteralPath $installerPath -Destination $compatInstallerPath -Force
-"SHA256  $installerHash  $(Split-Path -Leaf $compatInstallerPath)" | Set-Content -LiteralPath $compatInstallerHashPath -Encoding ascii
 Remove-Item -LiteralPath $assetsStage -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath $generatedInstaller -Force -ErrorAction SilentlyContinue
 Write-Host "Instalador criado em $installerPath"

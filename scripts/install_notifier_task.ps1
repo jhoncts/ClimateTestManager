@@ -5,7 +5,7 @@ param(
 $ErrorActionPreference = "Stop"
 $taskName = "ClimateTestManager-Notifications"
 $projectRoot = Split-Path -Parent $PSScriptRoot
-$releaseNotifier = Join-Path $projectRoot "dist\ClimateTestManager-v0.6.0\ClimateTestNotifier.exe"
+$releaseNotifier = Join-Path $projectRoot "dist\ClimateTestManager-v0.8.4\ClimateTestNotifier.exe"
 $legacyPackagedNotifier = Join-Path $projectRoot "dist\ClimateTestNotifier.exe"
 $developmentPython = Join-Path $projectRoot ".venv\Scripts\pythonw.exe"
 $developmentEntry = Join-Path $projectRoot "src\notifier.py"

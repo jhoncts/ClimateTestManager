@@ -10,8 +10,8 @@ import flet as ft
 
 import client as legacy
 
-APP_VERSION = "0.8.3"
-BUILD_REVISION = "R7-20260813"
+APP_VERSION = "0.8.4"
+BUILD_REVISION = "R8-20260814"
 BUILD_MARKER_PATH = "/server-build.txt"
 
 legacy.VERSION = APP_VERSION
@@ -57,7 +57,8 @@ def _diagnostic_page(page: ft.Page, server_url: str, found_build: str) -> None:
                             color="#102A43",
                         ),
                         ft.Text(
-                            "Esta estação está com a versão 0.8.3, mas o computador central "
+                            "Esta estação está com a versão "
+                            f"{APP_VERSION}, mas o computador central "
                             "ainda não está executando a mesma versão. A conexão foi bloqueada "
                             "para evitar telas antigas ou inconsistentes.",
                             size=13,

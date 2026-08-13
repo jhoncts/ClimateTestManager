@@ -38,7 +38,7 @@ from climatetest_manager.ui.components.table17_interactive import (
 from climatetest_manager.ui.formatters import format_datetime
 from climatetest_manager.ui.theme import AppColors
 
-BUILD_REVISION = "R7-20260813"
+BUILD_REVISION = "R8-20260814"
 TABLE17_MODE = "table17_select"
 
 

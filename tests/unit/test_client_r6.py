@@ -12,7 +12,7 @@ class ClientR6Tests(unittest.TestCase):
         response = MagicMock()
         response.__enter__.return_value = response
         response.status = 200
-        response.read.return_value = b"R7-20260813\n"
+        response.read.return_value = b"R8-20260814\n"
         urlopen.return_value = response
 
         value = client_r6._server_build("http://127.0.0.1:8550")

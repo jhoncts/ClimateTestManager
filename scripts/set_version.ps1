@@ -46,6 +46,11 @@ Replace-InFile `
     -Replacement "VERSION = `"$Version`""
 
 Replace-InFile `
+    -Path "src\client_r6.py" `
+    -Pattern '(?m)^APP_VERSION\s*=\s*"\d+\.\d+\.\d+"' `
+    -Replacement "APP_VERSION = `"$Version`""
+
+Replace-InFile `
     -Path "installer\ClimateTestManager.iss" `
     -Pattern '(?m)^#define MyAppVersion "\d+\.\d+\.\d+"' `
     -Replacement "#define MyAppVersion `"$Version`""

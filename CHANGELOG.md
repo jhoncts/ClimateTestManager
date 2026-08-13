@@ -7,6 +7,28 @@ e o projeto utiliza versionamento semântico.
 
 ## [Não publicado]
 
+### v0.8.4 — estabilidade da interface e instalador universal validável
+
+- A moldura principal permanece montada durante navegação e redimensionamento; somente o conteúdo
+  central muda, eliminando o reparenting que causava tela branca e desaparecimento da sidebar.
+- A sidebar usa dimensões aceitas pelo Flet 0.86.4, preserva o conteúdo aberto ao recolher/expandir
+  e mantém textos, ícones e badges determinísticos nos breakpoints.
+- O Novo ensaio volta a ter um único scroll vertical, campos de identificação em coluna e apenas
+  um campo de Ts no modo de seleção pela Tabela 17.
+- A Tabela 17 interativa permanece montada durante seleção e rolagem, aceita exatamente um EPL e
+  uma condição e explica tentativas de escolher opções incompatíveis com Ts.
+- Configurações recebe a grade clean 2×2 para e-mail, avisos, backup e falhas, com log de falhas
+  separado da página principal.
+- A primeira configuração SMTP habilita os avisos automáticos por padrão; o status diferencia
+  credenciais testáveis de automação ativa e oferece ativação explícita quando necessário.
+- Alertas de falha são tentados imediatamente para administradores e para o relator, com mensagem
+  clara quando o SMTP está desligado, sem destinatários ou recusou a entrega.
+- A confirmação por pressão usa uma única superfície com progresso embutido.
+- O instalador universal configura servidor central ou estação, preserva
+  `C:\ProgramData\ClimateTestManager` e impede um segundo servidor quando a descoberta local já
+  encontra outro.
+- Build `R8-20260814`, pacote e workflow Windows unificados na versão `0.8.4`.
+
 ### v0.6.0 — rede local, central de notificações e identidade própria
 
 - Servidor Flet para acesso simultâneo por computadores e celulares na rede privada, mantendo o
