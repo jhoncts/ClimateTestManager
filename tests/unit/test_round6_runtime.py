@@ -7,11 +7,11 @@ import flet as ft
 
 from climatetest_manager.config import EmailSettings
 from climatetest_manager.repositories.climate_tests import SystemIncidentSummary
+from climatetest_manager.round6_compat import navigation_surface
 from climatetest_manager.round6_runtime import (
     BUILD_REVISION,
     RefinedNewTestView,
     _compact_incident_panel,
-    _navigation_surface,
     apply_interaction_polish,
 )
 from climatetest_manager.ui.theme import AppColors
@@ -58,7 +58,7 @@ class Round6RuntimeTests(unittest.TestCase):
         self.assertNotEqual(view._table17_b_status.value, "Aplicada ao ensaio")
 
     def test_sidebar_count_is_inside_navigation_surface_not_overflow_badge(self) -> None:
-        surface = _navigation_surface(
+        surface = navigation_surface(
             label="Notificações",
             icon=ft.Icons.NOTIFICATIONS_OUTLINED,
             selected=False,
