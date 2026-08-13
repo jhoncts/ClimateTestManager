@@ -5,7 +5,9 @@ from __future__ import annotations
 import flet as ft
 
 from climatetest_manager.round4_runtime import _safe_update
+from climatetest_manager.round6_runtime import apply_interaction_polish
 from climatetest_manager.ui import shell as shell_module
+from climatetest_manager.ui.components import dialogs as dialogs_module
 from climatetest_manager.ui.theme import AppColors
 
 
@@ -101,3 +103,4 @@ def navigation_surface(
 
 def install() -> None:
     shell_module.hoverable_navigation_surface = navigation_surface
+    dialogs_module.apply_interaction_polish = apply_interaction_polish
