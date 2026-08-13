@@ -21,7 +21,13 @@ def walk(control: ft.Control):
 
 
 def texts(control: ft.Control) -> list[str]:
-    return [str(item.value or "") for item in walk(control) if isinstance(item, ft.Text)]
+    values: list[str] = []
+    for item in walk(control):
+        if isinstance(item, ft.Text):
+            values.append(str(item.value or ""))
+        elif isinstance(item, ft.Button) and isinstance(item.content, str):
+            values.append(item.content)
+    return values
 
 
 class Round7RuntimeTests(unittest.TestCase):
