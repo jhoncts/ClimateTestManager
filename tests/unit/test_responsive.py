@@ -42,26 +42,11 @@ class ResponsiveLayoutTests(unittest.TestCase):
         self.assertIs(compact.with_collapsed_sidebar(True), compact)
 
     def test_keeps_current_profile_while_width_jitters_near_breakpoint(self) -> None:
-        self.assertEqual(
-            LayoutProfile.stable_from_width(1170, current_mode="regular").mode,
-            "regular",
-        )
-        self.assertEqual(
-            LayoutProfile.stable_from_width(1147, current_mode="regular").mode,
-            "compact",
-        )
-        self.assertEqual(
-            LayoutProfile.stable_from_width(1200, current_mode="compact").mode,
-            "compact",
-        )
-        self.assertEqual(
-            LayoutProfile.stable_from_width(1212, current_mode="compact").mode,
-            "regular",
-        )
-        self.assertEqual(
-            LayoutProfile.stable_from_width(1480, current_mode="spacious").mode,
-            "spacious",
-        )
+        self.assertEqual(LayoutProfile.stable_from_width(970, current_mode="regular").mode, "regular")
+        self.assertEqual(LayoutProfile.stable_from_width(947, current_mode="regular").mode, "compact")
+        self.assertEqual(LayoutProfile.stable_from_width(1000, current_mode="compact").mode, "compact")
+        self.assertEqual(LayoutProfile.stable_from_width(1012, current_mode="compact").mode, "regular")
+        self.assertEqual(LayoutProfile.stable_from_width(1480, current_mode="spacious").mode, "spacious")
 
 
 if __name__ == "__main__":
