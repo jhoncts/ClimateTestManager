@@ -10,8 +10,6 @@ step.
 
 from __future__ import annotations
 
-import base64
-from io import BytesIO
 from pathlib import Path
 from zipfile import ZipFile
 
@@ -19,6 +17,5 @@ _PROJECT_ROOT = Path(__file__).resolve().parent
 _OVERLAY = _PROJECT_ROOT / ".release-candidate" / "ui-fix7-overlay.zip"
 
 if _OVERLAY.exists():
-    overlay_bytes = base64.b64decode(_OVERLAY.read_bytes(), validate=True)
-    with ZipFile(BytesIO(overlay_bytes)) as archive:
+    with ZipFile(_OVERLAY) as archive:
         archive.extractall(_PROJECT_ROOT)
