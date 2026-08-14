@@ -18,11 +18,19 @@ from zipfile import ZipFile
 _PROJECT_ROOT = Path(__file__).resolve().parent
 _OVERLAY = _PROJECT_ROOT / ".release-candidate" / "ui-fix7-overlay.zip"
 
+
+def _decode_overlay(payload: bytes) -> bytes:
+    candidate = payload.strip()
+    for _ in range(3):
+        if candidate.startswith(b"PK"):
+            return candidate
+        candidate = base64.b64decode(b"".join(candidate.split()), validate=False)
+    if candidate.startswith(b"PK"):
+        return candidate
+    raise RuntimeError("UI-FIX-7 release-candidate overlay is not a valid ZIP payload.")
+
+
 if _OVERLAY.exists():
-    payload = _OVERLAY.read_bytes()
-    if payload.startswith(b"PK"):
-        overlay_bytes = payload
-    else:
-        overlay_bytes = base64.b64decode(b"".join(payload.split()), validate=True)
+    overlay_bytes = _decode_overlay(_OVERLAY.read_bytes())
     with ZipFile(BytesIO(overlay_bytes)) as archive:
         archive.extractall(_PROJECT_ROOT)
