@@ -52,8 +52,8 @@ jobs:
           Remove-Item -LiteralPath $readyFile -Force -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Path $dataDir -Force | Out-Null
 
-          $serverExe = ".\dist\ClimateTestManager-v0.8.4\ClimateTestServer.exe"
-          $clientExe = ".\dist\ClimateTestManager-v0.8.4\ClimateTestManager.exe"
+          $serverExe = ".\dist\ClimateTestManager-v0.8.5\ClimateTestServer.exe"
+          $clientExe = ".\dist\ClimateTestManager-v0.8.5\ClimateTestManager.exe"
           $server = Start-Process `
             -FilePath $serverExe `
             -ArgumentList @(
@@ -72,10 +72,12 @@ jobs:
               }
               try {
                 $response = Invoke-WebRequest `
-                  -Uri "http://127.0.0.1:18550/" `
+                  -Uri "http://127.0.0.1:18550/server-build.txt" `
                   -UseBasicParsing `
                   -TimeoutSec 2
-                if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 500) {
+                if (($response.StatusCode -ge 200) -and
+                    ($response.StatusCode -lt 300) -and
+                    (([string]$response.Content).Trim() -eq "R9-20260814")) {
                   $ready = $true
                   break
                 }
@@ -150,8 +152,8 @@ jobs:
           Remove-Item -LiteralPath $setupLog -Force -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Path $serverData -Force | Out-Null
 
-          $serverExe = ".\dist\ClimateTestManager-v0.8.4\ClimateTestServer.exe"
-          $setupExe = ".\dist\ClimateTestManager-Setup-v0.8.4.exe"
+          $serverExe = ".\dist\ClimateTestManager-v0.8.5\ClimateTestServer.exe"
+          $setupExe = ".\dist\ClimateTestManager-Setup-v0.8.5.exe"
           $server = Start-Process `
             -FilePath $serverExe `
             -ArgumentList @(
@@ -169,8 +171,10 @@ jobs:
                 throw "Servidor temporário da estação encerrou. ExitCode=$($server.ExitCode)"
               }
               try {
-                $response = Invoke-WebRequest -Uri "http://127.0.0.1:18552/" -UseBasicParsing -TimeoutSec 2
-                if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 500) {
+                $response = Invoke-WebRequest -Uri "http://127.0.0.1:18552/server-build.txt" -UseBasicParsing -TimeoutSec 2
+                if (($response.StatusCode -ge 200) -and
+                    ($response.StatusCode -lt 300) -and
+                    (([string]$response.Content).Trim() -eq "R9-20260814")) {
                   $ready = $true
                   break
                 }
@@ -299,7 +303,7 @@ jobs:
           New-Item -ItemType Directory -Path $installDir -Force | Out-Null
           New-Item -ItemType Directory -Path $oldData -Force | Out-Null
           Copy-Item `
-            ".\dist\ClimateTestManager-v0.8.4\ClimateTestServer.exe" `
+            ".\dist\ClimateTestManager-v0.8.5\ClimateTestServer.exe" `
             (Join-Path $installDir "ClimateTestServer.exe") `
             -Force
 
@@ -318,7 +322,7 @@ jobs:
           }
 
           $setup = Start-Process `
-            -FilePath ".\dist\ClimateTestManager-Setup-v0.8.4.exe" `
+            -FilePath ".\dist\ClimateTestManager-Setup-v0.8.5.exe" `
             -ArgumentList @(
               "/VERYSILENT",
               "/SUPPRESSMSGBOXES",
@@ -355,10 +359,12 @@ jobs:
           for ($attempt = 1; $attempt -le 45; $attempt++) {
             try {
               $response = Invoke-WebRequest `
-                -Uri "http://127.0.0.1:8550/" `
+                -Uri "http://127.0.0.1:8550/server-build.txt" `
                 -UseBasicParsing `
                 -TimeoutSec 2
-              if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 500) {
+              if (($response.StatusCode -ge 200) -and
+                  ($response.StatusCode -lt 300) -and
+                  (([string]$response.Content).Trim() -eq "R9-20260814")) {
                 $ready = $true
                 break
               }
@@ -368,7 +374,17 @@ jobs:
             }
           }
           if (-not $ready) {
-            throw "Servidor instalado não respondeu após o teste de atualização."
+            throw "Servidor instalado não publicou a revisão R9 após a atualização."
+          }
+
+          $installStatusPath = Join-Path $env:ProgramData "ClimateTestManager\install-status.json"
+          if (-not (Test-Path -LiteralPath $installStatusPath)) {
+            throw "A atualização não gerou o diagnóstico install-status.json."
+          }
+          $installStatus = Get-Content -LiteralPath $installStatusPath -Raw | ConvertFrom-Json
+          if (($installStatus.version -ne "0.8.5") -or
+              ($installStatus.build_revision -ne "R9-20260814")) {
+            throw "O diagnóstico da instalação não confirma v0.8.5 / R9-20260814."
           }
 
           $installedClient = Join-Path $installDir "ClimateTestManager.exe"
@@ -389,8 +405,8 @@ jobs:
       - name: Verify installer checksum
         shell: pwsh
         run: |
-          $installer = ".\dist\ClimateTestManager-Setup-v0.8.4.exe"
-          $hashFile = ".\dist\ClimateTestManager-Setup-v0.8.4-SHA256.txt"
+          $installer = ".\dist\ClimateTestManager-Setup-v0.8.5.exe"
+          $hashFile = ".\dist\ClimateTestManager-Setup-v0.8.5-SHA256.txt"
           if (-not (Test-Path -LiteralPath $installer)) {
             throw "Instalador final não foi gerado."
           }
@@ -406,12 +422,12 @@ jobs:
       - name: Upload validated Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ClimateTestManager-v0.8.4-Windows-Validated
+          name: ClimateTestManager-v0.8.5-Windows-Validated
           if-no-files-found: error
           path: |
-            dist/ClimateTestManager-Setup-v0.8.4.exe
-            dist/ClimateTestManager-Setup-v0.8.4-SHA256.txt
-            dist/ClimateTestManager-v0.8.4-windows.zip
+            dist/ClimateTestManager-Setup-v0.8.5.exe
+            dist/ClimateTestManager-Setup-v0.8.5-SHA256.txt
+            dist/ClimateTestManager-v0.8.5-windows.zip
 
       - name: Publish GitHub release only from a tag
         if: startsWith(github.ref, 'refs/tags/')
@@ -420,9 +436,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "${{ github.ref_name }}" `
-            "dist/ClimateTestManager-Setup-v0.8.4.exe" `
-            "dist/ClimateTestManager-Setup-v0.8.4-SHA256.txt" `
-            "dist/ClimateTestManager-v0.8.4-windows.zip" `
+            "dist/ClimateTestManager-Setup-v0.8.5.exe" `
+            "dist/ClimateTestManager-Setup-v0.8.5-SHA256.txt" `
+            "dist/ClimateTestManager-v0.8.5-windows.zip" `
             --target "${{ github.sha }}" `
             --title "ClimateTest Manager ${{ github.ref_name }}" `
             --generate-notes

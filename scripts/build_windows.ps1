@@ -1,5 +1,5 @@
 $ErrorActionPreference = "Stop"
-$version = "0.8.4"
+$version = "0.8.5"
 $releaseDir = "dist\ClimateTestManager-v$version"
 $releaseZip = "dist\ClimateTestManager-v$version-windows.zip"
 $installerPath = "dist\ClimateTestManager-Setup-v$version.exe"
@@ -19,7 +19,7 @@ Copy-Item "src\assets\brand\climatetest-logo.png" (Join-Path $assetsStage "icons
 
 $packSucceeded = $false
 for ($attempt = 1; $attempt -le 3; $attempt++) {
-    .\.venv\Scripts\flet.exe pack src/client_r6.py --name ClimateTestManager --icon "src\assets\brand\climatetest.ico" --add-data "$assetsStage;assets" --product-name "ClimateTest Manager" --product-version $version --file-version "$version.0" --file-description "Cliente desktop do ClimateTest Manager - v$version / R8" --company-name "ClimateTest Manager" --copyright "Copyright (c) 2026 Jhon Cleiton" --distpath $releaseDir --yes
+    .\.venv\Scripts\flet.exe pack src/client_r6.py --name ClimateTestManager --icon "src\assets\brand\climatetest.ico" --add-data "$assetsStage;assets" --product-name "ClimateTest Manager" --product-version $version --file-version "$version.0" --file-description "Cliente desktop do ClimateTest Manager - v$version / R9" --company-name "ClimateTest Manager" --copyright "Copyright (c) 2026 Jhon Cleiton" --distpath $releaseDir --yes
     if ($LASTEXITCODE -eq 0) { $packSucceeded = $true; break }
     if ($attempt -lt 3) { Start-Sleep -Seconds (8 * $attempt) }
 }

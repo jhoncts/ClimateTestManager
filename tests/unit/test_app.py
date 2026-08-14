@@ -149,7 +149,7 @@ class ApplicationTests(unittest.TestCase):
                 self.assertEqual(page.controls[0].reverse_duration, 140)
                 self.assertIsInstance(page.controls[0].content, ft.Container)
                 dashboard_content = application._current_content
-                application._handle_resize(SimpleNamespace(width=900))
+                application._handle_resize(SimpleNamespace(width=820))
                 compact_shell = application._screen_container.content
                 self.assertEqual(application._layout.mode, "compact")
                 self.assertIs(compact_shell.controls[1].content, dashboard_content)
@@ -207,7 +207,7 @@ class ApplicationTests(unittest.TestCase):
                 self.assertIs(application._screen_container.content, original_shell)
                 self.assertEqual(page.scheduled_tasks, [])
 
-                application._handle_resize(SimpleNamespace(width=900))
+                application._handle_resize(SimpleNamespace(width=820))
                 self.assertEqual(application._layout.mode, "compact")
                 self.assertEqual(len(page.scheduled_tasks), 1)
                 self.assertEqual(page.scheduled_tasks[0][2]["offset"], 430)

@@ -1,4 +1,4 @@
-"""Estabilização final da interface e dos fluxos críticos da versão 0.8.4.
+"""Estabilização final da interface e dos fluxos críticos da versão 0.8.5.
 
 Esta camada substitui somente pontos da R7 que reconstruíam controles já
 montados. A moldura, o formulário e a Tabela 17 passam a manter uma árvore
@@ -45,8 +45,9 @@ from climatetest_manager.ui.responsive import (
 )
 from climatetest_manager.ui.shell import build_production_shell
 from climatetest_manager.ui.theme import THEME_OPTIONS, AppColors
+from climatetest_manager.ui.views.final_new_test import FinalNewTestView
 
-BUILD_REVISION = "R8-20260814"
+BUILD_REVISION = "R9-20260814"
 
 
 def _safe_update(control: ft.Control | None) -> None:
@@ -162,7 +163,6 @@ def _stable_render(
     self._scroll_offset = 0.0
     self._bind_scroll_state(content)
     self._transition_index += 1
-    old_content = self._current_content
     self._current_content = content
     self._selected_view = selected_view
 
@@ -184,11 +184,10 @@ def _stable_render(
         self._switcher.content = surface
         self._page.update()
     else:
-        if content_host.content is old_content:
-            content_host.content = None
+        # Uma única atualização troca a tela e a navegação. Limpar o host e atualizá-lo
+        # novamente criava uma janela intermediária vazia no WebView2.
         content_host.content = content
         _replace_shell_frame(self)
-        _safe_update(content_host)
 
     self._page.run_task(self._save_offline_snapshot)
 
@@ -514,26 +513,42 @@ def _hold_button(
 
     progress = ft.ProgressBar(
         value=0,
-        height=50,
+        height=56,
         color=AppColors.DANGER,
         bgcolor=AppColors.DANGER_LIGHT,
     )
-    icon = ft.Icon(ft.Icons.TOUCH_APP, size=18, color=AppColors.DANGER)
-    caption = ft.Text(label, size=11, weight=ft.FontWeight.BOLD, color=AppColors.DANGER)
+    icon = ft.Icon(ft.Icons.TOUCH_APP_OUTLINED, size=19, color=AppColors.DANGER)
+    caption = ft.Text(
+        label,
+        size=11,
+        weight=ft.FontWeight.BOLD,
+        color=AppColors.DANGER,
+        no_wrap=True,
+    )
+    hint = ft.Text(
+        "Segure por 1,6 s • solte para abortar",
+        size=8,
+        color=AppColors.TEXT_SECONDARY,
+        no_wrap=True,
+    )
     percent = ft.Text("0%", size=10, weight=ft.FontWeight.BOLD, color=AppColors.DANGER)
     state = {"holding": False, "generation": 0, "confirmed": False}
 
     async def advance(generation: int) -> None:
-        for step in range(1, 21):
-            await asyncio.sleep(0.07)
+        for step in range(1, 25):
+            await asyncio.sleep(0.065)
             if not state["holding"] or state["generation"] != generation:
                 return
-            value = step / 20
+            value = step / 24
             progress.value = value
             percent.value = f"{round(value * 100)}%"
-            if value >= 0.55:
+            if value >= 0.16:
                 icon.color = AppColors.WHITE
+            if value >= 0.44:
                 caption.color = AppColors.WHITE
+            if value >= 0.52:
+                hint.color = AppColors.WHITE
+            if value >= 0.88:
                 percent.color = AppColors.WHITE
             _safe_update(surface)
         state["holding"] = False
@@ -541,6 +556,9 @@ def _hold_button(
         if enabled is not None and not enabled():
             reset()
             return
+        caption.value = "Confirmando ação..."
+        hint.value = "Aguarde um instante"
+        _safe_update(surface)
         on_confirm()
 
     def reset() -> None:
@@ -548,6 +566,9 @@ def _hold_button(
         percent.value = "0%"
         icon.color = AppColors.DANGER
         caption.color = AppColors.DANGER
+        caption.value = label
+        hint.color = AppColors.TEXT_SECONDARY
+        hint.value = "Segure por 1,6 s • solte para abortar"
         percent.color = AppColors.DANGER
         _safe_update(surface)
 
@@ -565,24 +586,45 @@ def _hold_button(
             reset()
 
     surface = ft.Container(
-        height=50,
+        height=56,
         border=ft.Border.all(1, AppColors.DANGER),
         border_radius=12,
         clip_behavior=ft.ClipBehavior.HARD_EDGE,
+        animate=ft.Animation(120, ft.AnimationCurve.EASE_OUT_CUBIC),
         content=ft.Stack(
             controls=[
                 progress,
                 ft.Container(
-                    padding=ft.Padding.symmetric(horizontal=14, vertical=0),
+                    padding=ft.Padding.symmetric(horizontal=12, vertical=0),
                     alignment=ft.Alignment.CENTER,
                     content=ft.Row(
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
                         controls=[
-                            icon,
                             ft.Container(
-                                expand=True, alignment=ft.Alignment.CENTER, content=caption
+                                width=34,
+                                height=34,
+                                border_radius=17,
+                                border=ft.Border.all(1, AppColors.DANGER),
+                                alignment=ft.Alignment.CENTER,
+                                content=icon,
                             ),
-                            percent,
+                            ft.Container(
+                                expand=True,
+                                padding=ft.Padding.symmetric(horizontal=8),
+                                alignment=ft.Alignment.CENTER,
+                                content=ft.Column(
+                                    tight=True,
+                                    spacing=0,
+                                    horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                                    controls=[caption, hint],
+                                ),
+                            ),
+                            ft.Container(
+                                width=38,
+                                alignment=ft.Alignment.CENTER_RIGHT,
+                                content=percent,
+                            ),
                         ],
                     ),
                 ),
@@ -1138,7 +1180,7 @@ def _show_new_test(self: production_app.ProductionClimateTestApplication) -> Non
     if self._selected_view == "new_test" and self._new_test_view is not None:
         return
     self._prepare_theme()
-    view = StableNewTestView(
+    view = FinalNewTestView(
         on_cancel=self._confirm_discard_new_test,
         on_save=self._save_test,
         draft=self._new_test_draft,
@@ -1157,7 +1199,7 @@ def _show_edit_test(
         self._show_message("Este perfil possui acesso somente para consulta.", error=True)
         return
     self._prepare_theme()
-    view = StableNewTestView(
+    view = FinalNewTestView(
         on_cancel=lambda: self.show_details(test_id),
         on_save=lambda command: self._update_test(test_id, command),
         details=self._service.get_details(test_id),

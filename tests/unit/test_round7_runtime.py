@@ -65,7 +65,8 @@ class Round7RuntimeTests(unittest.TestCase):
     def test_normal_notebook_width_keeps_sidebar_labels(self) -> None:
         self.assertEqual(LayoutProfile.from_width(1100).mode, "regular")
         self.assertFalse(LayoutProfile.from_width(1100).compact_navigation)
-        self.assertEqual(LayoutProfile.from_width(920).mode, "compact")
+        self.assertEqual(LayoutProfile.from_width(920).mode, "regular")
+        self.assertFalse(LayoutProfile.from_width(920).compact_navigation)
 
 
 if __name__ == "__main__":

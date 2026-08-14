@@ -28,7 +28,7 @@ from climatetest_manager.services.updates import (
 from climatetest_manager.single_instance import SingleInstanceCoordinator
 from climatetest_manager.ui.offline import build_offline_view
 
-VERSION = "0.8.4"
+VERSION = "0.8.5"
 DEFAULT_PORT = 8550
 SERVER_CONFIG_FILENAME = "server.url"
 

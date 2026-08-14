@@ -138,11 +138,36 @@ def hoverable_navigation_surface(
         height=1.35,
         weight=ft.FontWeight.BOLD if selected else ft.FontWeight.W_500,
         color=selected_color,
-        visible=not compact,
         no_wrap=True,
         max_lines=1,
     )
     icon_control = ft.Icon(icon, size=icon_size, color=selected_color)
+    badge = ft.Container(
+        visible=badge_count > 0,
+        width=22,
+        height=20,
+        border_radius=10,
+        bgcolor=AppColors.DANGER,
+        alignment=ft.Alignment.CENTER,
+        content=ft.Text(
+            str(min(badge_count, 99)),
+            size=9,
+            weight=ft.FontWeight.BOLD,
+            color=AppColors.WHITE,
+            no_wrap=True,
+        ),
+    )
+    if compact:
+        row_controls: list[ft.Control] = [icon_control]
+        if badge_count:
+            row_controls.append(badge)
+    else:
+        row_controls = [
+            icon_control,
+            ft.Container(expand=True, content=label_control),
+        ]
+        if badge_count:
+            row_controls.append(badge)
     surface = ft.Container(
         height=52,
         border_radius=12,
@@ -151,20 +176,11 @@ def hoverable_navigation_surface(
         alignment=ft.Alignment.CENTER if compact else ft.Alignment.CENTER_LEFT,
         tooltip=label if compact else None,
         on_click=(lambda _event: on_click()) if on_click else None,
-        badge=(
-            ft.Badge(
-                label=str(min(badge_count, 99)),
-                bgcolor=AppColors.DANGER,
-                text_color=AppColors.WHITE,
-            )
-            if badge_count
-            else None
-        ),
         content=ft.Row(
             alignment=ft.MainAxisAlignment.CENTER if compact else ft.MainAxisAlignment.START,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=0 if compact else 11,
-            controls=[icon_control, label_control],
+            spacing=5 if compact else 11,
+            controls=row_controls,
         ),
     )
 

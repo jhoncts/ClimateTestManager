@@ -9,7 +9,8 @@ param(
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
-$version = "0.8.4"
+$version = "0.8.5"
+$buildRevision = "R9-20260814"
 $serverTaskName = "ClimateTestManager-Server"
 $backgroundTaskName = "ClimateTestManager-Background"
 $notifierTaskName = "ClimateTestManager-Notifications"
@@ -73,13 +74,19 @@ function Remove-ExistingTask {
 function Test-ServerReady {
     param([int]$Attempts = 30)
 
-    $url = "http://127.0.0.1:$Port/"
+    $url = "http://127.0.0.1:$Port/server-build.txt"
     for ($attempt = 1; $attempt -le $Attempts; $attempt++) {
         try {
             $response = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 2
-            if ($response.StatusCode -ge 200 -and $response.StatusCode -lt 500) {
+            $reportedBuild = ([string]$response.Content).Trim()
+            if (($response.StatusCode -ge 200) -and
+                ($response.StatusCode -lt 300) -and
+                ($reportedBuild -eq $buildRevision)) {
                 return $true
             }
+            Write-InstallLog -Level "WARN" -Message (
+                "Servidor respondeu com revisão '$reportedBuild'; aguardando '$buildRevision'."
+            )
         }
         catch {
             Start-Sleep -Seconds 1
@@ -368,6 +375,7 @@ try {
 
     $status = [ordered]@{
         version = $version
+        build_revision = $buildRevision
         installed_at = (Get-Date).ToString("o")
         server_url = "http://$env:COMPUTERNAME`:$Port"
         local_url = "http://localhost:$Port"

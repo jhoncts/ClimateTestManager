@@ -10,8 +10,8 @@ import flet as ft
 
 import client as legacy
 
-APP_VERSION = "0.8.4"
-BUILD_REVISION = "R8-20260814"
+APP_VERSION = "0.8.5"
+BUILD_REVISION = "R9-20260814"
 BUILD_MARKER_PATH = "/server-build.txt"
 
 legacy.VERSION = APP_VERSION

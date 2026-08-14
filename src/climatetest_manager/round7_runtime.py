@@ -38,7 +38,7 @@ from climatetest_manager.ui.components.table17_interactive import (
 from climatetest_manager.ui.formatters import format_datetime
 from climatetest_manager.ui.theme import AppColors
 
-BUILD_REVISION = "R8-20260814"
+BUILD_REVISION = "R9-20260814"
 TABLE17_MODE = "table17_select"
 
 
@@ -670,11 +670,7 @@ class CleanDetailsView(StableDetailsView):
                     color=AppColors.TEXT_SECONDARY,
                 ),
             )
-        actions_button = ft.Button(
-            content="Ações",
-            icon=ft.Icons.MORE_HORIZ,
-            on_click=self._show_actions_menu,
-        )
+        actions_button = self._build_actions_button()
         self._r7_actions_button = actions_button
         self.root = ft.Column(
             key=f"r7-details-{details.id}-{id(self)}",
@@ -721,6 +717,117 @@ class CleanDetailsView(StableDetailsView):
                 self._history_panel(),
                 ft.Container(height=12),
             ],
+        )
+
+    def _popup_action_item(
+        self,
+        *,
+        title: str,
+        description: str,
+        icon: ft.IconData,
+        enabled: bool,
+        tooltip: str,
+        on_click,
+        danger: bool = False,
+    ) -> ft.PopupMenuItem:
+        color = AppColors.DANGER if danger and enabled else AppColors.TEXT_PRIMARY
+        return ft.PopupMenuItem(
+            height=66,
+            disabled=not enabled,
+            tooltip=tooltip if not enabled else None,
+            padding=ft.Padding.symmetric(horizontal=14, vertical=8),
+            on_click=(lambda _event: on_click()) if enabled else None,
+            content=ft.Row(
+                spacing=11,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                controls=[
+                    ft.Icon(
+                        icon,
+                        size=19,
+                        color=color if enabled else AppColors.TEXT_SECONDARY,
+                    ),
+                    ft.Column(
+                        expand=True,
+                        spacing=1,
+                        controls=[
+                            ft.Text(
+                                title,
+                                size=11,
+                                weight=ft.FontWeight.BOLD,
+                                color=color,
+                            ),
+                            ft.Text(
+                                description,
+                                size=9,
+                                color=AppColors.TEXT_SECONDARY,
+                                no_wrap=True,
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        )
+
+    def _build_actions_button(self) -> ft.PopupMenuButton:
+        details = self._details
+        active = details.situation in {"Aguardando", "Na Câmara", "Em Secagem"}
+        items = [
+            self._popup_action_item(
+                title="Editar dados",
+                description="Alterar informações e parâmetros do ensaio.",
+                icon=ft.Icons.EDIT_OUTLINED,
+                enabled=self._r7_can_operate,
+                tooltip="Este perfil possui acesso somente para consulta.",
+                on_click=self._r7_on_edit,
+            ),
+            self._popup_action_item(
+                title="Cancelar ensaio",
+                description="Interromper e registrar o cancelamento no histórico.",
+                icon=ft.Icons.CANCEL_OUTLINED,
+                enabled=bool(self._r7_can_operate and active),
+                tooltip=(
+                    "Este ensaio já está encerrado."
+                    if not active
+                    else "Este perfil possui acesso somente para consulta."
+                ),
+                on_click=self._show_r7_cancel_dialog,
+            ),
+            self._popup_action_item(
+                title="Excluir do histórico",
+                description="Remover permanentemente o cadastro da operação.",
+                icon=ft.Icons.DELETE_FOREVER_OUTLINED,
+                enabled=self._r7_is_admin,
+                tooltip="Somente administradores podem realizar esta ação.",
+                on_click=self._show_r7_delete_dialog,
+                danger=True,
+            ),
+        ]
+        return ft.PopupMenuButton(
+            tooltip="Ações do ensaio",
+            menu_position=ft.PopupMenuPosition.UNDER,
+            menu_padding=6,
+            elevation=8,
+            shape=ft.RoundedRectangleBorder(radius=12),
+            size_constraints=ft.BoxConstraints(min_width=390, max_width=430),
+            items=items,
+            content=ft.Container(
+                border=ft.Border.all(1, AppColors.PRIMARY),
+                border_radius=11,
+                padding=ft.Padding.symmetric(horizontal=13, vertical=8),
+                content=ft.Row(
+                    spacing=7,
+                    controls=[
+                        ft.Icon(ft.Icons.MORE_VERT, size=18, color=AppColors.PRIMARY),
+                        ft.Text(
+                            "Ações",
+                            size=11,
+                            weight=ft.FontWeight.BOLD,
+                            color=AppColors.PRIMARY,
+                        ),
+                        ft.Icon(ft.Icons.KEYBOARD_ARROW_DOWN, size=17, color=AppColors.PRIMARY),
+                    ],
+                ),
+            ),
         )
 
     def _action_tile(

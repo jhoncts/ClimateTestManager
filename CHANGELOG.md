@@ -7,6 +7,28 @@ e o projeto utiliza versionamento semântico.
 
 ## [Não publicado]
 
+### v0.8.5 — interface final, Tabela 17 dinâmica e atualização limpa
+
+- O Novo ensaio foi reconstruído sobre uma única árvore Flet persistente, com uma única rolagem,
+  cards compactos, ícones semânticos e layout em duas colunas conforme a referência aprovada.
+- A Tabela 17 agora exibe todos os EPLs, recalcula faixas e alternativas conforme o Ts, desabilita
+  células incompatíveis e permite selecionar EPL e condição diretamente com um clique.
+- A visualização simples resume câmara úmida, secagem, EPL, faixa de Ts e alternativa; a avançada
+  mantém a tabela completa sem desmontar controles durante digitação ou rolagem.
+- A navegação lateral mantém os textos em toda largura suportada da janela; badges passaram a
+  integrar o item de navegação e não interferem mais no conteúdo ou no scroll.
+- Campos obrigatórios recebem erro visual individual e a ação Salvar permanece disponível para
+  que o sistema mostre exatamente o que falta.
+- O menu Ações dos detalhes passou a ser um popup ancorado, com descrição e estado de permissão;
+  a confirmação por pressão mostra instrução, percentual e cancelamento ao soltar.
+- Pausas e retomadas continuam registradas no histórico global mesmo com zero ensaios ativos, e
+  essa condição passou a ter teste de regressão da persistência e da exibição.
+- O renderizador central deixa de esvaziar a tela entre atualizações, eliminando o quadro branco
+  intermediário observado no WebView2.
+- O instalador remove somente binários e recursos antigos antes de copiar a nova versão, preserva
+  integralmente o ProgramData e só considera o servidor pronto quando ele publica `R9-20260814`.
+- Build `R9-20260814`, cliente, servidor, scripts e workflow Windows unificados na versão `0.8.5`.
+
 ### v0.8.4 — estabilidade da interface e instalador universal validável
 
 - A moldura principal permanece montada durante navegação e redimensionamento; somente o conteúdo

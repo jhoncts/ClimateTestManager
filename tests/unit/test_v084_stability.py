@@ -1,4 +1,4 @@
-"""Regressões críticas corrigidas na estabilização 0.8.4."""
+"""Regressões críticas preservadas na estabilização final 0.8.5."""
 
 from datetime import UTC, datetime
 from pathlib import Path
@@ -16,8 +16,8 @@ from climatetest_manager.round7_runtime import TABLE17_MODE
 from climatetest_manager.services.auth import UserSummary
 from climatetest_manager.services.network import ServerIdentity
 from climatetest_manager.ui.responsive import LayoutProfile
+from climatetest_manager.ui.views.final_new_test import FinalNewTestView
 from climatetest_manager.v084_stability import (
-    StableNewTestView,
     _compact_settings_builder,
     _compose_shell,
     _replace_shell_frame,
@@ -50,7 +50,7 @@ def _admin() -> UserSummary:
 
 
 def test_table17_keeps_one_tree_and_service_temperature_has_one_parent() -> None:
-    view = StableNewTestView(on_cancel=lambda: None, on_save=lambda _command: None)
+    view = FinalNewTestView(on_cancel=lambda: None, on_save=lambda _command: None)
     table = view._interactive_table
     option_cells = tuple(cell for _row, _option, cell in table._option_cells)
 
@@ -68,7 +68,7 @@ def test_table17_keeps_one_tree_and_service_temperature_has_one_parent() -> None
 
 
 def test_save_stays_clickable_so_missing_fields_can_be_highlighted() -> None:
-    view = StableNewTestView(on_cancel=lambda: None, on_save=lambda _command: None)
+    view = FinalNewTestView(on_cancel=lambda: None, on_save=lambda _command: None)
     view.mode_group.value = TABLE17_MODE
     view._on_mode_change()
 
@@ -186,14 +186,20 @@ def test_release_and_installer_use_one_consistent_version_and_one_server_guard()
     build = (project / "scripts" / "build_windows.ps1").read_text(encoding="utf-8")
     workflow = (project / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
     marker = (project / "src" / "assets" / "server-build.txt").read_text(encoding="utf-8")
+    server_install = (project / "scripts" / "install_server_tasks.ps1").read_text(encoding="utf-8")
 
-    assert __version__ == "0.8.4"
-    assert '#define MyAppVersion "0.8.4"' in installer
+    assert __version__ == "0.8.5"
+    assert '#define MyAppVersion "0.8.5"' in installer
+    assert '#define MyBuildRevision "R9-20260814"' in installer
     assert "ClimateTestManager-v{#MyAppVersion}" in installer
     assert "ForeignServerFound" in installer
     assert "Somente um servidor central" in installer
-    assert '$version = "0.8.4"' in build
+    assert "[InstallDelete]" in installer
+    assert '$version = "0.8.5"' in build
     assert "payloadVersion" not in build
-    assert "ClimateTestManager-Setup-v0.8.4.exe" in workflow
+    assert "ClimateTestManager-Setup-v0.8.5.exe" in workflow
+    assert '([string]$response.Content).Trim() -eq "R9-20260814"' in workflow
     assert "v0.8.0" not in workflow
-    assert marker.strip() == "R8-20260814"
+    assert '$buildRevision = "R9-20260814"' in server_install
+    assert "/server-build.txt" in server_install
+    assert marker.strip() == "R9-20260814"

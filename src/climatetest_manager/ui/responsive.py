@@ -4,7 +4,9 @@ from dataclasses import dataclass
 
 # Em notebooks e janelas não maximizadas, 1100-1170 px ainda comportam a navegação
 # textual. O breakpoint antigo recolhia o menu cedo demais e parecia uma regressão.
-COMPACT_BREAKPOINT = 980
+# A janela desktop possui largura mínima de 900 px. A navegação textual permanece
+# visível em toda a faixa suportada e só é compactada por ação explícita do usuário.
+COMPACT_BREAKPOINT = 860
 SPACIOUS_BREAKPOINT = 1500
 BREAKPOINT_HYSTERESIS = 32
 RESIZE_REBUILD_MIN_DELTA = 48
@@ -92,7 +94,7 @@ class LayoutProfile:
         if mode == "spacious":
             return cls(
                 mode="spacious",
-                sidebar_width=252,
+                sidebar_width=276,
                 sidebar_padding=22,
                 content_padding=32,
                 compact_navigation=False,
@@ -101,7 +103,7 @@ class LayoutProfile:
             )
         return cls(
             mode="regular",
-            sidebar_width=236,
+            sidebar_width=252,
             sidebar_padding=20,
             content_padding=24,
             compact_navigation=False,

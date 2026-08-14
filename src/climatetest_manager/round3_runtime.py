@@ -39,6 +39,8 @@ from climatetest_manager.ui.views.new_test import NewTestView
 # podem ser ajustados sem ciclo de importação.
 from climatetest_manager import production_app
 
+_stable_navigation_surface = interaction_module.hoverable_navigation_surface
+
 
 def _safe_update(control: ft.Control) -> None:
     with suppress(RuntimeError):
@@ -153,74 +155,17 @@ def _navigation_surface(
     on_click,
     badge_count: int = 0,
 ) -> ft.Container:
-    """Mantém o texto realmente montado quando a barra lateral está expandida."""
+    """Reutiliza a única implementação estável da navegação lateral."""
 
-    selected_color = AppColors.PRIMARY if selected else AppColors.NAV_TEXT
-    icon_control = ft.Icon(icon, size=icon_size, color=selected_color)
-    label_control = (
-        None
-        if compact
-        else ft.Text(
-            label,
-            size=13,
-            weight=ft.FontWeight.BOLD if selected else ft.FontWeight.W_500,
-            color=selected_color,
-            no_wrap=True,
-        )
+    return _stable_navigation_surface(
+        label=label,
+        icon=icon,
+        selected=selected,
+        compact=compact,
+        icon_size=icon_size,
+        on_click=on_click,
+        badge_count=badge_count,
     )
-    controls: list[ft.Control] = [icon_control]
-    if label_control is not None:
-        controls.append(label_control)
-
-    surface = ft.Container(
-        height=52,
-        border_radius=12,
-        bgcolor=AppColors.NAV_SELECTED if selected else None,
-        padding=ft.Padding.symmetric(horizontal=12 if not compact else 8, vertical=9),
-        alignment=ft.Alignment.CENTER if compact else ft.Alignment.CENTER_LEFT,
-        tooltip=label if compact else None,
-        on_click=(lambda _event: on_click()) if on_click else None,
-        badge=(
-            ft.Badge(
-                label=str(min(badge_count, 99)),
-                bgcolor=AppColors.DANGER,
-                text_color=AppColors.WHITE,
-            )
-            if badge_count
-            else None
-        ),
-        content=ft.Row(
-            alignment=ft.MainAxisAlignment.CENTER if compact else ft.MainAxisAlignment.START,
-            vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=0 if compact else 11,
-            controls=controls,
-        ),
-    )
-
-    def hover(event: ft.HoverEvent) -> None:
-        active = event.data == "true"
-        if selected:
-            surface.bgcolor = AppColors.NAV_SELECTED
-            icon_control.color = AppColors.PRIMARY
-            if label_control is not None:
-                label_control.color = AppColors.PRIMARY
-        elif active:
-            surface.bgcolor = AppColors.NAV_HOVER
-            icon_control.color = AppColors.PRIMARY
-            if label_control is not None:
-                label_control.color = AppColors.TEXT_PRIMARY
-        else:
-            surface.bgcolor = None
-            icon_control.color = AppColors.NAV_TEXT
-            if label_control is not None:
-                label_control.color = AppColors.NAV_TEXT
-        _safe_update(surface)
-
-    if on_click is not None:
-        surface.on_hover = hover
-        with suppress(Exception):
-            surface.mouse_cursor = ft.MouseCursor.CLICK
-    return surface
 
 
 def _install_sidebar_fix() -> None:

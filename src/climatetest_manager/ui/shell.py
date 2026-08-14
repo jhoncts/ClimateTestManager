@@ -6,7 +6,7 @@ from collections.abc import Callable
 
 import flet as ft
 
-from climatetest_manager import __version__
+from climatetest_manager import __build_revision__, __version__
 from climatetest_manager.services.auth import UserSummary
 from climatetest_manager.ui.components import github_credit, user_avatar
 from climatetest_manager.ui.interaction import (
@@ -198,6 +198,13 @@ def build_production_shell(
                 ft.Text(
                     f"IEC 60079-0 • v{__version__}",
                     size=9,
+                    color=AppColors.TEXT_SECONDARY,
+                    no_wrap=True,
+                    tooltip=f"Revisão instalada: {__build_revision__}",
+                ),
+                ft.Text(
+                    __build_revision__,
+                    size=8,
                     color=AppColors.TEXT_SECONDARY,
                     no_wrap=True,
                 ),

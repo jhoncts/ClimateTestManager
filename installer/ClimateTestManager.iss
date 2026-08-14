@@ -1,5 +1,6 @@
 #define MyAppName "ClimateTest Manager"
-#define MyAppVersion "0.8.4"
+#define MyAppVersion "0.8.5"
+#define MyBuildRevision "R9-20260814"
 #define MyAppPublisher "Jhon Cleiton"
 #define MyAppExeName "ClimateTestManager.exe"
 
@@ -35,6 +36,19 @@ Name: "{commonappdata}\ClimateTestManager"
 Name: "{commonappdata}\ClimateTestManager\Data"
 Name: "{commonappdata}\ClimateTestManager\Logs"
 Name: "{commonappdata}\ClimateTestManager\Backups"
+
+[InstallDelete]
+; Remove somente binários e recursos do programa. Banco, fotos, preferências e backups
+; permanecem em ProgramData e nunca são apagados durante uma atualização.
+Type: files; Name: "{app}\ClimateTestManager.exe"
+Type: files; Name: "{app}\ClimateTestServer.exe"
+Type: files; Name: "{app}\ClimateTestNotifier.exe"
+Type: files; Name: "{app}\climatetest.ico"
+Type: files; Name: "{app}\LEIA-ME-PRIMEIRO.md"
+Type: files; Name: "{app}\install_server_tasks.ps1"
+Type: files; Name: "{app}\uninstall_server_tasks.ps1"
+Type: files; Name: "{app}\discover_server.ps1"
+Type: filesandordirs; Name: "{app}\documentacao-conformidade"
 
 [Files]
 ; O arquivo temporário de descoberta fica primeiro para permitir ExtractTemporaryFile com SolidCompression.
@@ -582,6 +596,7 @@ begin
     begin
       WizardForm.FinishedHeadingLabel.Caption := 'ClimateTest Manager pronto para uso';
       WizardForm.FinishedLabel.Caption :=
+        'Versão {#MyAppVersion} / {#MyBuildRevision}' + #13#10 + #13#10 +
         'O servidor central foi instalado, iniciado e verificado. O aplicativo também respondeu ' +
         'corretamente como cliente Windows.' + #13#10 + #13#10 +
         'As estações de trabalho poderão localizar este servidor automaticamente na rede local.' + #13#10 + #13#10 +
@@ -604,6 +619,7 @@ begin
     begin
       WizardForm.FinishedHeadingLabel.Caption := 'ClimateTest Manager pronto para uso';
       WizardForm.FinishedLabel.Caption :=
+        'Versão {#MyAppVersion} / {#MyBuildRevision}' + #13#10 + #13#10 +
         'A estação foi instalada e a comunicação com o servidor central foi validada.' + #13#10 + #13#10 +
         'Servidor: ' + ConfiguredServerUrl + #13#10 + #13#10 +
         'Clique em Concluir para abrir o ClimateTest Manager.';

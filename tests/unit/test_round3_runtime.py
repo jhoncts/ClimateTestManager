@@ -43,8 +43,9 @@ def test_runtime_fixes_sidebar_and_required_field_feedback() -> None:
             on_click=lambda: None,
         )
         assert len(regular.content.controls) == 2
-        assert isinstance(regular.content.controls[1], ft.Text)
-        assert regular.content.controls[1].value == "Ensaios"
+        assert isinstance(regular.content.controls[1], ft.Container)
+        assert isinstance(regular.content.controls[1].content, ft.Text)
+        assert regular.content.controls[1].content.value == "Ensaios"
         assert len(compact.content.controls) == 1
 
         view = PolishedNewTestView(
