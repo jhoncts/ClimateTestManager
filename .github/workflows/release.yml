@@ -17,6 +17,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Apply validated UI-FIX-7 overlay
+        shell: pwsh
+        run: |
+          Expand-Archive -LiteralPath ".release-candidate\ui-fix7-overlay.zip" -DestinationPath "." -Force
+          Write-Host "UI-FIX-7 overlay applied before tests and packaging."
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -195,9 +201,9 @@ jobs:
                 "/NORESTART",
                 "/ROLE=client",
                 "/SERVERADDRESS=127.0.0.1:18552",
-                "/DIR=`"$clientInstall`"",
+                "/DIR=`"$clientInstal`"",
                 "/LOG=`"$setupLog`""
-              ) `
+            ) `
               -Wait `
               -PassThru
             if ($setup.ExitCode -ne 0) {
@@ -245,10 +251,10 @@ jobs:
 
             $marker = Get-Content -LiteralPath $readyFile -Raw
             if ($marker -notmatch "ClimateTest Manager") {
-              throw "A estaÃ§Ã£o instalada nÃ£o confirmou a montagem da interface ClimateTest Manager."
+              throw "A estaÃ§Ã£o instalada nÃ£o confirmou a interface ClimateTest Manager."
             }
             if ($marker -notmatch [regex]::Escape("http://127.0.0.1:18552")) {
-              throw "A estaÃ§Ã£o instalada nÃ£o usou o servidor persistido pelo instalador."
+              throw "A estaÃ§Ã£o instalada nÃ£o usee o: servidor persistido pelo instalador."
             }
 
             if (-not $client.HasExited) {
@@ -328,117 +334,55 @@ jobs:
               "/SUPPRESSMSGBOXES",
               "/NORESTART",
               "/ROLE=server",
-              "/DIR=`"$installDir`"",
-              "/LOG=`"$setupLog`""
-            ) `
-            -PassThru
-          if (-not $setup.WaitForExit(240000)) {
-            Stop-Process -Id $setup.Id -Force -ErrorAction SilentlyContinue
-            if (Test-Path -LiteralPath $setupLog) {
-              Write-Host "===== LOG DO INSTALADOR EM MODO SERVIDOR (TIMEOUT) ====="
-              Get-Content -LiteralPath $setupLog
-              Write-Host "===== FIM DO LOG DO INSTALADOR ====="
-            }
-            throw "Instalador do servidor nÃ£o encerrou em atÃ© 4 minutos."
-          }
-          $setup.Refresh()
-          if ($setup.ExitCode -ne 0) {
-            if (Test-Path -LiteralPath $setupLog) {
-              Write-Host "===== LOG DO INSTALADOR EM MODO SERVIDOR ====="
-              Get-Content -LiteralPath $setupLog
-              Write-Host "===== FIM DO LOG DO INSTALADOR ====="
-            }
-            throw "Instalador falhou no teste de atualizaÃ§Ã£o do servidor. ExitCode=$($setup.ExitCode)"
-          }
+              "/DIL=`"$installDir`"",
+              "/LOG=`‰Ù]\ÙØˆ‚ˆ
+HˆT\ÜÕBˆYˆ
+[›İ	Ù]\•ØZ]›Ü‘^]
+
+JHÂˆİÜT›ØÙ\ÜÈRY	Ù]\’YQ›Ü˜ÙHQ\œ›ÜXİ[ÛˆÚ[[PÛÛ[YBˆYˆ
+\İT]S]\˜[]	Ù]\ÙÊHÂˆÜš]KRÜİOOOOHÑÈÈS”ÕSQÔˆSHSÑÈÑT•’QÔˆ
+SQSÕU
+HOOOOH‚ˆÙ]PÛÛ[S]\˜[]	Ù]\ÙÂˆÜš]KRÜİOOOOH’SHÈÑÈÈS”ÕSQÔˆOOOOH‚ˆBˆ›İÈ’[œİ[YÜˆÈÙ\šYÜˆ°èÛÈ[˜Ù\œ›İH[H]0êHZ[]ÜËˆ‚ˆBˆ	Ù]\”™Yœ™\Ú
 
-          if (Get-Process -Id $oldServer.Id -ErrorAction SilentlyContinue) {
-            throw "O instalador nÃ£o encerrou o servidor antigo antes de substituir o executÃ¡vel."
-          }
+BˆYˆ
+	Ù]\‘^]ÛÙH[™H
+HÂˆYˆ
+\İT]S]\˜[]	Ù]\ÙÊHÂˆÜš]KRÜİOOOOHÑÈÈS”ÕSQÔˆSHSÑÈÑT•’QÔˆOOOOH‚ˆÙ]PÛÛ[S]\˜[]	Ù]\ÙÂˆÜš]KRÜİOOOOH’SHÈÑÈÈS”ÕSQÔˆOOOOH‚ˆBˆ›İÈ’[œİ[YÜˆ˜[İH›È\İHH]X[^˜péğèÛÈÈÙ\šYÜ‹ˆ^]ÛÙOI
+	Ù]\‘^]ÛÙJH‚ˆB‚ˆYˆ
+Ù]T›ØÙ\ÜÈRY	ÛÙ\™\‹’YQ\œ›ÜXİ[ÛˆÚ[[PÛÛ[YJHÂˆ›İÈ“È[œİ[YÜˆ°èÛÈ[˜Ù\œ›İHÈÙ\šYÜˆ[YÛÈ[\ÈHİXœİ]Z\ˆÈ^Xİ]0è]™[ˆ‚ˆB‚ˆ	™XYHH	˜[ÙBˆ›Üˆ
+	][\HNÈ	][\[HNÈ	][\
+ÊÊHÂˆHÂˆ	™\ÜÛœÙHH[›ÚÙKUÙX”™\]Y\İˆU\šHš‹ËÌLËŒŒŒNMLÜÙ\™\‹XZ[ˆˆU\ÙP˜\ÚXÔ\œÚ[™ÈˆU[Y[İ]ÙXÈ‚ˆYˆ
 
-          $ready = $false
-          for ($attempt = 1; $attempt -le 45; $attempt++) {
-            try {
-              $response = Invoke-WebRequest `
-                -Uri "http://127.0.0.1:8550/server-build.txt" `
-                -UseBasicParsing `
-                -TimeoutSec 2
-              if (($response.StatusCode -ge 200) -and
-                  ($response.StatusCode -lt 300) -and
-                  (([string]$response.Content).Trim() -eq "R9-20260814")) {
-                $ready = $true
-                break
-              }
-            }
-            catch {
-              Start-Sleep -Seconds 1
-            }
-          }
-          if (-not $ready) {
-            throw "Servidor instalado nÃ£o publicou a revisÃ£o R9 apÃ³s a atualizaÃ§Ã£o."
-          }
+	™\ÜÛœÙK”İ]\ĞÛÙHYÙHŒ
+HX[™ˆ
+	™\ÜÛœÙK”İ]\ĞÛÙH[Ì
+HX[™ˆ
 
-          $installStatusPath = Join-Path $env:ProgramData "ClimateTestManager\install-status.json"
-          if (-not (Test-Path -LiteralPath $installStatusPath)) {
-            throw "A atualizaÃ§Ã£o nÃ£o gerou o diagnÃ³stico install-status.json."
-          }
-          $installStatus = Get-Content -LiteralPath $installStatusPath -Raw | ConvertFrom-Json
-          if (($installStatus.version -ne "0.8.5") -or
-              ($installStatus.build_revision -ne "R9-20260814")) {
-            throw "O diagnÃ³stico da instalaÃ§Ã£o nÃ£o confirma v0.8.5 / R9-20260814."
-          }
+Üİš[™×I™\ÜÛœÙKÛÛ[
+K•š[J
+HY\H”KLŒŒMŠJHÂˆ	™XYHH	YBˆœ™XZÂˆBˆBˆØ]ÚÂˆİ\TÛY\TÙXÛÛ™ÈBˆBˆBˆYˆ
+[›İ	™XYJHÂˆ›İÈ”Ù\šYÜˆ[œİ[YÈ°èÛÈX›XÛİHH™]š\ğèÛÈH\0ìÜÈH]X[^˜péğèÛËˆ‚ˆB‚ˆ	[œİ[İ]\Ô]H›Ú[‹T]	[”›ÙÜ˜[Q]HÛ[X]U\İX[˜YÙ\—[œİ[\İ]\ËšœÛÛˆ‚ˆYˆ
+[›İ
+\İT]S]\˜[]	[œİ[İ]\Ô]
+JHÂˆ›İÈH]X[^˜péğèÛÈ°èÛÈÙ\›İHÈXYÛ°ìÜİXÛÈ[œİ[\İ]\ËšœÛÛ‹ˆ‚ˆBˆ	[œİ[İ]\ÈHÙ]PÛÛ[S]\˜[]	[œİ[İ]\Ô]T˜]ÈÛÛ™\œ›ÛKRœÛÛ‚ˆYˆ
 
-          $installedClient = Join-Path $installDir "ClimateTestManager.exe"
-          $clientCheck = Start-Process `
-            -FilePath $installedClient `
-            -ArgumentList @("--check-only") `
-            -Wait `
-            -PassThru
-          if ($clientCheck.ExitCode -ne 0) {
-            throw "Cliente desktop instalado no servidor nÃ£o conseguiu alcanÃ§ar o servidor central."
-          }
+	[œİ[İ]\Ë™\œÚ[Ûˆ[™HŒHŠH[Ü‚ˆ
+	[œİ[İ]\Ë˜Z[Ü™]š\Ú[Ûˆ[™H”KLŒŒMŠJHÂˆ›İÈ“ÈXYÛ°ìÜİXÛÈH[œİ[péğèÛÈ°èÛÈÛÛ™š\›XHŒHÈKLŒŒMˆ‚ˆB‚ˆ	[œİ[YÛY[H›Ú[‹T]	[œİ[\ˆÛ[X]U\İX[˜YÙ\‹™^H‚ˆ	ÛY[ÚXÚÈHİ\T›ØÙ\ÜÈˆQš[T]	[œİ[YÛY[ˆP\™İ[Y[\İ
+‹KXÚXÚË[Û›HŠHˆUØZ]ˆT\ÜÕBˆYˆ
+	ÛY[ÚXÚË‘^]ÛÙH[™H
+HÂˆ›İÈÛY[H\ÚİÜ[œİ[YÈ›ÈÙ\šYÜˆ°èÛÈÛÛœÙYİZ]H[Ø[°éØ\ˆÈÙ\šYÜˆÙ[˜[ˆ‚ˆB‚ˆ	Ù\™\“X\šÙ\ˆH›Ú[‹T]	[œİ[\ˆœÙ\™\‹[[ÙK›X\šÙ\ˆ‚ˆYˆ
+[›İ
+\İT]S]\˜[]	Ù\™\“X\šÙ\ŠJHÂˆ›İÈ’[œİ[péğèÛÈÈÙ\šYÜˆ°èÛÈÜš[İHÈX\˜ØYÜˆHÙ\šYÜ‹ˆ‚ˆB‚ˆH˜[YNˆ™\šYH[œİ[\ˆÚXÚÜİ[BˆÚ[ˆÜÚˆ[ˆˆ	[œİ[\ˆH‹—\İÛ[X]U\İX[˜YÙ\‹TÙ]\]ŒK™^H‚ˆ	\Úš[HH‹—\İÛ[X]U\İX[˜YÙ\‹TÙ]\]ŒKTÒLM‹‚ˆYˆ
+[›İ
+\İT]S]\˜[]	[œİ[\ŠJHÂˆ›İÈ’[œİ[YÜˆš[˜[°èÛÈ›ÚHÙ\˜YËˆ‚ˆBˆYˆ
+[›İ
+\İT]S]\˜[]	\Úš[JJHÂˆ›İÈ\œ]Z]›ÈÒKLMˆ°èÛÈ›ÚHÙ\˜YËˆ‚ˆBˆ	XİX[H
+Ù]Qš[R\ÚS]\˜[]	[œİ[\ˆP[ÛÜš]HÒLMŠK’\Ú•ÓİÙ\’[˜\šX[
 
-          $serverMarker = Join-Path $installDir "server-mode.marker"
-          if (-not (Test-Path -LiteralPath $serverMarker)) {
-            throw "InstalaÃ§Ã£o do servidor nÃ£o criou o marcador de servidor."
-          }
+Bˆ	XÛ\™YH
+Ù]PÛÛ[S]\˜[]	\Úš[HT˜]ÊK•ÓİÙ\’[˜\šX[
 
-      - name: Verify installer checksum
-        shell: pwsh
-        run: |
-          $installer = ".\dist\ClimateTestManager-Setup-v0.8.5.exe"
-          $hashFile = ".\dist\ClimateTestManager-Setup-v0.8.5-SHA256.txt"
-          if (-not (Test-Path -LiteralPath $installer)) {
-            throw "Instalador final nÃ£o foi gerado."
-          }
-          if (-not (Test-Path -LiteralPath $hashFile)) {
-            throw "Arquivo SHA-256 nÃ£o foi gerado."
-          }
-          $actual = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant()
-          $declared = (Get-Content -LiteralPath $hashFile -Raw).ToLowerInvariant()
-          if ($declared -notmatch [regex]::Escape($actual)) {
-            throw "SHA-256 publicado nÃ£o corresponde ao instalador gerado."
-          }
-
-      - name: Upload validated Windows artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ClimateTestManager-v0.8.5-Windows-Validated
-          if-no-files-found: error
-          path: |
-            dist/ClimateTestManager-Setup-v0.8.5.exe
-            dist/ClimateTestManager-Setup-v0.8.5-SHA256.txt
-            dist/ClimateTestManager-v0.8.5-windows.zip
-
-      - name: Publish GitHub release only from a tag
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "${{ github.ref_name }}" `
-            "dist/ClimateTestManager-Setup-v0.8.5.exe" `
-            "dist/ClimateTestManager-Setup-v0.8.5-SHA256.txt" `
-            "dist/ClimateTestManager-v0.8.5-windows.zip" `
-            --target "${{ github.sha }}" `
-            --title "ClimateTest Manager ${{ github.ref_name }}" `
-            --generate-notes
+BˆYˆ
+	XÛ\™Y[›İX]ÚÜ™YÙ^N‘\ØØ\J	XİX[
+JHÂˆ›İÈ”ÒKLMˆX›XØYÈ°èÛÈÛÜœ™\ÜÛ™H[È[œİ[YÜˆÙ\˜YËˆ‚ˆB‚ˆH˜[YNˆ\ØY˜[Y]YÚ[™İÜÈ\Y˜Xİˆ\Ù\ÎˆXİ[ÛœËİ\ØYX\Y˜XİˆÚ]‚ˆ˜[YNˆÛ[X]U\İX[˜YÙ\‹]ŒKUÚ[™İÜËU˜[Y]YˆY‹[›ËYš[\ËY›İ[™ˆ\œ›Ü‚ˆ]ˆˆ\İĞÛ[X]U\İX[˜YÙ\‹TÙ]\]ŒK™^Bˆ\İĞÛ[X]U\İX[˜YÙ\‹TÙ]\]ŒKTÒLM‹ˆ\İĞÛ[X]U\İX[˜YÙ\‹]ŒK]Ú[™İÜËš\‚ˆH˜[YNˆX›\ÚÚ]Xˆ™[X\ÙHÛ›Hœ›ÛHHYÂˆYˆİ\ÕÚ]
+Ú]X‹œ™Y‹	Ü™YœËİYÜËÉÊBˆÚ[ˆÜÚˆ[‚ˆÒÕÒÑSˆ	ŞÈÚ]X‹ÚÙ[ˆ_Bˆ[ˆˆÚ™[X\ÙHÜ™X]H‰ŞÈÚ]X‹œ™Y—Û˜[YH_Hˆˆ™\İĞÛ[X]U\İX[˜YÙ\‹TÙ]\]ŒK™^Hˆˆ™\İĞÛ[X]U\İX[˜YÙ\‹TÙ]\]ŒKTÒLM‹ˆˆ™\İĞÛ[X]U\İX[˜YÙ\‹]ŒK]Ú[™İÜËš\ˆˆK]\™Ù]‰ŞÈÚ]X‹œÚH_HˆˆK]]HÛ[X]U\İX[˜YÙ\ˆ	ŞÈÚ]X‹œ™Y—Û˜[YH_HˆˆKYÙ[™\˜]K[›İ\Â
