@@ -41,7 +41,8 @@ def _safe_destination(name: str) -> Path:
     if relative.is_absolute() or ".." in relative.parts:
         raise RuntimeError(f"Unsafe path in UI-FIX-7 overlay: {name}")
     destination = (_PROJECT_ROOT / relative).resolve()
-    if _PROJECT_ROOT.resolve() not in destination.parents and destination != _PROJECT_ROOT.resolve():
+    project_root = _PROJECT_ROOT.resolve()
+    if project_root not in destination.parents and destination != project_root:
         raise RuntimeError(f"Unsafe path in UI-FIX-7 overlay: {name}")
     return destination
 
