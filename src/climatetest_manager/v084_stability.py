@@ -19,7 +19,7 @@ from climatetest_manager import app as legacy_app
 from climatetest_manager import production_app, round7_runtime
 from climatetest_manager.domain.enums import ConditionInputMode
 from climatetest_manager.domain.incidents import INCIDENT_REASONS, incident_reason
-from climatetest_manager.round4_runtime import _force_scroll_top, _safe_settings_builder
+from climatetest_manager.round4_runtime import _safe_settings_builder
 from climatetest_manager.round6_runtime import (
     RefinedNewTestView,
     _severity_color,
@@ -38,6 +38,11 @@ from climatetest_manager.ui.components.table17_interactive import (
     build_interactive_table17,
     ts_band_label,
 )
+from climatetest_manager.ui.formatters import (
+    format_datetime,
+    format_decimal,
+    format_duration_detail,
+)
 from climatetest_manager.ui.responsive import (
     RESIZE_REBUILD_MIN_DELTA,
     LayoutProfile,
@@ -48,6 +53,11 @@ from climatetest_manager.ui.theme import THEME_OPTIONS, AppColors
 from climatetest_manager.ui.views.final_new_test import FinalNewTestView
 
 BUILD_REVISION = "R9-20260814"
+SIDEBAR_ANIMATION_SECONDS = 0.2
+SCREEN_TRANSITION_MS = 0
+SCREEN_TRANSITION_REVERSE_MS = 0
+
+_ORIGINAL_CHANGE_THEME = production_app.ProductionClimateTestApplication._change_theme
 
 
 def _safe_update(control: ft.Control | None) -> None:
@@ -102,10 +112,28 @@ def _notification_count(app: production_app.ProductionClimateTestApplication) ->
         return 0
 
 
+def _activate_session_theme(app: production_app.ProductionClimateTestApplication) -> None:
+    """Reativa a paleta da sessão antes de compor controles em tarefas assíncronas.
+
+    ``page.run_task`` pode executar a animação da lateral em outro contexto. Sem
+    esta ativação, o ``ContextVar`` volta ao tema claro e somente a moldura é
+    reconstruída em azul, enquanto a tela central conserva o tema escolhido.
+    """
+
+    prepare = getattr(app, "_prepare_theme", None)
+    if callable(prepare):
+        prepare()
+        return
+    mode = getattr(app, "_theme_mode", None)
+    if mode:
+        AppColors.apply_mode(str(mode))
+
+
 def _compose_shell(
     app: production_app.ProductionClimateTestApplication,
     content: ft.Control,
 ) -> ft.Row:
+    _activate_session_theme(app)
     effective_layout = app._layout.with_collapsed_sidebar(app._sidebar_collapsed)
     return build_production_shell(
         content,
@@ -145,6 +173,70 @@ def _replace_shell_frame(app: production_app.ProductionClimateTestApplication) -
     _safe_update(shell)
 
 
+async def _animate_sidebar(app: production_app.ProductionClimateTestApplication) -> None:
+    """Desliza a lateral sem reconstruir nem remover a tela central."""
+
+    _activate_session_theme(app)
+    if getattr(app, "_v085_sidebar_animating", False) or app._layout.mode == "compact":
+        return
+    shell = getattr(app, "_v084_shell", None)
+    if not isinstance(shell, ft.Row) or not shell.controls:
+        return
+
+    app._v085_sidebar_animating = True
+    try:
+        if not app._sidebar_collapsed:
+            sidebar = shell.controls[0]
+            if not isinstance(sidebar, ft.Container):
+                return
+            sidebar.clip_behavior = ft.ClipBehavior.HARD_EDGE
+            sidebar.animate = ft.Animation(
+                int(SIDEBAR_ANIMATION_SECONDS * 1000),
+                ft.AnimationCurve.EASE_OUT_CUBIC,
+            )
+            sidebar.width = 84
+            _safe_update(sidebar)
+            await asyncio.sleep(SIDEBAR_ANIMATION_SECONDS)
+            app._sidebar_collapsed = True
+            _replace_shell_frame(app)
+            return
+
+        # Para expandir, monta-se primeiro a navegação textual ainda com 84 px.
+        # Em seguida somente a largura cresce; assim os rótulos acompanham o
+        # movimento em vez de surgirem depois de uma troca instantânea.
+        app._sidebar_collapsed = False
+        temporary = _compose_shell(app, ft.Container())
+        sidebar = temporary.controls[0]
+        if not isinstance(sidebar, ft.Container):
+            return
+        target_width = app._layout.sidebar_width
+        sidebar.width = 84
+        sidebar.clip_behavior = ft.ClipBehavior.HARD_EDGE
+        sidebar.animate = ft.Animation(
+            int(SIDEBAR_ANIMATION_SECONDS * 1000),
+            ft.AnimationCurve.EASE_OUT_CUBIC,
+        )
+        shell.controls[0] = sidebar
+        _safe_update(shell)
+        await asyncio.sleep(0.03)
+        sidebar.width = target_width
+        _safe_update(sidebar)
+        await asyncio.sleep(SIDEBAR_ANIMATION_SECONDS)
+    finally:
+        app._v085_sidebar_animating = False
+
+
+async def _ensure_scroll_top(control: ft.Control) -> None:
+    """Zera a rolagem depois das duas fases de montagem do WebView2."""
+
+    if not isinstance(control, ft.ScrollableControl):
+        return
+    for delay in (0.03, 0.12, 0.24):
+        await asyncio.sleep(delay)
+        with suppress(RuntimeError):
+            await control.scroll_to(offset=0, duration=0)
+
+
 def _stable_render(
     self: production_app.ProductionClimateTestApplication,
     content: ft.Control,
@@ -169,13 +261,15 @@ def _stable_render(
     shell = getattr(self, "_v084_shell", None)
     content_host = getattr(self, "_v084_content_host", None)
     if not isinstance(shell, ft.Row) or not isinstance(content_host, ft.Container):
-        shell = _compose_shell(self, content)
+        content_switcher = _navigation_content_switcher(content)
+        shell = _compose_shell(self, content_switcher)
         content_host = shell.controls[1]
         if not isinstance(content_host, ft.Container):
             raise RuntimeError("A moldura principal não possui um contêiner de conteúdo.")
         surface = ft.Container(expand=True, content=shell)
         self._v084_shell = shell
         self._v084_content_host = content_host
+        self._v086_content_switcher = content_switcher
         self._screen_container = surface
         if not self._shell_mounted:
             self._page.clean()
@@ -184,9 +278,18 @@ def _stable_render(
         self._switcher.content = surface
         self._page.update()
     else:
-        # Uma única atualização troca a tela e a navegação. Limpar o host e atualizá-lo
-        # novamente criava uma janela intermediária vazia no WebView2.
-        content_host.content = content
+        # A transição acontece somente dentro do host central. A lateral e a
+        # moldura permanecem montadas, evitando o frame vazio que ocorria quando
+        # a árvore completa era animada pelo WebView2.
+        content_switcher = getattr(self, "_v086_content_switcher", None)
+        if not isinstance(content_switcher, ft.AnimatedSwitcher):
+            content_switcher = _navigation_content_switcher(content)
+            self._v086_content_switcher = content_switcher
+            content_host.content = content_switcher
+            _safe_update(content_host)
+        else:
+            content_switcher.content = content
+            _safe_update(content_switcher)
         _replace_shell_frame(self)
 
     self._page.run_task(self._save_offline_snapshot)
@@ -195,8 +298,7 @@ def _stable_render(
 def _stable_toggle_sidebar(self: production_app.ProductionClimateTestApplication) -> None:
     if self._layout.mode == "compact":
         return
-    self._sidebar_collapsed = not self._sidebar_collapsed
-    _replace_shell_frame(self)
+    self._page.run_task(_animate_sidebar, self)
 
 
 def _stable_handle_resize(
@@ -221,11 +323,39 @@ def _stable_refresh_shell_frame(self: production_app.ProductionClimateTestApplic
 
 
 def _stable_screen_switcher() -> ft.AnimatedSwitcher:
+    """Host estável entre autenticação e aplicação, sem frame intermediário.
+
+    O fade da árvore inteira causava dois sintomas no WebView2: tela branca no
+    primeiro frame (que só reaparecia após resize) e flashes preto/branco em
+    trocas rápidas. O switcher continua existindo para preservar a arquitetura,
+    mas a substituição é atômica; o dinamismo fica nos controles locais.
+    """
+
     return ft.AnimatedSwitcher(
         content=ft.Container(expand=True),
-        duration=0,
-        reverse_duration=0,
+        duration=SCREEN_TRANSITION_MS,
+        reverse_duration=SCREEN_TRANSITION_REVERSE_MS,
         transition=ft.AnimatedSwitcherTransition.FADE,
+        switch_in_curve=ft.AnimationCurve.EASE_OUT_CUBIC,
+        switch_out_curve=ft.AnimationCurve.EASE_IN_CUBIC,
+        expand=True,
+    )
+
+
+def _navigation_content_switcher(content: ft.Control) -> ft.AnimatedSwitcher:
+    """Troca somente a tela central sem manter duas árvores pesadas simultâneas.
+
+    A duração zero evita que Dashboard e Novo ensaio coexistam durante um fade,
+    condição que podia fazer o runtime exibir ``Working...`` e piscar preto.
+    """
+
+    return ft.AnimatedSwitcher(
+        content=content,
+        duration=SCREEN_TRANSITION_MS,
+        reverse_duration=SCREEN_TRANSITION_REVERSE_MS,
+        transition=ft.AnimatedSwitcherTransition.FADE,
+        switch_in_curve=ft.AnimationCurve.EASE_OUT_CUBIC,
+        switch_out_curve=ft.AnimationCurve.EASE_IN_CUBIC,
         expand=True,
     )
 
@@ -640,6 +770,339 @@ def _hold_button(
     )
 
 
+async def _force_theme_repaint(
+    app: production_app.ProductionClimateTestApplication,
+) -> None:
+    """Força uma repintura leve depois da troca de paleta.
+
+    O WebView2 às vezes mantinha a camada rasterizada da paleta anterior até o
+    primeiro scroll. A árvore não é reconstruída: uma alteração imperceptível de
+    opacidade no host central invalida apenas a camada visual.
+    """
+
+    await asyncio.sleep(0.02)
+    _activate_session_theme(app)
+    host = getattr(app, "_v084_content_host", None)
+    if isinstance(host, ft.Container):
+        host.opacity = 0.999
+        _safe_update(host)
+        await asyncio.sleep(0.02)
+        _activate_session_theme(app)
+        host.opacity = 1
+        _safe_update(host)
+    with suppress(RuntimeError):
+        app._page.update()
+
+
+def _stable_change_theme(
+    self: production_app.ProductionClimateTestApplication,
+    mode: str,
+) -> None:
+    """Mantém o fluxo validado e invalida o frame antigo sem depender de scroll."""
+
+    _ORIGINAL_CHANGE_THEME(self, mode)
+    self._page.run_task(_force_theme_repaint, self)
+
+
+def _detail_value(
+    label: str,
+    value: str,
+    icon: ft.IconData,
+) -> ft.Container:
+    return ft.Container(
+        col={"xs": 12, "sm": 4},
+        height=58,
+        border_radius=11,
+        bgcolor=AppColors.SURFACE,
+        border=ft.Border.all(1, AppColors.DIVIDER),
+        padding=ft.Padding.symmetric(horizontal=10, vertical=8),
+        content=ft.Row(
+            spacing=8,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            controls=[
+                ft.Container(
+                    width=30,
+                    height=30,
+                    border_radius=9,
+                    bgcolor=AppColors.PRIMARY_LIGHT,
+                    alignment=ft.Alignment.CENTER,
+                    content=ft.Icon(icon, size=16, color=AppColors.PRIMARY),
+                ),
+                ft.Column(
+                    expand=True,
+                    spacing=1,
+                    alignment=ft.MainAxisAlignment.CENTER,
+                    controls=[
+                        ft.Text(label, size=8, color=AppColors.TEXT_SECONDARY),
+                        ft.Text(
+                            value,
+                            size=11,
+                            weight=ft.FontWeight.BOLD,
+                            color=AppColors.TEXT_PRIMARY,
+                            no_wrap=True,
+                        ),
+                    ],
+                ),
+            ],
+        ),
+    )
+
+
+def _detail_milestone(
+    label: str,
+    value: str,
+    icon: ft.IconData,
+) -> ft.Container:
+    return ft.Container(
+        col={"xs": 12, "sm": 6, "lg": 3},
+        height=54,
+        border_radius=10,
+        bgcolor=AppColors.PAGE_BACKGROUND,
+        padding=ft.Padding.symmetric(horizontal=10, vertical=7),
+        content=ft.Row(
+            spacing=7,
+            vertical_alignment=ft.CrossAxisAlignment.CENTER,
+            controls=[
+                ft.Icon(icon, size=16, color=AppColors.PRIMARY),
+                ft.Column(
+                    expand=True,
+                    spacing=0,
+                    alignment=ft.MainAxisAlignment.CENTER,
+                    controls=[
+                        ft.Text(label, size=8, color=AppColors.TEXT_SECONDARY),
+                        ft.Text(
+                            value,
+                            size=9,
+                            weight=ft.FontWeight.BOLD,
+                            color=AppColors.TEXT_PRIMARY,
+                            no_wrap=True,
+                        ),
+                    ],
+                ),
+            ],
+        ),
+    )
+
+
+def _compact_details_phase_panel(self) -> ft.Container:
+    """Condições e prazos em leitura rápida, sem o grande cartão vertical antigo."""
+
+    details = self._details
+
+    chamber_metrics = ft.ResponsiveRow(
+        spacing=8,
+        run_spacing=8,
+        controls=[
+            _detail_value(
+                "Temperatura",
+                f"{format_decimal(details.chamber_temperature_c)} ± 2 °C",
+                ft.Icons.THERMOSTAT,
+            ),
+            _detail_value(
+                "Umidade",
+                f"{format_decimal(details.chamber_humidity_percent)} ± 5% UR",
+                ft.Icons.WATER_DROP_OUTLINED,
+            ),
+            _detail_value(
+                "Permanência",
+                (
+                    f"{details.chamber_duration_hours} h "
+                    f"(+{details.chamber_duration_tolerance_hours} h)"
+                ),
+                ft.Icons.SCHEDULE,
+            ),
+        ],
+    )
+    chamber_timeline = ft.ResponsiveRow(
+        spacing=8,
+        run_spacing=8,
+        controls=[
+            _detail_milestone(
+                "Entrada",
+                format_datetime(details.chamber_started_at),
+                ft.Icons.LOGIN,
+            ),
+            _detail_milestone(
+                "Retirada nominal",
+                format_datetime(details.chamber_nominal_end_at),
+                ft.Icons.EVENT_AVAILABLE,
+            ),
+            _detail_milestone(
+                "Limite",
+                format_datetime(details.chamber_maximum_end_at),
+                ft.Icons.WARNING_AMBER,
+            ),
+            _detail_milestone(
+                "Retirada",
+                format_datetime(details.chamber_ended_at),
+                ft.Icons.LOGOUT,
+            ),
+        ],
+    )
+    chamber = ft.Container(
+        border_radius=13,
+        bgcolor=AppColors.PRIMARY_LIGHT,
+        border=ft.Border.all(1, AppColors.DIVIDER),
+        padding=12,
+        content=ft.Column(
+            spacing=8,
+            horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+            controls=[
+                ft.Row(
+                    spacing=8,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    controls=[
+                        ft.Container(
+                            width=32,
+                            height=32,
+                            border_radius=10,
+                            bgcolor=AppColors.SURFACE,
+                            alignment=ft.Alignment.CENTER,
+                            content=ft.Icon(
+                                ft.Icons.WATER_DROP_OUTLINED,
+                                size=17,
+                                color=AppColors.PRIMARY,
+                            ),
+                        ),
+                        ft.Column(
+                            expand=True,
+                            spacing=1,
+                            controls=[
+                                ft.Text(
+                                    "Câmara úmida",
+                                    size=12,
+                                    weight=ft.FontWeight.BOLD,
+                                    color=AppColors.TEXT_PRIMARY,
+                                ),
+                                ft.Text(
+                                    format_duration_detail(
+                                        details.chamber_duration_hours,
+                                        details.chamber_duration_tolerance_hours,
+                                    ),
+                                    size=8,
+                                    color=AppColors.TEXT_SECONDARY,
+                                ),
+                            ],
+                        ),
+                    ],
+                ),
+                chamber_metrics,
+                chamber_timeline,
+            ],
+        ),
+    )
+
+    phase_controls: list[ft.Control] = [chamber]
+    if details.drying_required:
+        drying = ft.Container(
+            border_radius=13,
+            bgcolor=AppColors.PAGE_BACKGROUND,
+            border=ft.Border.all(1, AppColors.DIVIDER),
+            padding=12,
+            content=ft.Column(
+                spacing=8,
+                controls=[
+                    ft.Row(
+                        spacing=8,
+                        controls=[
+                            ft.Icon(ft.Icons.AIR, size=17, color=AppColors.DRYING),
+                            ft.Text(
+                                "Secagem",
+                                size=12,
+                                weight=ft.FontWeight.BOLD,
+                                color=AppColors.TEXT_PRIMARY,
+                            ),
+                        ],
+                    ),
+                    ft.ResponsiveRow(
+                        spacing=8,
+                        run_spacing=8,
+                        controls=[
+                            _detail_value(
+                                "Temperatura",
+                                f"{format_decimal(details.drying_temperature_c or 0)} ± 2 °C",
+                                ft.Icons.THERMOSTAT,
+                            ),
+                            _detail_value(
+                                "Permanência",
+                                (
+                                    f"{details.drying_duration_hours} h "
+                                    f"(+{details.drying_duration_tolerance_hours} h)"
+                                ),
+                                ft.Icons.SCHEDULE,
+                            ),
+                        ],
+                    ),
+                    ft.ResponsiveRow(
+                        spacing=8,
+                        run_spacing=8,
+                        controls=[
+                            _detail_milestone(
+                                "Entrada",
+                                format_datetime(details.drying_started_at),
+                                ft.Icons.LOGIN,
+                            ),
+                            _detail_milestone(
+                                "Retirada nominal",
+                                format_datetime(details.drying_nominal_end_at),
+                                ft.Icons.EVENT_AVAILABLE,
+                            ),
+                            _detail_milestone(
+                                "Limite",
+                                format_datetime(details.drying_maximum_end_at),
+                                ft.Icons.WARNING_AMBER,
+                            ),
+                            _detail_milestone(
+                                "Retirada",
+                                format_datetime(details.drying_ended_at),
+                                ft.Icons.LOGOUT,
+                            ),
+                        ],
+                    ),
+                ],
+            ),
+        )
+        phase_controls.append(drying)
+    else:
+        phase_controls.append(
+            ft.Container(
+                border_radius=10,
+                bgcolor=AppColors.PAGE_BACKGROUND,
+                padding=ft.Padding.symmetric(horizontal=11, vertical=8),
+                content=ft.Row(
+                    spacing=7,
+                    controls=[
+                        ft.Icon(ft.Icons.AIR, size=15, color=AppColors.TEXT_SECONDARY),
+                        ft.Text(
+                            "Esta condição não exige etapa de secagem.",
+                            size=9,
+                            color=AppColors.TEXT_SECONDARY,
+                        ),
+                    ],
+                ),
+            )
+        )
+
+    return ft.Container(
+        bgcolor=AppColors.SURFACE,
+        border=ft.Border.all(1, AppColors.DIVIDER),
+        border_radius=16,
+        padding=14,
+        content=ft.Column(
+            spacing=10,
+            horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+            controls=[
+                _icon_heading(
+                    ft.Icons.SCHEDULE_OUTLINED,
+                    "Condições e prazos",
+                    "Condição aplicada e marcos operacionais em leitura rápida.",
+                ),
+                *phase_controls,
+            ],
+        ),
+    )
+
+
 def _status_pill(text: str, *, active: bool, warning: bool = False) -> ft.Container:
     color = AppColors.WARNING if warning else AppColors.PRIMARY if active else AppColors.DANGER
     background = (
@@ -664,7 +1127,7 @@ def _settings_card(
     subtitle: str,
     status: ft.Control | None,
     body: list[ft.Control],
-    height: int = 226,
+    height: int | None = 226,
 ) -> ft.Container:
     heading = ft.Row(
         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
@@ -888,6 +1351,9 @@ def _activate_automatic_email(kwargs: dict, button: ft.Button) -> None:
     )
 
 
+PROFILE_APPEARANCE_CARD_HEIGHT = 320
+
+
 def _compact_settings_builder(**kwargs) -> ft.Control:
     """Configurações em grade 2x2, mantendo todos os diálogos validados."""
 
@@ -1036,12 +1502,13 @@ def _compact_settings_builder(**kwargs) -> ft.Control:
         content=incident_panel,
     )
 
-    grid_controls: list[ft.Control] = []
+    grid_controls: list[ft.Control] = [
+        ft.Container(col={"xs": 12, "md": 6}, content=notification_card),
+    ]
     if current_user.is_admin:
         grid_controls.append(ft.Container(col={"xs": 12, "md": 6}, content=email_card))
     grid_controls.extend(
         [
-            ft.Container(col={"xs": 12, "md": 6}, content=notification_card),
             ft.Container(col={"xs": 12, "md": 6}, content=backup_card),
             ft.Container(col={"xs": 12, "md": 6}, content=incident_card),
         ]
@@ -1065,9 +1532,9 @@ def _compact_settings_builder(**kwargs) -> ft.Control:
     account_actions = [
         buttons[label]
         for label in (
+            "Alterar minha senha",
             "Escolher foto",
             "Remover foto",
-            "Alterar minha senha",
             "Gerenciar usuários",
             "Renovar código de recuperação",
             "Guia de uso",
@@ -1078,10 +1545,10 @@ def _compact_settings_builder(**kwargs) -> ft.Control:
         col={"xs": 12, "md": 6},
         content=_settings_card(
             icon=ft.Icons.PERSON_OUTLINE,
-            title="Conta e acesso",
+            title="Perfil e acesso",
             subtitle=f"@{current_user.username} • {current_user.role_label}",
             status=None,
-            height=208,
+            height=PROFILE_APPEARANCE_CARD_HEIGHT,
             body=[
                 ft.Row(
                     spacing=10,
@@ -1105,7 +1572,7 @@ def _compact_settings_builder(**kwargs) -> ft.Control:
             title="Aparência",
             subtitle="Preferência salva somente nesta estação.",
             status=None,
-            height=208,
+            height=PROFILE_APPEARANCE_CARD_HEIGHT,
             body=[theme],
         ),
     )
@@ -1160,12 +1627,13 @@ def _compact_settings_builder(**kwargs) -> ft.Control:
                     ),
                 ],
             ),
-            ft.ResponsiveRow(spacing=14, run_spacing=14, controls=grid_controls),
             ft.ResponsiveRow(
                 spacing=14,
                 run_spacing=14,
-                controls=[appearance_card, account_card],
+                vertical_alignment=ft.CrossAxisAlignment.START,
+                controls=[account_card, appearance_card],
             ),
+            ft.ResponsiveRow(spacing=14, run_spacing=14, controls=grid_controls),
             server_card,
             ft.Container(height=8),
         ],
@@ -1178,6 +1646,20 @@ def _show_new_test(self: production_app.ProductionClimateTestApplication) -> Non
         self._show_message("Este perfil possui acesso somente para consulta.", error=True)
         return
     if self._selected_view == "new_test" and self._new_test_view is not None:
+        # Um segundo clique também funciona como recuperação visual. Se o host
+        # nativo perdeu um frame durante a troca, o formulário é reafirmado sem
+        # criar outra árvore de controles e a rolagem volta ao início.
+        content_host = getattr(self, "_v084_content_host", None)
+        content_switcher = getattr(self, "_v086_content_switcher", None)
+        if isinstance(content_switcher, ft.AnimatedSwitcher):
+            self._current_content = self._new_test_view.root
+            content_switcher.content = self._new_test_view.root
+            _safe_update(content_switcher)
+        elif isinstance(content_host, ft.Container):
+            self._current_content = self._new_test_view.root
+            content_host.content = self._new_test_view.root
+            _safe_update(content_host)
+        self._page.run_task(_ensure_scroll_top, self._new_test_view.root)
         return
     self._prepare_theme()
     view = FinalNewTestView(
@@ -1188,7 +1670,7 @@ def _show_new_test(self: production_app.ProductionClimateTestApplication) -> Non
     view.save_button.disabled = False
     self._new_test_view = view
     self._render(view.root, selected_view="new_test")
-    self._page.run_task(_force_scroll_top, view.root)
+    self._page.run_task(_ensure_scroll_top, view.root)
 
 
 def _show_edit_test(
@@ -1206,7 +1688,7 @@ def _show_edit_test(
     )
     view.save_button.disabled = False
     self._render(view.root, selected_view="details")
-    self._page.run_task(_force_scroll_top, view.root)
+    self._page.run_task(_ensure_scroll_top, view.root)
 
 
 def install() -> None:
@@ -1218,8 +1700,10 @@ def install() -> None:
     application._toggle_sidebar = _stable_toggle_sidebar
     application._handle_resize = _stable_handle_resize
     application._refresh_shell_frame = _stable_refresh_shell_frame
+    application._change_theme = _stable_change_theme
     application.show_new_test = _show_new_test
     application.show_edit_test = _show_edit_test
+    round7_runtime.CleanDetailsView._phase_panel = _compact_details_phase_panel
     round7_runtime._hold_control = _hold_button
     production_app.build_production_settings_view = _compact_settings_builder
     production_app._v084_stability_installed = True

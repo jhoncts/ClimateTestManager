@@ -22,6 +22,7 @@ from climatetest_manager.services.auth import UserSummary
 from climatetest_manager.services.climate_tests import ClimateTestService, CreateClimateTestCommand
 from climatetest_manager.ui.components import ReasonSelector, user_avatar
 from climatetest_manager.ui.email_help import EMAIL_SETUP_STEPS
+from climatetest_manager.ui.theme import AppColors
 from climatetest_manager.ui.views.agenda import AgendaView
 from climatetest_manager.ui.views.dashboard import DashboardView
 from climatetest_manager.ui.views.history import build_history_view
@@ -643,6 +644,28 @@ class OperationalViewTests(unittest.TestCase):
 
         self.assertIsInstance(agenda.root, ft.Column)
         self.assertEqual(len(agenda._events), 2)
+
+    def test_agenda_selection_preserves_session_theme_in_late_callback(self) -> None:
+        try:
+            AppColors.apply_mode("lavender")
+            agenda = AgendaView(
+                [],
+                on_select=lambda _id: None,
+                today_provider=lambda: self.now.date(),
+            )
+            expected_primary = AppColors.PRIMARY
+            expected_light = AppColors.PRIMARY_LIGHT
+
+            # Simula o callback do WebView2 chegando fora do ContextVar da sessão.
+            AppColors.apply_mode("light")
+            agenda._select_date(self.now.date())
+            selected_cell = agenda._day_cell(self.now.date())
+
+            self.assertEqual(selected_cell.bgcolor, expected_light)
+            self.assertEqual(selected_cell.border.top.color, expected_primary)
+            self.assertEqual(AppColors.current_mode(), "lavender")
+        finally:
+            AppColors.apply_mode("light")
 
     def test_dashboard_builds_active_rows_with_compact_progress(self) -> None:
         self.service.start_chamber(self.test_id)

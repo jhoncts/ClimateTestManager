@@ -123,8 +123,15 @@ def hoverable_navigation_surface(
     icon_size: int,
     on_click: Callable[[], None] | None,
     badge_count: int = 0,
+    surface_width: int | None = None,
 ) -> ft.Container:
-    """Item lateral com baseline folgado e sem animações que rasterizem as letras."""
+    """Item lateral com geometria explícita e previsível no WebView2 do Windows.
+
+    A navegação antiga deixava o texto dentro de uma ``Row(tight=True)`` aninhada.
+    Em algumas escalas do Windows, o cálculo intermediário recebia largura zero e
+    somente o ícone era pintado. Aqui ícone, rótulo e badge são irmãos diretos e o
+    rótulo recebe uma largura numérica; nenhum ``expand`` participa dessa linha.
+    """
 
     nav_selected = AppColors.NAV_SELECTED
     nav_hover = AppColors.NAV_HOVER
@@ -135,7 +142,6 @@ def hoverable_navigation_surface(
     label_control = ft.Text(
         label,
         size=13,
-        height=1.35,
         weight=ft.FontWeight.BOLD if selected else ft.FontWeight.W_500,
         color=selected_color,
         no_wrap=True,
@@ -143,7 +149,6 @@ def hoverable_navigation_surface(
     )
     icon_control = ft.Icon(icon, size=icon_size, color=selected_color)
     badge = ft.Container(
-        visible=badge_count > 0,
         width=22,
         height=20,
         border_radius=10,
@@ -157,18 +162,50 @@ def hoverable_navigation_surface(
             no_wrap=True,
         ),
     )
+    resolved_width = surface_width or (60 if compact else 212)
     if compact:
-        row_controls: list[ft.Control] = [icon_control]
+        icon_box: ft.Control = ft.Container(
+            width=36,
+            height=34,
+            alignment=ft.Alignment.CENTER,
+            content=icon_control,
+        )
         if badge_count:
-            row_controls.append(badge)
+            badge.width = 18
+            badge.height = 18
+            badge.right = 0
+            badge.top = 0
+            icon_box = ft.Stack(width=40, height=36, controls=[icon_box, badge])
+        row_controls: list[ft.Control] = [icon_box]
+        row_alignment = ft.MainAxisAlignment.CENTER
+        row_spacing = 0
     else:
-        row_controls = [
-            icon_control,
-            ft.Container(expand=True, content=label_control),
-        ]
+        horizontal_padding = 12
+        icon_width = 28
+        row_spacing = 9
+        badge_space = (badge.width or 22) + row_spacing if badge_count else 0
+        label_width = max(
+            84,
+            resolved_width - (horizontal_padding * 2) - icon_width - row_spacing - badge_space,
+        )
+        icon_box = ft.Container(
+            width=icon_width,
+            height=34,
+            alignment=ft.Alignment.CENTER,
+            content=icon_control,
+        )
+        label_box = ft.Container(
+            width=label_width,
+            height=34,
+            alignment=ft.Alignment.CENTER_LEFT,
+            content=label_control,
+        )
+        row_controls = [icon_box, label_box]
         if badge_count:
             row_controls.append(badge)
+        row_alignment = ft.MainAxisAlignment.START
     surface = ft.Container(
+        width=resolved_width,
         height=52,
         border_radius=12,
         bgcolor=nav_selected if selected else None,
@@ -177,9 +214,9 @@ def hoverable_navigation_surface(
         tooltip=label if compact else None,
         on_click=(lambda _event: on_click()) if on_click else None,
         content=ft.Row(
-            alignment=ft.MainAxisAlignment.CENTER if compact else ft.MainAxisAlignment.START,
+            alignment=row_alignment,
             vertical_alignment=ft.CrossAxisAlignment.CENTER,
-            spacing=5 if compact else 11,
+            spacing=row_spacing,
             controls=row_controls,
         ),
     )

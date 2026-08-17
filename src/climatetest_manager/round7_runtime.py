@@ -680,12 +680,12 @@ class CleanDetailsView(StableDetailsView):
             horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
             controls=[
                 ft.Row(
-                    wrap=True,
-                    run_spacing=8,
+                    wrap=False,
                     alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     controls=[
                         ft.Row(
+                            expand=True,
                             spacing=10,
                             controls=[
                                 ft.IconButton(
@@ -803,19 +803,27 @@ class CleanDetailsView(StableDetailsView):
             ),
         ]
         return ft.PopupMenuButton(
+            width=112,
+            height=40,
             tooltip="Ações do ensaio",
             menu_position=ft.PopupMenuPosition.UNDER,
+            padding=0,
             menu_padding=6,
             elevation=8,
             shape=ft.RoundedRectangleBorder(radius=12),
             size_constraints=ft.BoxConstraints(min_width=390, max_width=430),
             items=items,
             content=ft.Container(
+                width=112,
+                height=40,
                 border=ft.Border.all(1, AppColors.PRIMARY),
                 border_radius=11,
+                alignment=ft.Alignment.CENTER,
                 padding=ft.Padding.symmetric(horizontal=13, vertical=8),
                 content=ft.Row(
+                    tight=True,
                     spacing=7,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
                     controls=[
                         ft.Icon(ft.Icons.MORE_VERT, size=18, color=AppColors.PRIMARY),
                         ft.Text(
@@ -1398,22 +1406,84 @@ _App = production_app.ProductionClimateTestApplication
 _original_launcher_open = production_app.ProductionClimateTestLauncher._open_application
 
 
+async def _animate_welcome(page: ft.Page, first_name: str) -> None:
+    """Mostra boas-vindas sem bloquear nem remontar a tela recém-aberta."""
+
+    banner = ft.Container(
+        right=22,
+        top=18,
+        width=360,
+        opacity=0,
+        offset=ft.Offset(0, -0.22),
+        animate_opacity=ft.Animation(220, ft.AnimationCurve.EASE_OUT_CUBIC),
+        animate_offset=ft.Animation(220, ft.AnimationCurve.EASE_OUT_CUBIC),
+        border_radius=16,
+        bgcolor=AppColors.PRIMARY,
+        padding=ft.Padding.symmetric(horizontal=16, vertical=13),
+        shadow=ft.BoxShadow(
+            blur_radius=24,
+            spread_radius=-4,
+            color="#33000000",
+            offset=ft.Offset(0, 8),
+        ),
+        content=ft.Row(
+            spacing=10,
+            controls=[
+                ft.Container(
+                    width=36,
+                    height=36,
+                    border_radius=12,
+                    bgcolor="#22FFFFFF",
+                    alignment=ft.Alignment.CENTER,
+                    content=ft.Icon(
+                        ft.Icons.WAVING_HAND_OUTLINED,
+                        color=AppColors.WHITE,
+                        size=21,
+                    ),
+                ),
+                ft.Column(
+                    expand=True,
+                    spacing=1,
+                    controls=[
+                        ft.Text(
+                            f"Bem-vindo de volta, {first_name}.",
+                            size=13,
+                            weight=ft.FontWeight.BOLD,
+                            color=AppColors.WHITE,
+                        ),
+                        ft.Text(
+                            "O ClimateTest Manager está pronto para uso.",
+                            size=10,
+                            color="#E8FFFFFF",
+                        ),
+                    ],
+                ),
+            ],
+        ),
+    )
+    try:
+        page.overlay.append(banner)
+        page.update()
+        await asyncio.sleep(0.04)
+        banner.opacity = 1
+        banner.offset = ft.Offset(0, 0)
+        _safe_update(banner)
+        await asyncio.sleep(2.1)
+        banner.opacity = 0
+        banner.offset = ft.Offset(0, -0.12)
+        _safe_update(banner)
+        await asyncio.sleep(0.24)
+    finally:
+        with suppress(ValueError):
+            page.overlay.remove(banner)
+        with suppress(RuntimeError):
+            page.update()
+
+
 def _open_application_with_welcome(self, user) -> None:
     _original_launcher_open(self, user)
     first = user.first_name.strip() or user.full_name
-    self._page.show_dialog(
-        ft.SnackBar(
-            content=ft.Row(
-                spacing=8,
-                controls=[
-                    ft.Icon(ft.Icons.WAVING_HAND_OUTLINED, color=AppColors.WHITE),
-                    ft.Text(f"Bem-vindo de volta, {first}.", color=AppColors.WHITE),
-                ],
-            ),
-            bgcolor=AppColors.PRIMARY,
-            duration=2200,
-        )
-    )
+    self._page.run_task(_animate_welcome, self._page, first)
 
 
 def install_round7_fixes() -> None:

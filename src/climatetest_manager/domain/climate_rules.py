@@ -120,13 +120,28 @@ def _chamber(temperature_c: Decimal, duration_hours: int) -> PhaseCondition:
     )
 
 
+def _nearest_low_band_chamber_setpoint(normative_target_c: Decimal) -> Decimal:
+    """Converte o alvo Ts + 20 K para o patamar operacional disponível.
+
+    Para a faixa G1 com Ts <= 70 °C, o laboratório executa a câmara úmida nos
+    patamares nominais disponíveis de 80 °C ou 90 °C. O alvo normativo continua
+    sendo Ts + 20 K (com mínimo de 80 °C); o setpoint operacional selecionado é
+    o patamar disponível mais próximo. Em empate (85 °C), escolhe-se 90 °C para
+    evitar reduzir a severidade térmica do condicionamento.
+    """
+
+    target = max(normative_target_c, Decimal("80"))
+    setpoints = (Decimal("80"), Decimal("90"))
+    return min(setpoints, key=lambda value: (abs(value - target), -value))
+
+
 def _drying(temperature_c: Decimal) -> PhaseCondition:
     return PhaseCondition(temperature_c=temperature_c, duration_hours=336)
 
 
 def _group_one_condition(epl: EPL, ts: Decimal, option: TestOption) -> ClimateCondition:
     if ts <= Decimal("70"):
-        chamber_temperature = max(ts + Decimal("20"), Decimal("80"))
+        chamber_temperature = _nearest_low_band_chamber_setpoint(ts + Decimal("20"))
         return ClimateCondition(
             epl=epl,
             service_temperature_c=ts,

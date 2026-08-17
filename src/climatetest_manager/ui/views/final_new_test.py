@@ -23,6 +23,7 @@ from climatetest_manager.ui.components.table17_interactive import (
     build_interactive_table17,
     ts_band_label,
 )
+from climatetest_manager.ui.formatters import format_decimal
 from climatetest_manager.ui.theme import AppColors
 from climatetest_manager.ui.views.new_test import NewTestView
 
@@ -105,6 +106,12 @@ def _selection_badge(label: str, value: ft.Text, icon: ft.IconData) -> ft.Contai
 class FinalNewTestView(NewTestView):
     """Formulário compacto, dinâmico e estável para cadastro e edição."""
 
+    ADVANCED_TABLE_HEIGHT = 610
+    STANDARD_TOP_CARD_HEIGHT = 334
+    DIRECT_TS_TOP_CARD_HEIGHT = 350
+    TABLE17_TOP_CARD_HEIGHT = 274
+    MANUAL_TOP_CARD_HEIGHT = 350
+
     _interactive_table: InteractiveTable17
 
     def __init__(self, *args, **kwargs) -> None:
@@ -118,7 +125,8 @@ class FinalNewTestView(NewTestView):
         super().__init__(*args, **kwargs)
 
         self.notes.min_lines = 1
-        self.notes.max_lines = 3
+        self.notes.max_lines = 2
+        self.notes.height = 56
         self.notes.max_length = 1000
         self.notes.hint_text = "Digite observações sobre o ensaio (opcional)..."
         self._notes_count.value = f"{len(self.notes.value or '')}/1000"
@@ -150,6 +158,8 @@ class FinalNewTestView(NewTestView):
             self._table17_guide,
             self._simple_holder,
             self._advanced_holder,
+            self._identity_panel_control,
+            self._thermal_panel_control,
         )
         self._on_mode_change()
 
@@ -169,10 +179,10 @@ class FinalNewTestView(NewTestView):
             self.manual_drying_temperature,
             self.manual_drying_duration,
         ):
-            field.height = 44
+            field.height = 42
             field.dense = True
 
-        self.epl.height = 44
+        self.epl.height = 42
         self.epl.dense = True
 
         radios = list(getattr(self.mode_group.content, "controls", []) or [])
@@ -180,7 +190,63 @@ class FinalNewTestView(NewTestView):
             isinstance(control, ft.Radio) and control.value == TABLE17_MODE for control in radios
         ):
             radios.append(ft.Radio(value=TABLE17_MODE, label="Selecionar na Tabela 17"))
-        self.mode_group.content = ft.Column(spacing=2, controls=radios)
+        for radio in radios:
+            if isinstance(radio, ft.Radio):
+                radio.height = 32
+                radio.visual_density = ft.VisualDensity.COMPACT
+        self.mode_group.content = ft.Column(spacing=0, tight=True, controls=radios)
+
+        for radio in getattr(self.option_group.content, "controls", []) or []:
+            if isinstance(radio, ft.Radio):
+                radio.height = 32
+                radio.visual_density = ft.VisualDensity.COMPACT
+
+        # Os campos personalizados precisam de área útil real. Em três colunas
+        # dentro de metade do card, o WebView2 quebrava os rótulos e reduzia
+        # demais a caixa de edição em escalas de 125/150 %.
+        manual_fields = (
+            self.manual_chamber_temperature,
+            self.manual_chamber_humidity,
+            self.manual_chamber_duration,
+            self.manual_drying_temperature,
+            self.manual_drying_duration,
+        )
+        for field in manual_fields:
+            field.height = 52
+            field.dense = False
+            field.text_size = 13
+            field.label_style = ft.TextStyle(size=10)
+            field.hint_style = ft.TextStyle(size=10)
+
+        self.manual_condition_fields.content = ft.Column(
+            spacing=8,
+            controls=[
+                ft.Text(
+                    "Informe somente a condição que será aplicada no ensaio.",
+                    size=9,
+                    color=AppColors.TEXT_SECONDARY,
+                ),
+                ft.ResponsiveRow(
+                    spacing=10,
+                    run_spacing=8,
+                    controls=[
+                        ft.Container(
+                            col={"xs": 12, "sm": 6},
+                            content=self.manual_chamber_temperature,
+                        ),
+                        ft.Container(
+                            col={"xs": 12, "sm": 6},
+                            content=self.manual_chamber_humidity,
+                        ),
+                    ],
+                ),
+                self.manual_chamber_duration,
+                self.manual_drying_required,
+                self.manual_drying_fields,
+            ],
+        )
+
+        self._configure_option_panel()
 
         self._table17_guide.content = ft.Container(
             border_radius=11,
@@ -235,14 +301,215 @@ class FinalNewTestView(NewTestView):
             ),
         )
 
+    def _configure_option_panel(self) -> None:
+        """Substitui o bloco antigo por duas opções compactas e legíveis."""
+
+        self.option_help.size = 9
+        self.option_help.no_wrap = True
+        self.option_help.visible = False
+        self._option_summary_a = ft.Text(
+            "Informe EPL e Ts.",
+            size=9,
+            color=AppColors.TEXT_SECONDARY,
+            no_wrap=True,
+            overflow=ft.TextOverflow.ELLIPSIS,
+        )
+        self._option_detail_a = ft.Text(
+            "",
+            size=8,
+            color=AppColors.TEXT_SECONDARY,
+            no_wrap=True,
+            overflow=ft.TextOverflow.ELLIPSIS,
+        )
+        self._option_summary_b = ft.Text(
+            "Informe EPL e Ts.",
+            size=9,
+            color=AppColors.TEXT_SECONDARY,
+            no_wrap=True,
+            overflow=ft.TextOverflow.ELLIPSIS,
+        )
+        self._option_detail_b = ft.Text(
+            "",
+            size=8,
+            color=AppColors.TEXT_SECONDARY,
+            no_wrap=True,
+            overflow=ft.TextOverflow.ELLIPSIS,
+        )
+        self._option_card_a = self._option_choice_card(
+            "A",
+            self._option_summary_a,
+            self._option_detail_a,
+        )
+        self._option_card_b = self._option_choice_card(
+            "B",
+            self._option_summary_b,
+            self._option_detail_b,
+        )
+        self.option_panel.height = 104
+        self.option_panel.padding = 8
+        self.option_panel.bgcolor = AppColors.PAGE_BACKGROUND
+        self.option_panel.border = ft.Border.all(1, AppColors.DIVIDER)
+        self.option_panel.border_radius = 11
+        self.option_panel.content = ft.Column(
+            spacing=4,
+            controls=[
+                ft.Row(
+                    height=24,
+                    spacing=7,
+                    controls=[
+                        ft.Container(
+                            width=24,
+                            height=24,
+                            border_radius=8,
+                            bgcolor=AppColors.PRIMARY_LIGHT,
+                            alignment=ft.Alignment.CENTER,
+                            content=ft.Icon(
+                                ft.Icons.ALT_ROUTE,
+                                size=14,
+                                color=AppColors.PRIMARY,
+                            ),
+                        ),
+                        ft.Text(
+                            "Alternativa da Tabela 17",
+                            size=11,
+                            weight=ft.FontWeight.BOLD,
+                            color=AppColors.TEXT_PRIMARY,
+                        ),
+                        ft.Container(expand=True),
+                    ],
+                ),
+                ft.Row(
+                    spacing=8,
+                    controls=[
+                        ft.Container(expand=True, content=self._option_card_a),
+                        ft.Container(expand=True, content=self._option_card_b),
+                    ],
+                ),
+            ],
+        )
+
+    def _option_choice_card(
+        self,
+        option: str,
+        summary: ft.Text,
+        detail: ft.Text,
+    ) -> ft.Container:
+        return ft.Container(
+            height=58,
+            border_radius=10,
+            bgcolor=AppColors.SURFACE,
+            border=ft.Border.all(1, AppColors.DIVIDER),
+            padding=ft.Padding.symmetric(horizontal=8, vertical=5),
+            content=ft.Row(
+                spacing=8,
+                vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                controls=[
+                    ft.Container(
+                        width=28,
+                        height=28,
+                        border_radius=9,
+                        bgcolor=AppColors.PRIMARY_LIGHT,
+                        alignment=ft.Alignment.CENTER,
+                        content=ft.Text(
+                            option,
+                            size=11,
+                            weight=ft.FontWeight.BOLD,
+                            color=AppColors.PRIMARY,
+                        ),
+                    ),
+                    ft.Column(
+                        expand=True,
+                        spacing=1,
+                        alignment=ft.MainAxisAlignment.CENTER,
+                        controls=[
+                            ft.Text(
+                                f"Opção {option}",
+                                size=10,
+                                weight=ft.FontWeight.BOLD,
+                                color=AppColors.TEXT_PRIMARY,
+                            ),
+                            summary,
+                            detail,
+                        ],
+                    ),
+                ],
+            ),
+        )
+
+    def _option_summary(self, option: str) -> tuple[str, str, bool]:
+        ts = self._current_ts()
+        epl = self.epl.value
+        if ts is None or not epl:
+            return "Aguardando condição", "Informe EPL e temperatura.", False
+        try:
+            permitted = {item.value for item in available_options(epl, ts)}
+            if option not in permitted:
+                return "Não aplicável", "Indisponível para este EPL e Ts.", False
+            condition = resolve_condition(epl, ts, option)
+        except (ClimateRuleError, InvalidOperation, ValueError):
+            return "Condição indisponível", "Revise EPL e temperatura.", False
+
+        chamber = condition.chamber
+        humidity = format_decimal(chamber.humidity_percent or Decimal("0"))
+        humidity_tol = format_decimal(chamber.humidity_tolerance_percent or Decimal("0"))
+        first = (
+            f"{format_decimal(chamber.temperature_c)}±"
+            f"{format_decimal(chamber.temperature_tolerance_k)} °C • "
+            f"{humidity}±{humidity_tol}% UR • {chamber.duration_hours} h"
+        )
+        if condition.drying is None:
+            second = "Sem secagem"
+        else:
+            drying = condition.drying
+            second = (
+                f"Seco: {format_decimal(drying.temperature_c)}±"
+                f"{format_decimal(drying.temperature_tolerance_k)} °C • "
+                f"{drying.duration_hours} h"
+            )
+        return first, second, True
+
+    def _refresh_option_cards(self) -> None:
+        if not hasattr(self, "_option_card_a"):
+            return
+        for option, card, summary, detail in (
+            ("A", self._option_card_a, self._option_summary_a, self._option_detail_a),
+            ("B", self._option_card_b, self._option_summary_b, self._option_detail_b),
+        ):
+            first, second, enabled = self._option_summary(option)
+            selected = bool(enabled and self.option_group.value == option)
+            summary.value = first
+            detail.value = second
+            summary.color = AppColors.PRIMARY if selected else AppColors.TEXT_PRIMARY
+            detail.color = AppColors.TEXT_SECONDARY
+            card.bgcolor = AppColors.PRIMARY_LIGHT if selected else AppColors.SURFACE
+            card.border = ft.Border.all(
+                2 if selected else 1,
+                AppColors.PRIMARY if selected else AppColors.DIVIDER,
+            )
+            card.opacity = 1 if enabled else 0.45
+            card.tooltip = (
+                f"Opção {option} selecionada"
+                if selected
+                else f"Selecionar opção {option}"
+                if enabled
+                else second
+            )
+            card.on_click = (
+                (lambda _event, value=option: self._choose_option(value)) if enabled else None
+            )
+
+    def _choose_option(self, value: str) -> None:
+        self.option_group.value = value
+        self._recalculate()
+
     def _identity_panel(self) -> ft.Container:
         return ft.Container(
             bgcolor=AppColors.SURFACE,
             border=ft.Border.all(1, AppColors.DIVIDER),
             border_radius=14,
-            padding=14,
+            padding=12,
             content=ft.Column(
-                spacing=9,
+                spacing=7,
                 horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
                 controls=[
                     _section_heading(
@@ -270,13 +537,25 @@ class FinalNewTestView(NewTestView):
                 self._table17_guide,
             ],
         )
+        self._mode_selector_box = ft.Container(
+            col={"xs": 12, "sm": 5},
+            border_radius=11,
+            bgcolor=AppColors.PAGE_BACKGROUND,
+            border=ft.Border.all(1, AppColors.DIVIDER),
+            padding=10,
+            content=self.mode_group,
+        )
+        self._thermal_input_box = ft.Container(
+            col={"xs": 12, "sm": 7},
+            content=input_area,
+        )
         return ft.Container(
             bgcolor=AppColors.SURFACE,
             border=ft.Border.all(1, AppColors.DIVIDER),
             border_radius=14,
-            padding=14,
+            padding=12,
             content=ft.Column(
-                spacing=10,
+                spacing=8,
                 horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
                 controls=[
                     _section_heading(
@@ -288,20 +567,7 @@ class FinalNewTestView(NewTestView):
                         spacing=12,
                         run_spacing=10,
                         vertical_alignment=ft.CrossAxisAlignment.START,
-                        controls=[
-                            ft.Container(
-                                col={"xs": 12, "sm": 5},
-                                border_radius=11,
-                                bgcolor=AppColors.PAGE_BACKGROUND,
-                                border=ft.Border.all(1, AppColors.DIVIDER),
-                                padding=10,
-                                content=self.mode_group,
-                            ),
-                            ft.Container(
-                                col={"xs": 12, "sm": 7},
-                                content=input_area,
-                            ),
-                        ],
+                        controls=[self._mode_selector_box, self._thermal_input_box],
                     ),
                     self.option_panel,
                 ],
@@ -476,6 +742,7 @@ class FinalNewTestView(NewTestView):
             on_select_epl=self._select_table_epl,
             on_select_option=self._select_table_option,
             on_invalid=self._show_table_error,
+            interactive=self.mode_group.value == TABLE17_MODE,
         )
 
     def _build_result_panel(self) -> ft.Container:
@@ -494,7 +761,17 @@ class FinalNewTestView(NewTestView):
         )
         self._simple_holder = ft.Container(content=self._simple_summary())
         self._interactive_table = self._advanced_table()
-        self._advanced_holder = ft.Container(visible=False, content=self._interactive_table)
+        # A tabela permanece montada desde o primeiro frame, mas ocupa zero px no
+        # modo simples. Tornar uma árvore grande ``visible`` somente no clique
+        # provocava um novo layout sem limite no WebView2 (tela cinza e scroll
+        # virtualmente infinito). A altura explícita torna a troca determinística.
+        self._advanced_holder = ft.Container(
+            visible=True,
+            height=0,
+            opacity=0,
+            clip_behavior=ft.ClipBehavior.HARD_EDGE,
+            content=self._interactive_table,
+        )
         return ft.Container(
             bgcolor=AppColors.SURFACE,
             border=ft.Border.all(1, AppColors.PRIMARY),
@@ -541,14 +818,22 @@ class FinalNewTestView(NewTestView):
 
     def _build(self) -> ft.Column:
         self._prepare_controls()
+        identity_panel = self._identity_panel()
+        identity_panel.expand = 5
+        identity_panel.height = self.STANDARD_TOP_CARD_HEIGHT
+        thermal_panel = self._thermal_panel()
+        thermal_panel.expand = 7
+        thermal_panel.height = self.STANDARD_TOP_CARD_HEIGHT
+        self._identity_panel_control = identity_panel
+        self._thermal_panel_control = thermal_panel
         controls: list[ft.Control] = [
             ft.Row(
-                wrap=True,
-                run_spacing=8,
+                wrap=False,
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
                 controls=[
                     ft.Column(
+                        expand=True,
                         spacing=1,
                         controls=[
                             ft.Text(
@@ -578,20 +863,11 @@ class FinalNewTestView(NewTestView):
                 ],
             ),
             self.error_banner,
-            ft.ResponsiveRow(
+            ft.Row(
                 spacing=12,
-                run_spacing=12,
+                intrinsic_height=False,
                 vertical_alignment=ft.CrossAxisAlignment.START,
-                controls=[
-                    ft.Container(
-                        col={"xs": 12, "md": 5},
-                        content=self._identity_panel(),
-                    ),
-                    ft.Container(
-                        col={"xs": 12, "md": 7},
-                        content=self._thermal_panel(),
-                    ),
-                ],
+                controls=[identity_panel, thermal_panel],
             ),
             self._notes_panel(),
         ]
@@ -625,7 +901,10 @@ class FinalNewTestView(NewTestView):
     def _set_table_view(self, mode: str) -> None:
         self._table_view = "advanced" if mode == "advanced" else "simple"
         self._simple_holder.visible = self._table_view == "simple"
-        self._advanced_holder.visible = self._table_view == "advanced"
+        self._advanced_holder.height = (
+            self.ADVANCED_TABLE_HEIGHT if self._table_view == "advanced" else 0
+        )
+        self._advanced_holder.opacity = 1 if self._table_view == "advanced" else 0
         if self._simple_button is not None:
             self._simple_button.bgcolor = (
                 AppColors.PRIMARY if self._table_view == "simple" else None
@@ -642,6 +921,39 @@ class FinalNewTestView(NewTestView):
             )
         _safe_update(self.result_panel if hasattr(self, "result_panel") else None)
 
+    def _sync_top_card_height(self) -> None:
+        """Mantém os dois cards superiores idênticos sem usar IntrinsicHeight."""
+
+        mode = self.mode_group.value or ConditionInputMode.CALCULATED.value
+        if hasattr(self, "_mode_selector_box") and hasattr(self, "_thermal_input_box"):
+            if mode == ConditionInputMode.DIRECT_CONFIGURATION.value:
+                self._mode_selector_box.col = {"xs": 12, "sm": 4}
+                self._thermal_input_box.col = {"xs": 12, "sm": 8}
+            else:
+                self._mode_selector_box.col = {"xs": 12, "sm": 5}
+                self._thermal_input_box.col = {"xs": 12, "sm": 7}
+
+        if mode == TABLE17_MODE:
+            height = self.TABLE17_TOP_CARD_HEIGHT
+        elif mode == ConditionInputMode.DIRECT_CONFIGURATION.value:
+            height = self.MANUAL_TOP_CARD_HEIGHT
+        elif mode == ConditionInputMode.DIRECT_TS.value:
+            # O modo Ts informado exibe EPL + Ts + alternativa. A folga evita o
+            # recorte intermitente do card de alternativa em WebView2/escala DPI.
+            height = self.DIRECT_TS_TOP_CARD_HEIGHT
+        else:
+            height = self.STANDARD_TOP_CARD_HEIGHT
+        for panel in (
+            getattr(self, "_identity_panel_control", None),
+            getattr(self, "_thermal_panel_control", None),
+        ):
+            if isinstance(panel, ft.Container):
+                panel.height = height
+                # A altura do card superior faz parte de uma atualização parcial.
+                # Sem reenviar esta superfície, o WebView2 só refletia a nova
+                # geometria depois de outro clique ou de uma rolagem.
+                _safe_update(panel)
+
     def _refresh_result_views(self) -> None:
         if not hasattr(self, "_interactive_table"):
             return
@@ -657,17 +969,29 @@ class FinalNewTestView(NewTestView):
             self._simple_source.value = "Configuração personalizada"
         else:
             self._simple_source.value = f"Tabela 17 • {self._condition.rule_id}"
+        self._refresh_option_cards()
         self._interactive_table.set_state(
             ts=ts,
             selected_epl=self.epl.value,
             selected_option=self.option_group.value,
+            interactive=self.mode_group.value == TABLE17_MODE,
         )
+        # A regra base atualiza antes destes controles derivados. Reenvia apenas
+        # os dois blocos afetados, evitando um segundo page.update() completo.
+        _safe_update(self.option_panel)
+        _safe_update(self.result_panel if hasattr(self, "result_panel") else None)
 
     def _show_table_error(self, message: str) -> None:
         self._show_error(message)
         self._refresh()
 
     def _select_table_epl(self, value: str) -> None:
+        if self.mode_group.value != TABLE17_MODE:
+            self._show_table_error(
+                "A Tabela 17 está somente para visualização. "
+                "Escolha 'Selecionar na Tabela 17' para alterar a condição."
+            )
+            return
         ts = _number(self.service_temperature.value)
         if ts is None:
             self._show_table_error("Informe o Ts antes de selecionar o EPL na Tabela 17.")
@@ -677,6 +1001,12 @@ class FinalNewTestView(NewTestView):
         self._recalculate()
 
     def _select_table_option(self, value: str) -> None:
+        if self.mode_group.value != TABLE17_MODE:
+            self._show_table_error(
+                "A Tabela 17 está somente para visualização. "
+                "Escolha 'Selecionar na Tabela 17' para alterar a condição."
+            )
+            return
         ts = _number(self.service_temperature.value)
         if ts is None or not self.epl.value:
             self._show_table_error("Informe o Ts e selecione o EPL antes da condição.")
@@ -696,6 +1026,7 @@ class FinalNewTestView(NewTestView):
             NewTestView._on_mode_change(self, event)
             self._set_table_view("simple")
             self.save_button.disabled = False
+            self._sync_top_card_height()
             self._refresh_result_views()
             return
 
@@ -707,6 +1038,7 @@ class FinalNewTestView(NewTestView):
         self._table17_guide.visible = True
         self.manual_drying_fields.visible = False
         self._set_table_view("advanced")
+        self._sync_top_card_height()
         self._recalculate()
 
     def _recalculate(self, event: object | None = None) -> None:
