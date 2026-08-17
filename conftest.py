@@ -9,10 +9,7 @@ from pathlib import Path
 from zipfile import ZipFile
 
 _PROJECT_ROOT = Path(__file__).resolve().parent
-_PARTS = [
-    _PROJECT_ROOT / ".release-candidate" / f"ui7.part{index:02}.b64"
-    for index in range(1, 9)
-]
+_PARTS = [_PROJECT_ROOT / ".release-candidate" / f"ui7.part{index:02}.b64" for index in range(1, 9)]
 _EXPECTED_SHA256 = "4043f9762fef01a54c12eb4d8167aff8f7067fa0d46771c0f7bb1d2c88bb9e1a"
 _EXPECTED_FILES = {
     "src/climatetest_manager/v084_stability.py",
