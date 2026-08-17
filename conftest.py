@@ -9,6 +9,10 @@ from pathlib import Path
 from zipfile import ZipFile
 
 _PROJECT_ROOT = Path(__file__).resolve().parent
+
+# Keep this immutable staging manifest byte-for-byte readable. Ruff lint still validates
+# the file, while the formatter must not rewrite the long approved SHA-256 values.
+# fmt: off
 _PARTS = [_PROJECT_ROOT / ".release-candidate" / f"ui7.part{index:02}.b64" for index in range(1, 9)]
 _EXPECTED_RUNTIME_FILES = (
     (
@@ -33,6 +37,7 @@ _EXPECTED_RUNTIME_FILES = (
     ),
 )
 _EXPECTED_FILE_SHA256 = dict(_EXPECTED_RUNTIME_FILES)
+# fmt: on
 
 
 def _safe_member(name: str) -> None:
