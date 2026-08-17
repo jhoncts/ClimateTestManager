@@ -45,9 +45,7 @@ def _stage_ui_fix7() -> None:
             _safe_member(name)
         files = {name for name in names if not name.endswith("/")}
         if files != _EXPECTED_FILES:
-            raise RuntimeError(
-                "UI-FIX-7 staging payload contains an unexpected file set."
-            )
+            raise RuntimeError("UI-FIX-7 staging payload contains an unexpected file set.")
         archive.extractall(_PROJECT_ROOT)
 
 
