@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 
 import flet as ft
@@ -11,7 +12,9 @@ from climatetest_manager.services.auth import UserSummary
 from climatetest_manager.ui.components import github_credit, user_avatar
 from climatetest_manager.ui.interaction import (
     apply_interaction_polish,
-    hoverable_navigation_surface,
+)
+from climatetest_manager.ui.interaction import (
+    hoverable_navigation_surface as _stable_navigation_surface,
 )
 from climatetest_manager.ui.responsive import LayoutProfile
 from climatetest_manager.ui.theme import AppColors
@@ -38,6 +41,10 @@ def build_production_shell(
     notification_count: int,
 ) -> ft.Row:
     compact = layout.compact_navigation
+    source_preview = os.getenv("CLIMATETEST_SOURCE_PREVIEW", "").strip()
+    revision_label = (
+        f"{__build_revision__} • PRÉVIA {source_preview}" if source_preview else __build_revision__
+    )
     brand_icon = ft.Container(
         width=layout.brand_icon_size,
         height=layout.brand_icon_size,
@@ -119,10 +126,11 @@ def build_production_shell(
         navigation.append(("Usuários", ft.Icons.GROUPS_OUTLINED, "users", on_users, 0))
 
     nav_controls: list[ft.Control] = []
+    navigation_width = layout.sidebar_width - (layout.sidebar_padding * 2)
     for label, icon, view, callback, badge in navigation:
         selected = selected_view == view or (view == "tests" and selected_view == "details")
         nav_controls.append(
-            hoverable_navigation_surface(
+            _stable_navigation_surface(
                 label=label,
                 icon=icon,
                 selected=selected,
@@ -130,6 +138,7 @@ def build_production_shell(
                 icon_size=layout.navigation_icon_size,
                 on_click=callback,
                 badge_count=badge,
+                surface_width=navigation_width,
             )
         )
 
@@ -203,7 +212,7 @@ def build_production_shell(
                     tooltip=f"Revisão instalada: {__build_revision__}",
                 ),
                 ft.Text(
-                    __build_revision__,
+                    revision_label,
                     size=8,
                     color=AppColors.TEXT_SECONDARY,
                     no_wrap=True,
