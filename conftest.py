@@ -37,9 +37,7 @@ def _stage_ui_fix7() -> None:
     payload = base64.b64decode(encoded, validate=True)
     digest = hashlib.sha256(payload).hexdigest()
     if digest != _EXPECTED_SHA256:
-        raise RuntimeError(
-            f"UI-FIX-7 staging payload checksum mismatch: {digest}"
-        )
+        raise RuntimeError(f"UI-FIX-7 staging payload checksum mismatch: {digest}")
 
     with ZipFile(BytesIO(payload)) as archive:
         names = archive.namelist()
