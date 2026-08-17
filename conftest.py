@@ -10,13 +10,29 @@ from zipfile import ZipFile
 
 _PROJECT_ROOT = Path(__file__).resolve().parent
 _PARTS = [_PROJECT_ROOT / ".release-candidate" / f"ui7.part{index:02}.b64" for index in range(1, 9)]
-_EXPECTED_FILE_SHA256 = {
-    "src/climatetest_manager/v084_stability.py": "2d3ee3371e4d7cd547b1b5844649d9ffb61b44c60505744cd434c5991fe43dc5",
-    "src/climatetest_manager/domain/climate_rules.py": "e5976ca14bb7859d72b6707633c88431697ae8366eb53598670e149a82d75a0c",
-    "src/climatetest_manager/ui/components/table17_interactive.py": "699971177e3673ea531f912c5c936314a1343cb51909011a96392490ff84369e",
-    "src/climatetest_manager/ui/views/final_new_test.py": "a0845d7d72760650e8b6005dc914a56ae1215778d0d83fc49e0536e86d457f30",
-    "src/climatetest_manager/ui/views/agenda.py": "fa3e66e721a2cadb43532b01ac38da85efacb70cfbd7909100e1260084d04b65",
-}
+_EXPECTED_RUNTIME_FILES = (
+    (
+        "src/climatetest_manager/v084_stability.py",
+        "2d3ee3371e4d7cd547b1b5844649d9ffb61b44c60505744cd434c5991fe43dc5",
+    ),
+    (
+        "src/climatetest_manager/domain/climate_rules.py",
+        "e5976ca14bb7859d72b6707633c88431697ae8366eb53598670e149a82d75a0c",
+    ),
+    (
+        "src/climatetest_manager/ui/components/table17_interactive.py",
+        "699971177e3673ea531f912c5c936314a1343cb51909011a96392490ff84369e",
+    ),
+    (
+        "src/climatetest_manager/ui/views/final_new_test.py",
+        "a0845d7d72760650e8b6005dc914a56ae1215778d0d83fc49e0536e86d457f30",
+    ),
+    (
+        "src/climatetest_manager/ui/views/agenda.py",
+        "fa3e66e721a2cadb43532b01ac38da85efacb70cfbd7909100e1260084d04b65",
+    ),
+)
+_EXPECTED_FILE_SHA256 = dict(_EXPECTED_RUNTIME_FILES)
 
 
 def _safe_member(name: str) -> None:
@@ -40,7 +56,7 @@ def _stage_ui_fix7() -> None:
         if files != set(_EXPECTED_FILE_SHA256):
             raise RuntimeError("UI-FIX-7 staging payload contains an unexpected file set.")
 
-        for name, expected_digest in _EXPECTED_FILE_SHA256.items():
+        for name, expected_digest in _EXPECTED_RUNTIME_FILES:
             digest = hashlib.sha256(archive.read(name)).hexdigest()
             if digest != expected_digest:
                 raise RuntimeError(
