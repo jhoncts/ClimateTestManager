@@ -300,8 +300,11 @@ jobs:
           $installDir = Join-Path $env:ProgramFiles "ClimateTest Manager"
           $oldData = Join-Path $env:RUNNER_TEMP "ClimateTestManagerOldData"
           $setupLog = Join-Path $env:RUNNER_TEMP "ClimateTestManagerServer-setup.log"
+          $programData = Join-Path $env:ProgramData "ClimateTestManager"
           New-Item -ItemType Directory -Path $installDir -Force | Out-Null
           New-Item -ItemType Directory -Path $oldData -Force | Out-Null
+          New-Item -ItemType Directory -Path $programData -Force | Out-Null
+          Set-Content -LiteralPath (Join-Path $programData "server-mode.marker") -Value "server" -Encoding ascii
           Copy-Item `
             ".\dist\ClimateTestManager-v0.8.5\ClimateTestServer.exe" `
             (Join-Path $installDir "ClimateTestServer.exe") `
