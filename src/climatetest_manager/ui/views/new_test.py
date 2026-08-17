@@ -250,22 +250,10 @@ class NewTestView:
             field.keyboard_type = ft.KeyboardType.NUMBER
             field.expand = True
             field.on_change = self._on_condition_input_change
-        decimal_filter = ft.InputFilter(allow=True, regex_string=r"[0-9,.]")
-        integer_filter = ft.InputFilter(allow=True, regex_string=r"[0-9]")
-        for field in (
-            self.service_temperature,
-            self.manual_chamber_temperature,
-            self.manual_chamber_humidity,
-            self.manual_drying_temperature,
-        ):
-            field.input_filter = decimal_filter
-        for field in (
-            self.manual_chamber_duration,
-            self.manual_drying_duration,
-        ):
-            field.input_filter = integer_filter
-        # A filtragem via evento permite apagar o valor inicial sem o cursor ser
-        # restaurado pelo formatter nativo do Flet.
+        # Não usamos InputFilter nativo nesses campos. No WebView2 ele pode
+        # rejeitar o estado vazio e restaurar o último dígito digitado.
+        # A normalização via on_change mantém somente números/vírgula e permite
+        # apagar completamente o valor antes de digitar outro.
         self.tamb.expand = True
         self.delta_t.expand = True
         self.tamb.on_change = self._on_tamb_change

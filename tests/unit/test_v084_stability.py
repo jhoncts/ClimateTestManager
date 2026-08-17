@@ -125,18 +125,29 @@ def test_sidebar_refresh_never_reparents_or_replaces_current_screen() -> None:
     assert app._v084_content_host.padding == LayoutProfile.from_width(1280).content_padding
 
 
-def test_sidebar_toggle_schedules_animation_instead_of_switching_instantly() -> None:
-    scheduled: list[tuple[object, tuple[object, ...]]] = []
+def test_sidebar_toggle_is_atomic_and_never_spawns_a_background_race(monkeypatch) -> None:
+    from climatetest_manager import v084_stability
+
+    refreshed: list[bool] = []
+    monkeypatch.setattr(
+        v084_stability,
+        "_replace_shell_frame",
+        lambda app: refreshed.append(app._sidebar_collapsed),
+    )
     app = SimpleNamespace(
         _layout=LayoutProfile.from_width(1280),
         _sidebar_collapsed=False,
-        _page=SimpleNamespace(run_task=lambda handler, *args: scheduled.append((handler, args))),
     )
 
     _stable_toggle_sidebar(app)
+    assert app._sidebar_collapsed is True
+    assert app._v085_sidebar_animating is False
+    assert refreshed == [True]
 
+    _stable_toggle_sidebar(app)
     assert app._sidebar_collapsed is False
-    assert scheduled == [(_animate_sidebar, (app,))]
+    assert app._v085_sidebar_animating is False
+    assert refreshed == [True, False]
 
 
 def test_screen_transitions_are_short_and_keep_navigation_inside_the_shell() -> None:

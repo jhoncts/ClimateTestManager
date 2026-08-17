@@ -164,8 +164,10 @@ def _replace_shell_frame(app: production_app.ProductionClimateTestApplication) -
     if not isinstance(shell, ft.Row) or not isinstance(content_host, ft.Container):
         return
     temporary = _compose_shell(app, ft.Container())
-    sidebar = temporary.controls[0]
     temporary_host = temporary.controls[1]
+    # Retira a lateral da árvore temporária antes de montá-la na árvore viva.
+    # Isso garante um único pai por Control e evita updates em controles reparentados.
+    sidebar = temporary.controls.pop(0)
     shell.controls[0] = sidebar
     if isinstance(temporary_host, ft.Container):
         content_host.padding = temporary_host.padding
@@ -206,7 +208,7 @@ async def _animate_sidebar(app: production_app.ProductionClimateTestApplication)
         # movimento em vez de surgirem depois de uma troca instantânea.
         app._sidebar_collapsed = False
         temporary = _compose_shell(app, ft.Container())
-        sidebar = temporary.controls[0]
+        sidebar = temporary.controls.pop(0)
         if not isinstance(sidebar, ft.Container):
             return
         target_width = app._layout.sidebar_width
@@ -296,9 +298,16 @@ def _stable_render(
 
 
 def _stable_toggle_sidebar(self: production_app.ProductionClimateTestApplication) -> None:
-    if self._layout.mode == "compact":
+    """Alterna a lateral de forma atômica para não competir com a navegação."""
+
+    if self._layout.mode == "compact" or getattr(self, "_v085_sidebar_animating", False):
         return
-    self._page.run_task(_animate_sidebar, self)
+    self._v085_sidebar_animating = True
+    try:
+        self._sidebar_collapsed = not self._sidebar_collapsed
+        _replace_shell_frame(self)
+    finally:
+        self._v085_sidebar_animating = False
 
 
 def _stable_handle_resize(
