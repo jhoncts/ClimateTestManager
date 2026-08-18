@@ -12,6 +12,7 @@ from typing import Protocol
 from climatetest_manager.config import EmailSettings, normalize_smtp_password
 from climatetest_manager.repositories.climate_tests import ClimateTestRepository
 from climatetest_manager.services.branding import brand_logo_path
+from climatetest_manager.time_utils import format_local_datetime
 
 SMTP_LOCAL_HOSTNAME = "[127.0.0.1]"
 
@@ -321,7 +322,7 @@ def deliver_pending_incident_emails(
                 f"Categoria: {incident.category}",
                 f"Prioridade: {incident.severity}",
                 f"Registrada por: {incident.reported_by}",
-                f"Data do registro: {incident.reported_at:%d/%m/%Y %H:%M}",
+                f"Data do registro: {format_local_datetime(incident.reported_at, assume_utc=True)}",
                 f"Ocorrido: {incident.description}",
                 f"Ação tomada: {incident.immediate_action}",
             )

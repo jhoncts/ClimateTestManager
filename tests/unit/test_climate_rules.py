@@ -40,6 +40,20 @@ class GroupOneRulesTests(unittest.TestCase):
         self.assertEqual(condition.chamber.temperature_c, Decimal("90"))
         self.assertEqual(available_options(EPL.GA, 70), (ClimateTestOption.A,))
 
+    def test_low_band_uses_nearest_available_80_or_90_setpoint(self) -> None:
+        self.assertEqual(
+            resolve_condition(EPL.GB, 64, ClimateTestOption.A).chamber.temperature_c,
+            Decimal("80"),
+        )
+        self.assertEqual(
+            resolve_condition(EPL.GB, 65, ClimateTestOption.A).chamber.temperature_c,
+            Decimal("90"),
+        )
+        self.assertEqual(
+            resolve_condition(EPL.GB, 69, ClimateTestOption.A).chamber.temperature_c,
+            Decimal("90"),
+        )
+
     def test_middle_band_allows_both_options(self) -> None:
         self.assertEqual(
             available_options(EPL.DB, "74.99"),

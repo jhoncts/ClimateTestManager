@@ -77,8 +77,9 @@ class UsersView:
                     bgcolor=AppColors.INFO_LIGHT,
                     padding=14,
                     content=ft.Text(
-                        "Administradores gerenciam contas e também operam ensaios. "
-                        "Operadores acessam todas as funções técnicas, mas não alteram usuários.",
+                        "Administradores gerenciam contas. Operadores executam todas as "
+                        "funções técnicas. O perfil Consulta acompanha ensaios e detalhes "
+                        "sem alterar a operação.",
                         size=12,
                         color=AppColors.TEXT_PRIMARY,
                     ),
@@ -250,6 +251,7 @@ class UsersView:
             value="operator",
             options=[
                 ft.DropdownOption(key="operator", text="Operador"),
+                ft.DropdownOption(key="viewer", text="Consulta — somente leitura"),
                 ft.DropdownOption(key="admin", text="Administrador"),
             ],
         )
@@ -349,6 +351,7 @@ class UsersView:
             value=user.role,
             options=[
                 ft.DropdownOption(key="operator", text="Operador"),
+                ft.DropdownOption(key="viewer", text="Consulta — somente leitura"),
                 ft.DropdownOption(key="admin", text="Administrador"),
             ],
         )

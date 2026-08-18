@@ -2,7 +2,11 @@
 
 from dataclasses import dataclass
 
-COMPACT_BREAKPOINT = 1180
+# Em notebooks e janelas não maximizadas, 1100-1170 px ainda comportam a navegação
+# textual. O breakpoint antigo recolhia o menu cedo demais e parecia uma regressão.
+# A janela desktop possui largura mínima de 900 px. A navegação textual permanece
+# visível em toda a faixa suportada e só é compactada por ação explícita do usuário.
+COMPACT_BREAKPOINT = 860
 SPACIOUS_BREAKPOINT = 1500
 BREAKPOINT_HYSTERESIS = 32
 RESIZE_REBUILD_MIN_DELTA = 48
@@ -53,12 +57,7 @@ class LayoutProfile:
         *,
         current_mode: str,
     ) -> "LayoutProfile":
-        """Evita alternância contínua quando a largura oscila perto de um limite.
-
-        A barra de rolagem e o arredondamento de escala do Windows podem mudar a
-        largura útil em poucos pixels. Sem essa margem, a moldura era reconstruída
-        repetidamente e a tela podia piscar ou voltar ao topo.
-        """
+        """Evita alternância contínua quando a largura oscila perto de um limite."""
 
         resolved = float(width or 1280)
         if current_mode == "compact":
@@ -87,7 +86,7 @@ class LayoutProfile:
                 mode="compact",
                 sidebar_width=84,
                 sidebar_padding=12,
-                content_padding=20,
+                content_padding=18,
                 compact_navigation=True,
                 brand_icon_size=38,
                 navigation_icon_size=22,
@@ -95,18 +94,18 @@ class LayoutProfile:
         if mode == "spacious":
             return cls(
                 mode="spacious",
-                sidebar_width=268,
-                sidebar_padding=26,
-                content_padding=36,
+                sidebar_width=276,
+                sidebar_padding=22,
+                content_padding=32,
                 compact_navigation=False,
-                brand_icon_size=46,
+                brand_icon_size=44,
                 navigation_icon_size=21,
             )
         return cls(
             mode="regular",
             sidebar_width=252,
-            sidebar_padding=24,
-            content_padding=28,
+            sidebar_padding=20,
+            content_padding=24,
             compact_navigation=False,
             brand_icon_size=42,
             navigation_icon_size=20,

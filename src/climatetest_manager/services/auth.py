@@ -12,6 +12,10 @@ from datetime import UTC, datetime, timedelta
 
 from climatetest_manager.database.models import UserRecord, UserSessionRecord
 from climatetest_manager.repositories.users import UserRepository
+from climatetest_manager.services.profile_photos import (
+    ProfilePhotoError,
+    optimize_profile_photo,
+)
 
 PBKDF2_ITERATIONS = 600_000
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9._-]{3,32}$")
@@ -45,11 +49,23 @@ class UserSummary:
 
     @property
     def role_label(self) -> str:
-        return "Administrador" if self.role == "admin" else "Operador"
+        if self.is_admin:
+            return "Administrador"
+        if self.is_viewer:
+            return "Consulta"
+        return "Operador"
 
     @property
     def is_admin(self) -> bool:
         return self.role == "admin"
+
+    @property
+    def is_viewer(self) -> bool:
+        return self.role == "viewer"
+
+    @property
+    def can_operate(self) -> bool:
+        return self.role in {"admin", "operator"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -324,7 +340,7 @@ class AuthenticationService:
         ) = self._validated_identity(command)
         password = _validate_password(command.password, command.password_confirmation)
         role = forced_role or command.role
-        if role not in {"admin", "operator"}:
+        if role not in {"admin", "operator", "viewer"}:
             raise AuthenticationError("Perfil de usuário inválido.")
         return UserRecord(
             username=username,
@@ -438,7 +454,7 @@ class AuthenticationService:
         current = self._repository.get(user_id)
         if current is None:
             raise AuthenticationError(f"Usuário #{user_id} não encontrado.")
-        if command.role not in {"admin", "operator"}:
+        if command.role not in {"admin", "operator", "viewer"}:
             raise AuthenticationError("Perfil de usuário inválido.")
         if user_id == actor.id and not command.is_active:
             raise AuthenticationError("Você não pode desativar a própria conta.")
@@ -539,24 +555,15 @@ class AuthenticationService:
         user: UserSummary,
         image_bytes: bytes | None,
     ) -> UserSummary:
-        """Salva a foto no banco para que ela acompanhe a cópia de segurança."""
+        """Salva um avatar otimizado no banco para manter a LAN rápida e o backup completo."""
 
         encoded: str | None = None
         if image_bytes is not None:
-            if len(image_bytes) > 2 * 1024 * 1024:
-                raise AuthenticationError("A foto deve ter no máximo 2 MB.")
-            valid_image = (
-                image_bytes.startswith(b"\x89PNG\r\n\x1a\n")
-                or image_bytes.startswith(b"\xff\xd8\xff")
-                or (
-                    len(image_bytes) >= 12
-                    and image_bytes[:4] == b"RIFF"
-                    and image_bytes[8:12] == b"WEBP"
-                )
-            )
-            if not valid_image:
-                raise AuthenticationError("Escolha uma imagem PNG, JPG ou WEBP válida.")
-            encoded = base64.b64encode(image_bytes).decode("ascii")
+            try:
+                optimized = optimize_profile_photo(image_bytes)
+            except ProfilePhotoError as error:
+                raise AuthenticationError(str(error)) from error
+            encoded = base64.b64encode(optimized).decode("ascii")
         self._repository.mutate(
             user.id,
             lambda target: setattr(target, "profile_photo_b64", encoded),

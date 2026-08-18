@@ -7,9 +7,20 @@ from pathlib import Path
 
 import flet as ft
 
-from climatetest_manager.app import main
+from climatetest_manager import round4_runtime, round6_compat, round6_email, round6_runtime
 from climatetest_manager.client_session import enable_client_session_persistence
 from climatetest_manager.services.network import DiscoveryResponder
+
+round4_runtime._App._refresh_shell_frame = round4_runtime._original_refresh_shell_frame
+round6_runtime.install_round6_fixes()
+round6_compat.install()
+round6_email.install()
+
+from climatetest_manager import round7_runtime, v084_stability  # noqa: E402
+from climatetest_manager.round7_runtime import main  # noqa: E402
+
+round7_runtime.install_round7_fixes()
+v084_stability.install()
 
 
 def _arguments() -> argparse.Namespace:
@@ -22,13 +33,6 @@ def _arguments() -> argparse.Namespace:
 
 
 def _ensure_standard_streams() -> None:
-    """Garante streams válidos quando o executável foi empacotado com --noconsole.
-
-    No Windows, o PyInstaller pode definir sys.stdout/sys.stderr como None em executáveis
-    sem console. O Uvicorn consulta ``isatty()`` nesses streams durante a configuração do
-    logging; sem esta proteção o servidor encerra antes mesmo de abrir a porta HTTP.
-    """
-
     if sys.stdin is None:
         sys.stdin = open(os.devnull, encoding="utf-8")  # noqa: SIM115
     if sys.stdout is None:
@@ -53,7 +57,6 @@ def run_server() -> None:
     os.environ["FLET_FORCE_WEB_SERVER"] = "true"
     os.environ["FLET_SERVER_IP"] = arguments.host
     os.environ["FLET_SERVER_PORT"] = str(arguments.port)
-
     discovery = DiscoveryResponder(app_port=arguments.port)
     discovery.start()
     try:

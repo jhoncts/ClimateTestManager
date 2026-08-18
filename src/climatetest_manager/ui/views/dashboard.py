@@ -32,7 +32,7 @@ PAUSE_REASON_OPTIONS = (
 )
 
 
-def _empty_state(on_new_test: Callable[[], None]) -> ft.Container:
+def _empty_state(on_new_test: Callable[[], None] | None) -> ft.Container:
     return ft.Container(
         expand=True,
         bgcolor=AppColors.SURFACE,
@@ -63,11 +63,17 @@ def _empty_state(on_new_test: Callable[[], None]) -> ft.Container:
                     size=13,
                     color=AppColors.TEXT_SECONDARY,
                 ),
-                ft.Button(
-                    content="Cadastrar ensaio",
-                    icon=ft.Icons.ADD,
-                    color=AppColors.PRIMARY,
-                    on_click=lambda _event: on_new_test(),
+                *(
+                    [
+                        ft.Button(
+                            content="Cadastrar ensaio",
+                            icon=ft.Icons.ADD,
+                            color=AppColors.PRIMARY,
+                            on_click=lambda _event: on_new_test(),
+                        )
+                    ]
+                    if on_new_test is not None
+                    else []
                 ),
             ],
         ),
@@ -88,7 +94,7 @@ def _status_style(test: ClimateTestListItem) -> tuple[str, str, str]:
 
 def _active_tests(
     tests: list[ClimateTestListItem],
-    on_new_test: Callable[[], None],
+    on_new_test: Callable[[], None] | None,
     on_select: Callable[[int], None],
 ) -> ft.Control:
     if not tests:
@@ -250,15 +256,17 @@ class DashboardView:
         active_tests: list[ClimateTestListItem],
         resource_statuses: tuple[ResourceStatus, ...],
         *,
-        on_new_test: Callable[[], None],
+        on_new_test: Callable[[], None] | None,
         on_select: Callable[[int], None],
         on_pause_resource: Callable[[str, str], None],
         on_resume_resource: Callable[[str], None],
+        read_only: bool = False,
     ) -> None:
         self._on_pause_resource = on_pause_resource
         self._summary = summary
         self._active_tests = active_tests
         self._on_new_test = on_new_test
+        self._read_only = read_only
         self._on_select = on_select
         self._active_filter: str | None = None
         self.metrics = ft.ResponsiveRow(spacing=16, run_spacing=16)
@@ -297,12 +305,18 @@ class DashboardView:
                                 ),
                             ],
                         ),
-                        ft.Button(
-                            content="Novo ensaio",
-                            icon=ft.Icons.ADD,
-                            bgcolor=AppColors.PRIMARY,
-                            color=AppColors.WHITE,
-                            on_click=lambda _event: on_new_test(),
+                        *(
+                            [
+                                ft.Button(
+                                    content="Novo ensaio",
+                                    icon=ft.Icons.ADD,
+                                    bgcolor=AppColors.PRIMARY,
+                                    color=AppColors.WHITE,
+                                    on_click=lambda _event: on_new_test(),
+                                )
+                            ]
+                            if on_new_test is not None
+                            else []
                         ),
                     ],
                 ),
@@ -446,6 +460,25 @@ class DashboardView:
                 ),
             )
         )
+        if self._read_only:
+            button = ft.Container(
+                border_radius=18,
+                bgcolor=AppColors.INFO_LIGHT,
+                padding=ft.Padding.symmetric(horizontal=12, vertical=8),
+                content=ft.Row(
+                    tight=True,
+                    spacing=7,
+                    controls=[
+                        ft.Icon(ft.Icons.VISIBILITY_OUTLINED, size=18, color=AppColors.INFO),
+                        ft.Text(
+                            "Consulta",
+                            no_wrap=True,
+                            weight=ft.FontWeight.BOLD,
+                            color=AppColors.INFO,
+                        ),
+                    ],
+                ),
+            )
         return ft.Container(
             col={"xs": 12, "lg": 6},
             bgcolor=AppColors.SURFACE,
@@ -558,10 +591,11 @@ def build_dashboard(
     active_tests: list[ClimateTestListItem],
     resource_statuses: tuple[ResourceStatus, ...],
     *,
-    on_new_test: Callable[[], None],
+    on_new_test: Callable[[], None] | None,
     on_select: Callable[[int], None],
     on_pause_resource: Callable[[str, str], None],
     on_resume_resource: Callable[[str], None],
+    read_only: bool = False,
 ) -> ft.Column:
     """Monta o resumo operacional sem finalizados ou cancelados."""
 
@@ -573,4 +607,5 @@ def build_dashboard(
         on_select=on_select,
         on_pause_resource=on_pause_resource,
         on_resume_resource=on_resume_resource,
+        read_only=read_only,
     ).root

@@ -1,21 +1,27 @@
 """Central interna de avisos operacionais e administrativos."""
 
+from __future__ import annotations
+
 from collections.abc import Callable
+from contextlib import suppress
 
 import flet as ft
 
 from climatetest_manager.repositories.climate_tests import UserNotificationSummary
 from climatetest_manager.ui.formatters import format_datetime
+from climatetest_manager.ui.interaction import apply_interaction_polish
 from climatetest_manager.ui.theme import AppColors
+
+NotificationKey = tuple[str, int]
 
 
 def _notification_card(
     notification: UserNotificationSummary,
     *,
+    checkbox: ft.Checkbox,
     on_mark_read: Callable[[str, int], None],
+    on_dismiss: Callable[[str, int], None] | None,
 ) -> ft.Container:
-    """Card deliberadamente simples para renderizar igual no host e em FletApp remoto."""
-
     critical = notification.severity in {
         "critical",
         "crítica",
@@ -30,79 +36,92 @@ def _notification_card(
         if notification.source_kind == "incident"
         else ft.Icons.SCHEDULE_OUTLINED
     )
-    title_row_controls: list[ft.Control] = [
+    title_controls: list[ft.Control] = [
         ft.Text(
             notification.title,
-            size=14,
+            size=13,
             weight=ft.FontWeight.BOLD,
             color=AppColors.TEXT_PRIMARY,
+            no_wrap=False,
         )
     ]
     if not notification.is_read:
-        title_row_controls.append(
-            ft.Container(
-                width=8,
-                height=8,
-                border_radius=4,
-                bgcolor=accent,
-                tooltip="Não lida",
+        title_controls.append(
+            ft.Container(width=8, height=8, border_radius=4, bgcolor=accent, tooltip="Não lida")
+        )
+
+    action_controls: list[ft.Control] = []
+    if not notification.is_read:
+        action_controls.append(
+            ft.IconButton(
+                icon=ft.Icons.DONE,
+                icon_size=18,
+                tooltip="Marcar como lida",
+                on_click=lambda _event: on_mark_read(
+                    notification.source_kind, notification.source_id
+                ),
+            )
+        )
+    if on_dismiss is not None:
+        action_controls.append(
+            ft.IconButton(
+                icon=ft.Icons.DELETE_OUTLINE,
+                icon_size=18,
+                tooltip="Remover da minha central",
+                on_click=lambda _event: on_dismiss(
+                    notification.source_kind, notification.source_id
+                ),
             )
         )
 
-    return ft.Container(
-        width=float("inf"),
+    card = ft.Container(
         border_radius=14,
         bgcolor=AppColors.SURFACE,
         border=ft.Border.all(
             1.5 if not notification.is_read else 1,
             accent if not notification.is_read else AppColors.DIVIDER,
         ),
-        padding=16,
+        padding=14,
         clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
-        on_click=(
-            (lambda _event: on_mark_read(notification.source_kind, notification.source_id))
-            if not notification.is_read
-            else None
-        ),
         content=ft.Row(
-            spacing=13,
+            spacing=10,
             vertical_alignment=ft.CrossAxisAlignment.START,
             controls=[
+                checkbox,
                 ft.Container(
-                    width=42,
-                    height=42,
-                    border_radius=12,
+                    width=38,
+                    height=38,
+                    border_radius=11,
                     bgcolor=AppColors.DANGER_LIGHT if critical else AppColors.INFO_LIGHT,
                     alignment=ft.Alignment.CENTER,
-                    content=ft.Icon(icon, color=accent, size=22),
+                    content=ft.Icon(icon, color=accent, size=20),
                 ),
-                ft.Container(
+                ft.Column(
                     expand=True,
-                    content=ft.Column(
-                        spacing=6,
-                        horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
-                        controls=[
-                            ft.Row(
-                                spacing=8,
-                                vertical_alignment=ft.CrossAxisAlignment.CENTER,
-                                controls=title_row_controls,
+                    spacing=5,
+                    controls=[
+                        ft.Row(spacing=7, wrap=True, controls=title_controls),
+                        ft.Text(
+                            notification.message,
+                            size=11,
+                            color=AppColors.TEXT_SECONDARY,
+                            no_wrap=False,
+                        ),
+                        ft.Text(
+                            format_datetime(
+                                notification.created_at,
+                                assume_utc=notification.source_kind == "incident",
                             ),
-                            ft.Text(
-                                notification.message,
-                                size=12,
-                                color=AppColors.TEXT_SECONDARY,
-                            ),
-                            ft.Text(
-                                format_datetime(notification.created_at),
-                                size=10,
-                                color=AppColors.TEXT_SECONDARY,
-                            ),
-                        ],
-                    ),
+                            size=9,
+                            color=AppColors.TEXT_SECONDARY,
+                        ),
+                    ],
                 ),
+                ft.Row(spacing=1, controls=action_controls),
             ],
         ),
     )
+    return apply_interaction_polish(card)  # type: ignore[return-value]
 
 
 def build_notifications_view(
@@ -111,43 +130,103 @@ def build_notifications_view(
     is_admin: bool,
     on_mark_read: Callable[[str, int], None],
     on_mark_all_read: Callable[[], None],
-) -> ft.Column:
+    on_mark_many_read: Callable[[list[NotificationKey]], None] | None = None,
+    on_dismiss: Callable[[str, int], None] | None = None,
+    on_dismiss_many: Callable[[list[NotificationKey]], None] | None = None,
+) -> ft.ListView:
+    """Monta uma central com seleção individual e opção explícita de selecionar todas."""
+
     unread = sum(not notification.is_read for notification in notifications)
-    cards: list[ft.Control]
-    if notifications:
-        cards = [
-            _notification_card(notification, on_mark_read=on_mark_read)
-            for notification in notifications
-        ]
-    else:
+    selected: set[NotificationKey] = set()
+    checkboxes: dict[NotificationKey, ft.Checkbox] = {}
+    select_all = ft.Checkbox(label="Selecionar todas", value=False, disabled=not notifications)
+    mark_selected = ft.Button(
+        content="Marcar selecionadas como lidas", icon=ft.Icons.DONE_ALL, disabled=True
+    )
+    delete_selected = ft.Button(
+        content="Remover selecionadas",
+        icon=ft.Icons.DELETE_SWEEP_OUTLINED,
+        color=AppColors.DANGER,
+        disabled=True,
+    )
+    selection_text = ft.Text("Nenhuma selecionada", size=10, color=AppColors.TEXT_SECONDARY)
+
+    def refresh_selection() -> None:
+        count = len(selected)
+        selection_text.value = "Nenhuma selecionada" if count == 0 else f"{count} selecionada(s)"
+        mark_selected.disabled = count == 0 or on_mark_many_read is None
+        delete_selected.disabled = count == 0 or on_dismiss_many is None
+        select_all.value = bool(notifications) and count == len(notifications)
+        with suppress(RuntimeError):
+            select_all.page.update(select_all, mark_selected, delete_selected, selection_text)
+
+    cards: list[ft.Control] = []
+    for notification in notifications:
+        key = (notification.source_kind, notification.source_id)
+        checkbox = ft.Checkbox(value=False, tooltip="Selecionar")
+        checkboxes[key] = checkbox
+
+        def select_item(_event=None, *, item_key=key, item=checkbox) -> None:
+            if item.value:
+                selected.add(item_key)
+            else:
+                selected.discard(item_key)
+            refresh_selection()
+
+        checkbox.on_change = select_item
+        cards.append(
+            _notification_card(
+                notification,
+                checkbox=checkbox,
+                on_mark_read=on_mark_read,
+                on_dismiss=on_dismiss,
+            )
+        )
+
+    def toggle_all(_event=None) -> None:
+        target = bool(select_all.value)
+        selected.clear()
+        for key, checkbox in checkboxes.items():
+            checkbox.value = target
+            if target:
+                selected.add(key)
+        with suppress(RuntimeError):
+            select_all.page.update(*checkboxes.values())
+        refresh_selection()
+
+    select_all.on_change = toggle_all
+
+    if not notifications:
         cards = [
             ft.Container(
                 border_radius=16,
                 bgcolor=AppColors.SURFACE,
+                border=ft.Border.all(1, AppColors.DIVIDER),
                 padding=28,
                 alignment=ft.Alignment.CENTER,
                 content=ft.Column(
                     horizontal_alignment=ft.CrossAxisAlignment.CENTER,
+                    spacing=6,
                     controls=[
                         ft.Icon(
-                            ft.Icons.NOTIFICATIONS_NONE,
-                            size=34,
-                            color=AppColors.TEXT_SECONDARY,
+                            ft.Icons.NOTIFICATIONS_NONE, size=34, color=AppColors.TEXT_SECONDARY
                         ),
-                        ft.Text(
-                            "Nenhuma notificação disponível.",
-                            color=AppColors.TEXT_SECONDARY,
-                        ),
+                        ft.Text("Nenhuma notificação disponível.", color=AppColors.TEXT_SECONDARY),
                     ],
                 ),
             )
         ]
 
-    return ft.Column(
+    mark_selected.on_click = lambda _event: (
+        on_mark_many_read(list(selected)) if on_mark_many_read is not None and selected else None
+    )
+    delete_selected.on_click = lambda _event: (
+        on_dismiss_many(list(selected)) if on_dismiss_many is not None and selected else None
+    )
+
+    root = ft.ListView(
         expand=True,
-        scroll=ft.ScrollMode.AUTO,
-        spacing=16,
-        horizontal_alignment=ft.CrossAxisAlignment.STRETCH,
+        spacing=13,
         controls=[
             ft.Row(
                 alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
@@ -155,7 +234,7 @@ def build_notifications_view(
                 run_spacing=8,
                 controls=[
                     ft.Column(
-                        spacing=3,
+                        spacing=2,
                         controls=[
                             ft.Text(
                                 "Notificações",
@@ -169,7 +248,7 @@ def build_notifications_view(
                                     if is_admin
                                     else "Prazos e avisos operacionais do laboratório."
                                 ),
-                                size=12,
+                                size=11,
                                 color=AppColors.TEXT_SECONDARY,
                             ),
                         ],
@@ -185,13 +264,34 @@ def build_notifications_view(
             ft.Container(
                 border_radius=12,
                 bgcolor=AppColors.INFO_LIGHT,
-                padding=13,
-                content=ft.Text(
-                    f"{unread} não lida(s) • {len(notifications)} aviso(s) no histórico recente",
-                    size=11,
-                    color=AppColors.TEXT_PRIMARY,
+                padding=11,
+                content=ft.Row(
+                    alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                    wrap=True,
+                    run_spacing=7,
+                    controls=[
+                        ft.Text(
+                            f"{unread} não lida(s) • {len(notifications)} no histórico recente",
+                            size=10,
+                            color=AppColors.TEXT_PRIMARY,
+                        ),
+                        selection_text,
+                    ],
                 ),
+            ),
+            *(
+                [
+                    ft.Row(
+                        spacing=8,
+                        wrap=True,
+                        run_spacing=6,
+                        controls=[select_all, mark_selected, delete_selected],
+                    )
+                ]
+                if notifications
+                else []
             ),
             *cards,
         ],
     )
+    return apply_interaction_polish(root)  # type: ignore[return-value]

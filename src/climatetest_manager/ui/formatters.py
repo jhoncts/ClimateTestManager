@@ -4,6 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from climatetest_manager.domain.enums import ConditionInputMode
+from climatetest_manager.time_utils import format_local_datetime
 
 
 def format_decimal(value: Decimal | str) -> str:
@@ -78,10 +79,10 @@ def format_duration_detail(duration_hours: int, positive_tolerance_hours: int) -
     return f"{nominal} nominais • limite: {maximum}"
 
 
-def format_datetime(value: datetime | None) -> str:
-    """Apresenta horário operacional no padrão brasileiro."""
+def format_datetime(value: datetime | None, *, assume_utc: bool = False) -> str:
+    """Apresenta horário brasileiro; registros técnicos UTC podem ser convertidos explicitamente."""
 
-    return value.strftime("%d/%m/%Y %H:%M") if value else "—"
+    return format_local_datetime(value, assume_utc=assume_utc)
 
 
 _WEEKDAYS_PT_BR = (

@@ -4,12 +4,16 @@ Este é o procedimento de implantação do ClimateTest Manager em rede local.
 
 ## Um único instalador
 
-Use o mesmo arquivo `ClimateTestManager-Setup-v0.7.0.exe` em todas as máquinas Windows 10/11 de 64 bits.
+Use o mesmo arquivo `ClimateTestManager-Setup-v0.8.5.exe` em todas as máquinas Windows 10/11 de 64 bits.
 
 Durante a instalação escolha apenas o papel do computador:
 
 - **Servidor central**: use somente no computador que permanecerá ligado e guardará o banco de dados.
 - **Estação de trabalho**: use nos demais computadores. Informe o nome ou IP do servidor central quando solicitado.
+
+Instale ou atualize sempre o **servidor central primeiro** e, depois que ele estiver funcionando,
+instale as estações. Se a descoberta automática encontrar outro servidor central na rede, o
+instalador bloqueia uma nova instalação de servidor e orienta a escolher Estação de trabalho.
 
 O ClimateTest Manager abre em uma janela própria do Windows. O navegador não é necessário para o uso normal.
 
@@ -53,12 +57,22 @@ Na tela de login existe a opção **Manter conectado neste computador por 30 dia
 
 Execute o instalador novo por cima da instalação existente. Não desinstale antes e não apague `C:\ProgramData\ClimateTestManager`.
 
-O instalador encerra os processos necessários antes de substituir os executáveis e preserva os dados existentes.
+O instalador encerra os processos necessários, remove os binários e recursos da versão anterior e
+copia o pacote novo. O banco, as fotos, as preferências, os logs e os backups em
+`C:\ProgramData\ClimateTestManager` são preservados.
+
+Atualize primeiro o servidor central. A instalação só é aceita como pronta quando o servidor
+publica a revisão exata `R9-20260814`; uma estação v0.8.5 rejeita um servidor antigo em vez de
+abrir silenciosamente uma interface de outra versão. Depois, atualize cada estação e confirme no
+rodapé `v0.8.5` e `R9-20260814`.
 
 ## Diagnósticos
 
 - **CTM-CLI-001**: o aplicativo cliente não conseguiu alcançar o servidor configurado. Confirme se o servidor está ligado, se ambos estão na mesma rede e se o nome/IP informado está correto.
 - **CTM-UI-002**: o servidor respondeu, mas a interface não conseguiu ser carregada dentro da janela do aplicativo. Reinicie o aplicativo e consulte os logs se o erro persistir.
+- **Servidor central desatualizado**: a estação encontrou um servidor, mas a revisão publicada não
+  é `R9-20260814`. Execute primeiro o instalador v0.8.5 no servidor e aguarde a tarefa reiniciar.
+- **CTM-SRV-002**: já existe um servidor central detectável na rede. Instale o computador atual como estação de trabalho.
 - **CTM-SRV-...**: a instalação do servidor não conseguiu concluir alguma etapa de inicialização. Consulte `C:\ProgramData\ClimateTestManager\Logs` e não apague o banco.
 - **CTM-UPD-...**: um processo antigo não pôde ser encerrado durante a atualização. Feche o ClimateTest Manager e execute o instalador novamente.
 
@@ -74,3 +88,4 @@ O instalador encerra os processos necessários antes de substituir os executáve
 - [ ] Ensaios, atividades e notificações criados em uma estação aparecem nas demais.
 - [ ] O backup configurado é criado normalmente.
 - [ ] Uma atualização por cima da versão existente preserva o banco e volta a iniciar o servidor.
+- [ ] O rodapé mostra **v0.8.5** e **R9-20260814** em todas as máquinas.

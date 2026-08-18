@@ -9,7 +9,7 @@ if ($DataDirectory) {
     $env:CLIMATETEST_DATA_DIR = $DataDirectory
 }
 
-$releaseNotifier = Join-Path $projectRoot "dist\ClimateTestManager-v0.6.0\ClimateTestNotifier.exe"
+$releaseNotifier = Join-Path $projectRoot "dist\ClimateTestManager-v0.8.5\ClimateTestNotifier.exe"
 $legacyPackagedNotifier = Join-Path $projectRoot "dist\ClimateTestNotifier.exe"
 $developmentPython = Join-Path $projectRoot ".venv\Scripts\pythonw.exe"
 $developmentEntry = Join-Path $projectRoot "src\notifier.py"

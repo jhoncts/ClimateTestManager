@@ -42,6 +42,10 @@ class AgendaView:
         self._today = today_provider()
         self._month = self._today.replace(day=1)
         self._selected_date = self._today
+        # Callbacks de clique do WebView2 podem executar em outro ContextVar.
+        # Guarde a paleta da sessão para que a seleção de datas nunca volte
+        # para o azul/teal do tema claro ao clicar no calendário.
+        self._theme_mode = AppColors.current_mode()
         self.month_title = ft.Text(
             "",
             size=18,
@@ -132,10 +136,24 @@ class AgendaView:
         )
         self._rebuild()
 
+    def _activate_theme(self) -> None:
+        """Restaura a paleta desta sessão antes de callbacks tardios."""
+
+        mode = self._theme_mode
+        try:
+            page_mode = getattr(self.root.page, "_climatetest_theme_mode", None)
+        except (AttributeError, RuntimeError):
+            page_mode = None
+        if page_mode:
+            mode = AppColors.normalize_mode(str(page_mode))
+            self._theme_mode = mode
+        AppColors.apply_mode(mode)
+
     def _events_on(self, selected_date: date) -> list[AgendaEvent]:
         return [event for event in self._events if event.occurs_at.date() == selected_date]
 
     def _move_month(self, offset: int) -> None:
+        self._activate_theme()
         month_index = self._month.year * 12 + self._month.month - 1 + offset
         year, month_zero_based = divmod(month_index, 12)
         self._month = date(year, month_zero_based + 1, 1)
@@ -144,6 +162,7 @@ class AgendaView:
         self._refresh()
 
     def _select_date(self, selected_date: date) -> None:
+        self._activate_theme()
         self._selected_date = selected_date
         if selected_date.month != self._month.month:
             self._month = selected_date.replace(day=1)
@@ -151,6 +170,7 @@ class AgendaView:
         self._refresh()
 
     def _rebuild(self) -> None:
+        self._activate_theme()
         self.month_title.value = f"{MONTH_NAMES[self._month.month]} de {self._month.year}"
         weeks = calendar.Calendar(firstweekday=0).monthdatescalendar(
             self._month.year,
@@ -299,6 +319,7 @@ class AgendaView:
         )
 
     def _refresh(self) -> None:
+        self._activate_theme()
         try:
             _page = self.root.page
         except RuntimeError:

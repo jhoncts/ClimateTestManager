@@ -1,5 +1,6 @@
 #define MyAppName "ClimateTest Manager"
-#define MyAppVersion "0.7.0"
+#define MyAppVersion "0.8.5"
+#define MyBuildRevision "R9-20260814"
 #define MyAppPublisher "Jhon Cleiton"
 #define MyAppExeName "ClimateTestManager.exe"
 
@@ -7,6 +8,8 @@
 AppId={{6E8E74D2-9E9E-4CB8-B877-CFEAC5F9C9CF}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
+VersionInfoVersion={#MyAppVersion}.0
+VersionInfoProductVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\ClimateTest Manager
 DefaultGroupName={#MyAppName}
@@ -34,18 +37,31 @@ Name: "{commonappdata}\ClimateTestManager\Data"
 Name: "{commonappdata}\ClimateTestManager\Logs"
 Name: "{commonappdata}\ClimateTestManager\Backups"
 
+[InstallDelete]
+; Remove somente binários e recursos do programa. Banco, fotos, preferências e backups
+; permanecem em ProgramData e nunca são apagados durante uma atualização.
+Type: files; Name: "{app}\ClimateTestManager.exe"
+Type: files; Name: "{app}\ClimateTestServer.exe"
+Type: files; Name: "{app}\ClimateTestNotifier.exe"
+Type: files; Name: "{app}\climatetest.ico"
+Type: files; Name: "{app}\LEIA-ME-PRIMEIRO.md"
+Type: files; Name: "{app}\install_server_tasks.ps1"
+Type: files; Name: "{app}\uninstall_server_tasks.ps1"
+Type: files; Name: "{app}\discover_server.ps1"
+Type: filesandordirs; Name: "{app}\documentacao-conformidade"
+
 [Files]
 ; O arquivo temporário de descoberta fica primeiro para permitir ExtractTemporaryFile com SolidCompression.
-Source: "..\dist\ClimateTestManager-v0.7.0\discover_server.ps1"; Flags: dontcopy noencryption
-Source: "..\dist\ClimateTestManager-v0.7.0\ClimateTestManager.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.7.0\ClimateTestServer.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.7.0\ClimateTestNotifier.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.7.0\climatetest.ico"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.7.0\LEIA-ME-PRIMEIRO.md"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.7.0\install_server_tasks.ps1"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.7.0\uninstall_server_tasks.ps1"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.7.0\discover_server.ps1"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\dist\ClimateTestManager-v0.7.0\documentacao-conformidade\*"; DestDir: "{app}\documentacao-conformidade"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "..\dist\ClimateTestManager-v{#MyAppVersion}\discover_server.ps1"; Flags: dontcopy noencryption
+Source: "..\dist\ClimateTestManager-v{#MyAppVersion}\ClimateTestManager.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v{#MyAppVersion}\ClimateTestServer.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v{#MyAppVersion}\ClimateTestNotifier.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v{#MyAppVersion}\climatetest.ico"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v{#MyAppVersion}\LEIA-ME-PRIMEIRO.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v{#MyAppVersion}\install_server_tasks.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v{#MyAppVersion}\uninstall_server_tasks.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v{#MyAppVersion}\discover_server.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v{#MyAppVersion}\documentacao-conformidade\*"; DestDir: "{app}\documentacao-conformidade"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\climatetest.ico"
@@ -73,6 +89,7 @@ var
   AutoDiscoveredServer: Boolean;
   DiscoveryServerName: String;
   DiscoveryServerIp: String;
+  DiscoveryResultCode: Integer;
 
 function ReadExistingServerUrl(): String;
 var
@@ -214,6 +231,7 @@ begin
   AutoDiscoveredServer := False;
   DiscoveryServerName := '';
   DiscoveryServerIp := '';
+  DiscoveryResultCode := -1;
 
   if RequestedServerAddress() <> '' then
     Exit;
@@ -234,6 +252,7 @@ begin
       'Configurações do computador servidor.';
     Exit;
   end;
+  DiscoveryResultCode := ResultCode;
 
   if not LoadStringFromFile(OutputPath, RawResults) then
   begin
@@ -266,6 +285,14 @@ begin
   end;
 end;
 
+function ForeignServerFound(): Boolean;
+begin
+  Result :=
+    (DiscoveryServerName <> '') and
+    ((DiscoveryResultCode <> 0) or
+      (CompareText(DiscoveryServerName, GetComputerNameString()) <> 0));
+end;
+
 procedure InitializeWizard();
 var
   ExistingUrl: String;
@@ -279,6 +306,7 @@ begin
   Role := RequestedRole();
   DiscoveryAttempted := False;
   AutoDiscoveredServer := False;
+  DiscoveryResultCode := -1;
 
   ExtractTemporaryFile('discover_server.ps1');
 
@@ -330,7 +358,24 @@ var
 begin
   Result := True;
 
-  if (CurPageID = RolePage.ID) and not SelectedServerMode() then
+  if (CurPageID = RolePage.ID) and SelectedServerMode() and not ExistingServerInstall then
+  begin
+    RunServerDiscovery();
+    if ForeignServerFound() then
+    begin
+      MsgBox(
+        'Já existe um servidor central do ClimateTest Manager nesta rede: ' +
+        DiscoveryServerName + ' (' + DiscoveryServerIp + ').' + #13#10 + #13#10 +
+        'Instale este computador como Estação de trabalho. Somente um servidor central deve ' +
+        'guardar os dados do laboratório.',
+        mbError,
+        MB_OK
+      );
+      Result := False;
+      Exit;
+    end;
+  end
+  else if (CurPageID = RolePage.ID) and not SelectedServerMode() then
   begin
     if (RequestedServerAddress() = '') and (Trim(AddressPage.Values[0]) = '') then
       RunServerDiscovery();
@@ -371,6 +416,17 @@ var
 begin
   Result := '';
   NeedsRestart := False;
+  if SelectedServerMode() and not ExistingServerInstall then
+  begin
+    RunServerDiscovery();
+    if ForeignServerFound() then
+    begin
+      Result :=
+        'Já existe um servidor central na rede (' + DiscoveryServerName + '). ' +
+        'Escolha Estação de trabalho para este computador. Código CTM-SRV-002.';
+      Exit;
+    end;
+  end;
   WizardForm.StatusLabel.Caption := 'Preparando a instalação e encerrando a versão anterior...';
 
   if SelectedServerMode() or ExistingServerInstall then
@@ -540,6 +596,7 @@ begin
     begin
       WizardForm.FinishedHeadingLabel.Caption := 'ClimateTest Manager pronto para uso';
       WizardForm.FinishedLabel.Caption :=
+        'Versão {#MyAppVersion} / {#MyBuildRevision}' + #13#10 + #13#10 +
         'O servidor central foi instalado, iniciado e verificado. O aplicativo também respondeu ' +
         'corretamente como cliente Windows.' + #13#10 + #13#10 +
         'As estações de trabalho poderão localizar este servidor automaticamente na rede local.' + #13#10 + #13#10 +
@@ -562,6 +619,7 @@ begin
     begin
       WizardForm.FinishedHeadingLabel.Caption := 'ClimateTest Manager pronto para uso';
       WizardForm.FinishedLabel.Caption :=
+        'Versão {#MyAppVersion} / {#MyBuildRevision}' + #13#10 + #13#10 +
         'A estação foi instalada e a comunicação com o servidor central foi validada.' + #13#10 + #13#10 +
         'Servidor: ' + ConfiguredServerUrl + #13#10 + #13#10 +
         'Clique em Concluir para abrir o ClimateTest Manager.';

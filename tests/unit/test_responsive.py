@@ -8,13 +8,16 @@ from climatetest_manager.ui.responsive import LayoutProfile, viewport_width
 
 class ResponsiveLayoutTests(unittest.TestCase):
     def test_selects_compact_regular_and_spacious_profiles(self) -> None:
-        compact = LayoutProfile.from_width(900)
+        compact = LayoutProfile.from_width(820)
+        notebook = LayoutProfile.from_width(900)
         regular = LayoutProfile.from_width(1280)
         spacious = LayoutProfile.from_width(1600)
 
         self.assertEqual(compact.mode, "compact")
         self.assertTrue(compact.compact_navigation)
         self.assertLess(compact.sidebar_width, regular.sidebar_width)
+        self.assertEqual(notebook.mode, "regular")
+        self.assertFalse(notebook.compact_navigation)
         self.assertEqual(regular.mode, "regular")
         self.assertEqual(spacious.mode, "spacious")
         self.assertGreater(spacious.content_padding, regular.content_padding)
@@ -43,19 +46,19 @@ class ResponsiveLayoutTests(unittest.TestCase):
 
     def test_keeps_current_profile_while_width_jitters_near_breakpoint(self) -> None:
         self.assertEqual(
-            LayoutProfile.stable_from_width(1170, current_mode="regular").mode,
+            LayoutProfile.stable_from_width(850, current_mode="regular").mode,
             "regular",
         )
         self.assertEqual(
-            LayoutProfile.stable_from_width(1147, current_mode="regular").mode,
+            LayoutProfile.stable_from_width(827, current_mode="regular").mode,
             "compact",
         )
         self.assertEqual(
-            LayoutProfile.stable_from_width(1200, current_mode="compact").mode,
+            LayoutProfile.stable_from_width(890, current_mode="compact").mode,
             "compact",
         )
         self.assertEqual(
-            LayoutProfile.stable_from_width(1212, current_mode="compact").mode,
+            LayoutProfile.stable_from_width(892, current_mode="compact").mode,
             "regular",
         )
         self.assertEqual(
