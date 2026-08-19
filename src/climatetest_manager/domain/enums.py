@@ -47,6 +47,9 @@ class TestSituation(StrEnum):
     WAITING = "Aguardando"
     IN_CHAMBER = "Na Câmara"
     DRYING = "Em Secagem"
+    AWAITING_CONDITIONING = "Aguardando Acondicionamento"
+    CONDITIONING = "Em Acondicionamento"
+    IN_COLD = "No Frio"
     FINISHED = "Finalizado"
     CANCELLED = "Cancelado"
 
