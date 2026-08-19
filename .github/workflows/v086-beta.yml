@@ -1,0 +1,201 @@
+name: Build v0.8.6 beta installer
+
+on:
+  push:
+    branches:
+      - feat/v0.8.6-stability-cold-flow
+
+permissions:
+  contents: read
+
+jobs:
+  beta-windows:
+    runs-on: windows-2022
+    env:
+      BETA_VERSION: 0.8.5.99
+      BETA_BUILD: R10-BETA1-20260819
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        shell: pwsh
+        run: |
+          python -m venv .venv
+          .\.venv\Scripts\python.exe -m pip install --upgrade pip
+          .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+
+      - name: Validate source before beta stamping
+        shell: pwsh
+        run: |
+          .\.venv\Scripts\ruff.exe check .
+          .\.venv\Scripts\ruff.exe format --check .
+          .\.venv\Scripts\pytest.exe -q
+
+      - name: Stamp isolated beta version
+        shell: pwsh
+        run: |
+          $version = $env:BETA_VERSION
+          $build = $env:BETA_BUILD
+
+          $path = "pyproject.toml"
+          $content = Get-Content $path -Raw -Encoding UTF8
+          $content = $content -replace '(?m)^version = "[^"]+"', "version = `"$version`""
+          Set-Content $path $content -Encoding UTF8 -NoNewline
+
+          $path = "src\climatetest_manager\__init__.py"
+          $content = Get-Content $path -Raw -Encoding UTF8
+          $content = $content -replace '(?m)^__version__ = "[^"]+"', "__version__ = `"$version`""
+          $content = $content -replace '(?m)^__build_revision__ = "[^"]+"', "__build_revision__ = `"$build`""
+          Set-Content $path $content -Encoding UTF8 -NoNewline
+
+          $path = "src\client.py"
+          $content = Get-Content $path -Raw -Encoding UTF8
+          $content = $content -replace '(?m)^VERSION = "[^"]+"', "VERSION = `"$version`""
+          Set-Content $path $content -Encoding UTF8 -NoNewline
+
+          $path = "src\client_r6.py"
+          $content = Get-Content $path -Raw -Encoding UTF8
+          $content = $content -replace '(?m)^APP_VERSION = "[^"]+"', "APP_VERSION = `"$version`""
+          $content = $content -replace '(?m)^BUILD_REVISION = "[^"]+"', "BUILD_REVISION = `"$build`""
+          Set-Content $path $content -Encoding UTF8 -NoNewline
+
+          $path = "src\climatetest_manager\round7_runtime.py"
+          $content = Get-Content $path -Raw -Encoding UTF8
+          $content = $content -replace '(?m)^BUILD_REVISION = "[^"]+"', "BUILD_REVISION = `"$build`""
+          Set-Content $path $content -Encoding UTF8 -NoNewline
+
+          Set-Content "src\assets\server-build.txt" $build -Encoding ASCII -NoNewline
+
+          $path = "scripts\build_windows.ps1"
+          $content = Get-Content $path -Raw -Encoding UTF8
+          $content = $content -replace '(?m)^\$version = "[^"]+"', "`$version = `"$version`""
+          Set-Content $path $content -Encoding UTF8 -NoNewline
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build beta installer
+        shell: pwsh
+        run: .\scripts\build_windows.ps1
+
+      - name: Smoke test beta server and workstation client
+        shell: pwsh
+        run: |
+          $version = $env:BETA_VERSION
+          $build = $env:BETA_BUILD
+          $releaseDir = ".\dist\ClimateTestManager-v$version"
+          $serverExe = Join-Path $releaseDir "ClimateTestServer.exe"
+          $clientExe = Join-Path $releaseDir "ClimateTestManager.exe"
+          $dataDir = Join-Path $env:RUNNER_TEMP "ClimateTestManagerBetaData"
+          $readyFile = Join-Path $env:RUNNER_TEMP "ClimateTestManagerBeta.ready"
+          New-Item -ItemType Directory -Path $dataDir -Force | Out-Null
+          Remove-Item $readyFile -Force -ErrorAction SilentlyContinue
+
+          $server = Start-Process `
+            -FilePath $serverExe `
+            -ArgumentList @(
+              "--host", "127.0.0.1",
+              "--port", "18560",
+              "--data-directory", "`"$dataDir`""
+            ) `
+            -PassThru
+          $client = $null
+          try {
+            $ready = $false
+            for ($attempt = 1; $attempt -le 60; $attempt++) {
+              if ($server.HasExited) {
+                throw "Servidor beta encerrou durante a inicialização. ExitCode=$($server.ExitCode)"
+              }
+              try {
+                $response = Invoke-WebRequest `
+                  -Uri "http://127.0.0.1:18560/server-build.txt" `
+                  -UseBasicParsing `
+                  -TimeoutSec 2
+                if (($response.StatusCode -ge 200) -and
+                    ($response.StatusCode -lt 300) -and
+                    (([string]$response.Content).Trim() -eq $build)) {
+                  $ready = $true
+                  break
+                }
+              }
+              catch {
+                Start-Sleep -Seconds 1
+              }
+            }
+            if (-not $ready) {
+              throw "Servidor beta não publicou o marcador $build."
+            }
+
+            $check = Start-Process `
+              -FilePath $clientExe `
+              -ArgumentList @("--url", "http://127.0.0.1:18560", "--check-only") `
+              -Wait `
+              -PassThru
+            if ($check.ExitCode -ne 0) {
+              throw "Cliente beta não validou o servidor beta. ExitCode=$($check.ExitCode)"
+            }
+
+            $client = Start-Process `
+              -FilePath $clientExe `
+              -ArgumentList @(
+                "--url", "http://127.0.0.1:18560",
+                "--ready-file", "`"$readyFile`"",
+                "--no-single-instance",
+                "--no-tray"
+              ) `
+              -PassThru
+            $desktopReady = $false
+            for ($attempt = 1; $attempt -le 60; $attempt++) {
+              $client.Refresh()
+              if ($client.HasExited) {
+                throw "Cliente beta encerrou antes de montar a interface. ExitCode=$($client.ExitCode)"
+              }
+              if (Test-Path $readyFile) {
+                $desktopReady = $true
+                break
+              }
+              Start-Sleep -Milliseconds 500
+            }
+            if (-not $desktopReady) {
+              throw "Cliente beta não confirmou a montagem da janela real."
+            }
+          }
+          finally {
+            if ($client -and -not $client.HasExited) {
+              Stop-Process -Id $client.Id -Force -ErrorAction SilentlyContinue
+            }
+            if (-not $server.HasExited) {
+              Stop-Process -Id $server.Id -Force -ErrorAction SilentlyContinue
+            }
+          }
+
+      - name: Verify beta checksum
+        shell: pwsh
+        run: |
+          $version = $env:BETA_VERSION
+          $installer = ".\dist\ClimateTestManager-Setup-v$version.exe"
+          $hashFile = ".\dist\ClimateTestManager-Setup-v$version-SHA256.txt"
+          if (-not (Test-Path $installer)) { throw "Instalador beta não foi gerado." }
+          if (-not (Test-Path $hashFile)) { throw "SHA-256 beta não foi gerado." }
+          $actual = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant()
+          $published = (Get-Content $hashFile -Raw).ToLowerInvariant()
+          if ($published -notmatch [regex]::Escape($actual)) {
+            throw "SHA-256 do instalador beta não confere."
+          }
+
+      - name: Upload controlled beta artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ClimateTestManager-v0.8.6-beta1-windows
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            dist/ClimateTestManager-Setup-v0.8.5.99.exe
+            dist/ClimateTestManager-Setup-v0.8.5.99-SHA256.txt
