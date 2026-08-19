@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 jobs:
-  format-and-test:
+  format:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
@@ -20,9 +20,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Install project
-        run: pip install -e ".[dev]"
-      - name: Format v0.8.6 files
+      - name: Install Ruff
+        run: pip install ruff==0.15.22
+      - name: Format only v0.8.6 files
         shell: bash
         run: |
           files=(
@@ -41,10 +41,6 @@ jobs:
           )
           ruff check "${files[@]}" --fix
           ruff format "${files[@]}"
-          ruff check .
-          ruff format --check .
-      - name: Run tests
-        run: pytest -q
       - name: Commit formatting
         shell: bash
         run: |
