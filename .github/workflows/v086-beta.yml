@@ -1,15 +1,16 @@
 name: Build v0.8.6 beta installer
 
 on:
-  push:
+  pull_request:
     branches:
-      - feat/v0.8.6-stability-cold-flow
+      - main
 
 permissions:
   contents: read
 
 jobs:
   beta-windows:
+    if: github.head_ref == 'feat/v0.8.6-stability-cold-flow'
     runs-on: windows-2022
     env:
       BETA_VERSION: 0.8.5.99
