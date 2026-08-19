@@ -1,8 +1,8 @@
 """Proteções de navegação e animações leves da v0.8.6.
 
-A moldura continua persistente. As animações atuam somente na largura da lateral
-e na superfície central já substituída, evitando manter duas telas pesadas
-montadas ao mesmo tempo no WebView2.
+A moldura continua persistente. A transição atua somente na opacidade da área
+central e a lateral mantém uma animação curta, evitando deslocamento visual da
+janela e repaints pesados no WebView2.
 """
 
 from __future__ import annotations
@@ -17,7 +17,8 @@ import flet as ft
 from climatetest_manager import production_app, v084_stability
 from climatetest_manager.config import get_database_path
 
-_TRANSITION_MS = 120
+_TRANSITION_MS = 105
+_TRANSITION_PRIME_SECONDS = 0.025
 
 
 def _log_navigation_failure(view_name: str, error: BaseException) -> None:
@@ -39,15 +40,22 @@ def _log_navigation_failure(view_name: str, error: BaseException) -> None:
 
 
 async def _animate_content_host(host: ft.Container) -> None:
+    """Aplica um fade curto e repetível sem mover a superfície da aplicação."""
+
     try:
-        host.animate_opacity = ft.Animation(_TRANSITION_MS, ft.AnimationCurve.EASE_OUT_CUBIC)
-        host.animate_offset = ft.Animation(_TRANSITION_MS, ft.AnimationCurve.EASE_OUT_CUBIC)
-        host.opacity = 0.97
-        host.offset = ft.Offset(0.012, 0)
-        host.update()
-        await asyncio.sleep(0.015)
-        host.opacity = 1
+        # A antiga animação também alterava ``offset``. Em alguns WebView2 isso
+        # fazia a área inteira parecer tremer um pixel ao trocar de tela.
+        host.animate_offset = None
         host.offset = ft.Offset(0, 0)
+        host.animate_opacity = None
+        host.opacity = 0.965
+        host.update()
+        await asyncio.sleep(_TRANSITION_PRIME_SECONDS)
+        host.animate_opacity = ft.Animation(
+            _TRANSITION_MS,
+            ft.AnimationCurve.EASE_OUT_CUBIC,
+        )
+        host.opacity = 1
         host.update()
     except RuntimeError:
         return
