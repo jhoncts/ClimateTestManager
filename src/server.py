@@ -16,11 +16,12 @@ round6_runtime.install_round6_fixes()
 round6_compat.install()
 round6_email.install()
 
-from climatetest_manager import round7_runtime, v084_stability  # noqa: E402
+from climatetest_manager import round7_runtime, v084_stability, v086_runtime  # noqa: E402
 from climatetest_manager.round7_runtime import main  # noqa: E402
 
 round7_runtime.install_round7_fixes()
 v084_stability.install()
+v086_runtime.install()
 
 
 def _arguments() -> argparse.Namespace:
