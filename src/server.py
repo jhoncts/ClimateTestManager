@@ -19,6 +19,7 @@ round6_email.install()
 from climatetest_manager import (  # noqa: E402
     round7_runtime,
     v084_stability,
+    v086_conditioning,
     v086_navigation,
     v086_runtime,
 )
@@ -27,6 +28,7 @@ from climatetest_manager.round7_runtime import main  # noqa: E402
 round7_runtime.install_round7_fixes()
 v084_stability.install()
 v086_runtime.install()
+v086_conditioning.install()
 v086_navigation.install()
 
 
