@@ -327,7 +327,9 @@ class V086NewTestView(FinalNewTestView):
             {
                 **base.values,
                 "cold_planned": bool(self.cold_planned.value),
-                "minimum_ambient_service_temperature": self.minimum_ambient_service_temperature.value,
+                "minimum_ambient_service_temperature": (
+                    self.minimum_ambient_service_temperature.value
+                ),
             }
         )
 
@@ -679,7 +681,10 @@ class V086DetailsView(round7_runtime.CleanDetailsView):
                                         tooltip=(
                                             None
                                             if ready
-                                            else "Disponível após completar 24 h de acondicionamento."
+                                            else (
+                                                "Disponível após completar 24 h de "
+                                                "acondicionamento."
+                                            )
                                         ),
                                         bgcolor=AppColors.PRIMARY if ready else None,
                                         color=AppColors.WHITE if ready else None,

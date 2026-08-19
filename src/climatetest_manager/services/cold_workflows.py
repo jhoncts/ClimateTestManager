@@ -194,7 +194,8 @@ class ColdWorkflowService:
                 raise ColdWorkflowError(f"Ensaio #{test_id} não encontrado.")
             if test.situation in {TestSituation.FINISHED.value, TestSituation.CANCELLED.value}:
                 raise ColdWorkflowError(
-                    "O ensaio já está encerrado; o fluxo de frio não pode ser ativado retroativamente."
+                    "O ensaio já está encerrado; o fluxo de frio não pode ser ativado "
+                    "retroativamente."
                 )
             workflow = session.get(ThermalColdWorkflowRecord, test_id)
             if workflow is None:
@@ -238,7 +239,8 @@ class ColdWorkflowService:
                 return
             if workflow.conditioning_started_at is not None or workflow.cold_started_at is not None:
                 raise ColdWorkflowError(
-                    "O fluxo já possui execução registrada. Use 'Não realizar frio' com justificativa."
+                    "O fluxo já possui execução registrada. Use 'Não realizar frio' "
+                    "com justificativa."
                 )
             session.delete(workflow)
             _audit(
@@ -380,7 +382,8 @@ class ColdWorkflowService:
                 "Resistência térmica ao frio iniciada",
                 (
                     f"Entrada: {window.started_at.isoformat(sep=' ', timespec='minutes')}; "
-                    f"retirada nominal: {window.nominal_end_at.isoformat(sep=' ', timespec='minutes')}; "
+                    "retirada nominal: "
+                    f"{window.nominal_end_at.isoformat(sep=' ', timespec='minutes')}; "
                     f"limite: {window.maximum_end_at.isoformat(sep=' ', timespec='minutes')}"
                 ),
                 (
@@ -442,7 +445,8 @@ class ColdWorkflowService:
                 raise ColdWorkflowError("Este ensaio não possui frio planejado.")
             if workflow.cold_started_at is not None:
                 raise ColdWorkflowError(
-                    "O frio já foi iniciado. Registre a retirada em vez de marcar como não realizado."
+                    "O frio já foi iniciado. Registre a retirada em vez de marcar "
+                    "como não realizado."
                 )
             if test.situation not in {
                 TestSituation.AWAITING_CONDITIONING.value,
