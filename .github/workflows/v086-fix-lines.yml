@@ -1,0 +1,82 @@
+name: v0.8.6 temporary line fix
+
+on:
+  push:
+    branches:
+      - feat/v0.8.6-stability-cold-flow
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/v0.8.6-stability-cold-flow
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Patch long lines
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("src/climatetest_manager/services/cold_workflows.py")
+          text = path.read_text(encoding="utf-8")
+          text = text.replace(
+              '                    "O ensaio já está encerrado; o fluxo de frio não pode ser ativado retroativamente."\n',
+              '                    "O ensaio já está encerrado; o fluxo de frio não pode ser ativado "\n'
+              '                    "retroativamente."\n',
+          )
+          text = text.replace(
+              '                    "O fluxo já possui execução registrada. Use \'Não realizar frio\' com justificativa."\n',
+              '                    "O fluxo já possui execução registrada. Use \'Não realizar frio\' "\n'
+              '                    "com justificativa."\n',
+          )
+          text = text.replace(
+              '                    f"retirada nominal: {window.nominal_end_at.isoformat(sep=\' \', timespec=\'minutes\')}; "\n',
+              '                    "retirada nominal: "\n'
+              '                    f"{window.nominal_end_at.isoformat(sep=\' \', timespec=\'minutes\')}; "\n',
+          )
+          text = text.replace(
+              '                    "O frio já foi iniciado. Registre a retirada em vez de marcar como não realizado."\n',
+              '                    "O frio já foi iniciado. Registre a retirada em vez de marcar "\n'
+              '                    "como não realizado."\n',
+          )
+          path.write_text(text, encoding="utf-8")
+
+          path = Path("src/climatetest_manager/v086_runtime.py")
+          text = path.read_text(encoding="utf-8")
+          text = text.replace(
+              '                "minimum_ambient_service_temperature": self.minimum_ambient_service_temperature.value,\n',
+              '                "minimum_ambient_service_temperature": (\n'
+              '                    self.minimum_ambient_service_temperature.value\n'
+              '                ),\n',
+          )
+          text = text.replace(
+              '                                            else "Disponível após completar 24 h de acondicionamento."\n',
+              '                                            else (\n'
+              '                                                "Disponível após completar 24 h de "\n'
+              '                                                "acondicionamento."\n'
+              '                                            )\n',
+          )
+          path.write_text(text, encoding="utf-8")
+      - name: Validate and format
+        shell: bash
+        run: |
+          pip install ruff==0.15.22
+          ruff format src/climatetest_manager/services/cold_workflows.py src/climatetest_manager/v086_runtime.py
+          ruff check .
+          ruff format --check .
+      - name: Commit fix
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/climatetest_manager/services/cold_workflows.py src/climatetest_manager/v086_runtime.py
+          git commit -m "chore: corrige estilo residual v0.8.6"
+          git push origin HEAD:feat/v0.8.6-stability-cold-flow
