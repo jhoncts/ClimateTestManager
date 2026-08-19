@@ -14,7 +14,7 @@ jobs:
     runs-on: windows-2022
     env:
       BETA_VERSION: 0.8.5.99
-      BETA_BUILD: R10-BETA2-20260819
+      BETA_BUILD: R10-BETA3-20260819
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -209,7 +209,7 @@ jobs:
       - name: Upload controlled beta artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ClimateTestManager-v0.8.6-beta2-windows
+          name: ClimateTestManager-v0.8.6-beta3-windows
           if-no-files-found: error
           retention-days: 14
           path: |
