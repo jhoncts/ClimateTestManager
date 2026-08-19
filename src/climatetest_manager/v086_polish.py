@@ -6,11 +6,15 @@ térmica e as transições evitam deslocamento da superfície central.
 
 from __future__ import annotations
 
+from contextlib import suppress
+
 import flet as ft
 
 from climatetest_manager import production_app, v084_stability, v086_runtime
 from climatetest_manager.ui.theme import AppColors
 from climatetest_manager.ui.views.final_new_test import FinalNewTestView
+
+_ORIGINAL_COLD_CHANGE = v086_runtime.V086NewTestView._on_cold_change
 
 
 def _integrated_thermal_panel(self: v086_runtime.V086NewTestView) -> ft.Container:
@@ -113,6 +117,25 @@ def _build_integrated(self: v086_runtime.V086NewTestView) -> ft.Column:
     return FinalNewTestView._build(self)
 
 
+def _sync_integrated_height(self: v086_runtime.V086NewTestView) -> None:
+    """Reserva só o espaço necessário para o bloco integrado, sem esticar Identificação."""
+
+    FinalNewTestView._sync_top_card_height(self)
+    thermal = getattr(self, "_thermal_panel_control", None)
+    identity = getattr(self, "_identity_panel_control", None)
+    base_height = getattr(identity, "height", None)
+    if not isinstance(thermal, ft.Container) or not isinstance(base_height, (int, float)):
+        return
+    thermal.height = base_height + (118 if self.cold_planned.value else 58)
+    with suppress(RuntimeError):
+        thermal.update()
+
+
+def _cold_change_with_height(self: v086_runtime.V086NewTestView, event=None) -> None:
+    _ORIGINAL_COLD_CHANGE(self, event)
+    _sync_integrated_height(self)
+
+
 def install() -> None:
     if getattr(production_app, "_v086_polish_installed", False):
         return
@@ -122,4 +145,6 @@ def install() -> None:
     v084_stability.SIDEBAR_ANIMATION_SECONDS = 0.16
     v086_runtime.V086NewTestView._thermal_panel = _integrated_thermal_panel
     v086_runtime.V086NewTestView._build = _build_integrated
+    v086_runtime.V086NewTestView._sync_top_card_height = _sync_integrated_height
+    v086_runtime.V086NewTestView._on_cold_change = _cold_change_with_height
     production_app._v086_polish_installed = True
