@@ -23,6 +23,7 @@ from climatetest_manager import (  # noqa: E402
     v086_navigation,
     v086_runtime,
     v086_skip_policy,
+    v086_tracking,
 )
 from climatetest_manager.round7_runtime import main  # noqa: E402
 
@@ -31,6 +32,7 @@ v084_stability.install()
 v086_runtime.install()
 v086_conditioning.install()
 v086_skip_policy.install()
+v086_tracking.install()
 v086_navigation.install()
 
 
