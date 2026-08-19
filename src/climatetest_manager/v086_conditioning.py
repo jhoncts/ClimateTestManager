@@ -7,8 +7,7 @@ comportamento da v0.8.5 até que o operador ative explicitamente o fluxo novo.
 
 from __future__ import annotations
 
-from contextlib import suppress
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import flet as ft
 from sqlalchemy import select
@@ -67,8 +66,7 @@ def _configure_flow(
             session.add(workflow)
         else:
             execution_started = bool(
-                workflow.conditioning_started_at is not None
-                or workflow.cold_started_at is not None
+                workflow.conditioning_started_at is not None or workflow.cold_started_at is not None
             )
             if execution_started and workflow.cold_planned != cold_planned:
                 raise ColdWorkflowError(
@@ -77,9 +75,7 @@ def _configure_flow(
                 )
             if not execution_started:
                 workflow.cold_planned = cold_planned
-                workflow.minimum_ambient_service_temperature_c = (
-                    minimum if cold_planned else None
-                )
+                workflow.minimum_ambient_service_temperature_c = minimum if cold_planned else None
                 workflow.status = STATUS_PLANNED
         _audit(
             test,
@@ -304,9 +300,7 @@ def _conditioning_only_phase_panel(self):
     )
     try:
         responsive = original.content.controls[1]
-        responsive.controls.append(
-            ft.Container(col={"xs": 12, "md": 6}, content=conditioning)
-        )
+        responsive.controls.append(ft.Container(col={"xs": 12, "md": 6}, content=conditioning))
         return original
     except (AttributeError, IndexError, TypeError):
         return ft.Column(spacing=9, controls=[original, conditioning])
@@ -370,19 +364,19 @@ def _conditioning_only_action_panel(self):
                     icon=ft.Icons.CHECK_CIRCLE_OUTLINE,
                     disabled=not ready,
                     tooltip=(
-                        None
-                        if ready
-                        else "Disponível após completar 24 h de acondicionamento."
+                        None if ready else "Disponível após completar 24 h de acondicionamento."
                     ),
                     bgcolor=AppColors.PRIMARY if ready else None,
                     color=AppColors.WHITE if ready else None,
                     on_click=(
-                        lambda _event: self._time_dialog(
-                            "Finalizar acondicionamento",
-                            self._v086_finish_cold,
+                        lambda _event: (
+                            self._time_dialog(
+                                "Finalizar acondicionamento",
+                                self._v086_finish_cold,
+                            )
+                            if ready
+                            else None
                         )
-                        if ready
-                        else None
                     ),
                 ),
             ],
