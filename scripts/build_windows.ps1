@@ -7,6 +7,15 @@ $installerHashPath = "dist\ClimateTestManager-Setup-v$version-SHA256.txt"
 $assetsStage = ".release-assets"
 $generatedInstaller = "installer\ClimateTestManager.generated.iss"
 
+$packageMetadata = Get-Content -LiteralPath "src\climatetest_manager\__init__.py" -Raw -Encoding UTF8
+$buildMatch = [regex]::Match($packageMetadata, '(?m)^__build_revision__\s*=\s*"([^"]+)"')
+if (-not $buildMatch.Success) { throw "Revisão de build não encontrada em __init__.py." }
+$buildRevision = $buildMatch.Groups[1].Value
+$serverBuildRevision = (Get-Content -LiteralPath "src\assets\server-build.txt" -Raw -Encoding ASCII).Trim()
+if ($serverBuildRevision -ne $buildRevision) {
+    throw "Revisões inconsistentes: pacote=$buildRevision; servidor=$serverBuildRevision."
+}
+
 if (-not (Test-Path ".\.venv\Scripts\python.exe")) { throw "Ambiente virtual nao encontrado." }
 if (Test-Path -LiteralPath $releaseDir) { Remove-Item -LiteralPath $releaseDir -Recurse -Force }
 New-Item -ItemType Directory -Path $releaseDir -Force | Out-Null
@@ -19,7 +28,7 @@ Copy-Item "src\assets\brand\climatetest-logo.png" (Join-Path $assetsStage "icons
 
 $packSucceeded = $false
 for ($attempt = 1; $attempt -le 3; $attempt++) {
-    .\.venv\Scripts\flet.exe pack src/client_r6.py --name ClimateTestManager --icon "src\assets\brand\climatetest.ico" --add-data "$assetsStage;assets" --product-name "ClimateTest Manager" --product-version $version --file-version "$version.0" --file-description "Cliente desktop do ClimateTest Manager - v$version / R9" --company-name "ClimateTest Manager" --copyright "Copyright (c) 2026 Jhon Cleiton" --distpath $releaseDir --yes
+    .\.venv\Scripts\flet.exe pack src/client_r6.py --name ClimateTestManager --icon "src\assets\brand\climatetest.ico" --add-data "$assetsStage;assets" --product-name "ClimateTest Manager" --product-version $version --file-version "$version.0" --file-description "Cliente desktop do ClimateTest Manager - v$version / $buildRevision" --company-name "ClimateTest Manager" --copyright "Copyright (c) 2026 Jhon Cleiton" --distpath $releaseDir --yes
     if ($LASTEXITCODE -eq 0) { $packSucceeded = $true; break }
     if ($attempt -lt 3) { Start-Sleep -Seconds (8 * $attempt) }
 }
@@ -36,6 +45,7 @@ Copy-Item "scripts\uninstall_server_tasks.ps1" $releaseDir
 Copy-Item "scripts\discover_server.ps1" $releaseDir
 $installScript = Get-Content -LiteralPath "scripts\install_server_tasks.ps1" -Raw -Encoding UTF8
 $installScript = [regex]::Replace($installScript, '(?m)^\$version\s*=\s*"[^"]+"', "`$version = `"$version`"")
+$installScript = [regex]::Replace($installScript, '(?m)^\$buildRevision\s*=\s*"[^"]+"', "`$buildRevision = `"$buildRevision`"")
 Set-Content -LiteralPath (Join-Path $releaseDir "install_server_tasks.ps1") -Value $installScript -Encoding UTF8 -NoNewline
 $complianceDir = Join-Path $releaseDir "documentacao-conformidade"
 New-Item -ItemType Directory -Path $complianceDir -Force | Out-Null
@@ -51,6 +61,7 @@ $iscc = $innoCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Ob
 if (-not $iscc) { throw "Inno Setup 6 nao encontrado." }
 $installerSource = Get-Content -LiteralPath "installer\ClimateTestManager.iss" -Raw -Encoding UTF8
 $installerSource = [regex]::Replace($installerSource, '(?m)^#define MyAppVersion "[^"]+"', "#define MyAppVersion `"$version`"")
+$installerSource = [regex]::Replace($installerSource, '(?m)^#define MyBuildRevision "[^"]+"', "#define MyBuildRevision `"$buildRevision`"")
 Set-Content -LiteralPath $generatedInstaller -Value $installerSource -Encoding UTF8 -NoNewline
 & $iscc $generatedInstaller
 if ($LASTEXITCODE -ne 0) { throw "O Inno Setup nao conseguiu gerar o instalador." }
@@ -61,5 +72,6 @@ $installerHash = (Get-FileHash -LiteralPath $installerPath -Algorithm SHA256).Ha
 Remove-Item -LiteralPath $assetsStage -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item -LiteralPath $generatedInstaller -Force -ErrorAction SilentlyContinue
 Write-Host "Instalador criado em $installerPath"
+Write-Host "Revisão de build: $buildRevision"
 Write-Host "SHA-256 criado em $installerHashPath"
 Write-Host "Pacote criado em $releaseZip"
