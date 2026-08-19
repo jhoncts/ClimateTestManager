@@ -2,7 +2,7 @@
 
 from sqlalchemy import Engine, inspect, text
 
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 
 OPERATIONAL_COLUMNS = {
     "chamber_started_at": "DATETIME",
