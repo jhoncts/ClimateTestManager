@@ -6,10 +6,10 @@ planejados recebem um registro em ``thermal_cold_workflows``.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import Callable
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
@@ -206,7 +206,10 @@ class ColdWorkflowService:
                 )
                 session.add(workflow)
             else:
-                if workflow.conditioning_started_at is not None or workflow.cold_started_at is not None:
+                if (
+                    workflow.conditioning_started_at is not None
+                    or workflow.cold_started_at is not None
+                ):
                     raise ColdWorkflowError(
                         "A temperatura planejada não pode ser substituída depois do início "
                         "do acondicionamento/frio sem tratamento técnico específico."
@@ -253,23 +256,27 @@ class ColdWorkflowService:
         now = self._now_provider().replace(microsecond=0)
         effective_end = _action_time(ended_at, now)
         with self._session_factory() as session:
-            test = session.scalar(
-                select(ClimateTestRecord).where(ClimateTestRecord.id == test_id)
-            )
+            test = session.scalar(select(ClimateTestRecord).where(ClimateTestRecord.id == test_id))
             workflow = session.get(ThermalColdWorkflowRecord, test_id)
             if test is None or workflow is None or not workflow.cold_planned:
-                raise ColdWorkflowError("Este ensaio não possui resistência térmica ao frio planejada.")
+                raise ColdWorkflowError(
+                    "Este ensaio não possui resistência térmica ao frio planejada."
+                )
             snapshot = test.condition_snapshot
             if test.situation == TestSituation.IN_CHAMBER.value:
                 if snapshot is not None and snapshot.drying_required:
-                    raise ColdWorkflowError("Inicie a secagem antes de finalizar o ensaio de calor.")
+                    raise ColdWorkflowError(
+                        "Inicie a secagem antes de finalizar o ensaio de calor."
+                    )
                 nominal = test.chamber_nominal_end_at
                 test.chamber_ended_at = effective_end
             elif test.situation == TestSituation.DRYING.value:
                 nominal = test.drying_nominal_end_at
                 test.drying_ended_at = effective_end
             else:
-                raise ColdWorkflowError("O ensaio não possui uma etapa de calor ativa para finalizar.")
+                raise ColdWorkflowError(
+                    "O ensaio não possui uma etapa de calor ativa para finalizar."
+                )
             if nominal is not None and effective_end < nominal:
                 raise ColdWorkflowError(
                     "O ensaio de calor não pode ser finalizado antes do término nominal da etapa."
@@ -277,7 +284,9 @@ class ColdWorkflowService:
             test.finished_at = None
             test.situation = TestSituation.AWAITING_CONDITIONING.value
             workflow.status = STATUS_AWAITING_CONDITIONING
-            test.notifications[:] = [item for item in test.notifications if item.sent_at is not None]
+            test.notifications[:] = [
+                item for item in test.notifications if item.sent_at is not None
+            ]
             _audit(
                 test,
                 self._actor(),
@@ -395,7 +404,9 @@ class ColdWorkflowService:
             test = session.get(ClimateTestRecord, test_id)
             workflow = session.get(ThermalColdWorkflowRecord, test_id)
             if test is None or workflow is None or test.situation != TestSituation.IN_COLD.value:
-                raise ColdWorkflowError("O ensaio não está na etapa de resistência térmica ao frio.")
+                raise ColdWorkflowError(
+                    "O ensaio não está na etapa de resistência térmica ao frio."
+                )
             if workflow.cold_nominal_end_at is None or workflow.cold_maximum_end_at is None:
                 raise ColdWorkflowError("Os prazos do ensaio de frio não foram calculados.")
             if effective_end < workflow.cold_nominal_end_at:

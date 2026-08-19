@@ -11,11 +11,10 @@ import asyncio
 from contextlib import suppress
 from dataclasses import replace
 from datetime import datetime
-from decimal import Decimal
 
 import flet as ft
 
-from climatetest_manager import production_app, round7_runtime, v084_stability
+from climatetest_manager import production_app, round7_runtime
 from climatetest_manager.domain.cold_flow import (
     cold_temperature_range,
     parse_minimum_ambient_service_temperature,
@@ -39,7 +38,9 @@ _ORIGINAL_DASHBOARD_SUMMARY = ClimateTestService.dashboard_summary
 _ORIGINAL_START = production_app.ProductionClimateTestApplication.start
 
 
-def _service_from_repository(repository, *, actor_provider=lambda: "Não identificado") -> ColdWorkflowService:
+def _service_from_repository(
+    repository, *, actor_provider=lambda: "Não identificado"
+) -> ColdWorkflowService:
     return ColdWorkflowService(
         repository._session_factory,
         actor_provider=actor_provider,
@@ -148,7 +149,9 @@ def _dashboard_summary_with_cold(self: ClimateTestService) -> DashboardSummary:
     return DashboardSummary(
         in_progress=sum(item.situation in active and not item.is_paused for item in items),
         overdue=sum(item.deadline_condition == DeadlineCondition.OVERDUE.value for item in items),
-        due_today=sum(item.deadline_condition == DeadlineCondition.DUE_TODAY.value for item in items),
+        due_today=sum(
+            item.deadline_condition == DeadlineCondition.DUE_TODAY.value for item in items
+        ),
         drying=sum(item.situation == TestSituation.DRYING.value for item in items),
         in_tolerance=sum(
             item.deadline_condition == DeadlineCondition.IN_TOLERANCE.value for item in items
@@ -210,7 +213,10 @@ class V086NewTestView(FinalNewTestView):
         super().__init__(*args, **kwargs)
         locked = bool(
             cold_snapshot
-            and (cold_snapshot.conditioning_started_at is not None or cold_snapshot.cold_started_at is not None)
+            and (
+                cold_snapshot.conditioning_started_at is not None
+                or cold_snapshot.cold_started_at is not None
+            )
         )
         self.cold_planned.disabled = locked
         self.minimum_ambient_service_temperature.disabled = locked
@@ -354,7 +360,9 @@ def _save_test_with_cold(app, command, planned: bool, minimum_temperature: str) 
     )
 
 
-def _update_test_with_cold(app, test_id: int, command, planned: bool, minimum_temperature: str) -> None:
+def _update_test_with_cold(
+    app, test_id: int, command, planned: bool, minimum_temperature: str
+) -> None:
     try:
         if planned:
             parse_minimum_ambient_service_temperature(minimum_temperature)
@@ -616,7 +624,10 @@ class V086DetailsView(round7_runtime.CleanDetailsView):
                         wrap=True,
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                         controls=[
-                            ft.Text("Próxima etapa: acondicionamento pós-calor", weight=ft.FontWeight.BOLD),
+                            ft.Text(
+                                "Próxima etapa: acondicionamento pós-calor",
+                                weight=ft.FontWeight.BOLD,
+                            ),
                             ft.Row(
                                 controls=[
                                     ft.Button(
@@ -654,7 +665,9 @@ class V086DetailsView(round7_runtime.CleanDetailsView):
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                         controls=[
                             ft.Text(
-                                "Acondicionamento mínimo concluído" if ready else "Acondicionamento em andamento",
+                                "Acondicionamento mínimo concluído"
+                                if ready
+                                else "Acondicionamento em andamento",
                                 weight=ft.FontWeight.BOLD,
                             ),
                             ft.Row(
@@ -671,12 +684,14 @@ class V086DetailsView(round7_runtime.CleanDetailsView):
                                         bgcolor=AppColors.PRIMARY if ready else None,
                                         color=AppColors.WHITE if ready else None,
                                         on_click=(
-                                            lambda _e: self._time_dialog(
-                                                "Iniciar resistência térmica ao frio",
-                                                self._v086_start_cold,
+                                            lambda _e: (
+                                                self._time_dialog(
+                                                    "Iniciar resistência térmica ao frio",
+                                                    self._v086_start_cold,
+                                                )
+                                                if ready
+                                                else None
                                             )
-                                            if ready
-                                            else None
                                         ),
                                     ),
                                     ft.TextButton(
@@ -699,7 +714,10 @@ class V086DetailsView(round7_runtime.CleanDetailsView):
                         wrap=True,
                         alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
                         controls=[
-                            ft.Text("Resistência térmica ao frio em andamento", weight=ft.FontWeight.BOLD),
+                            ft.Text(
+                                "Resistência térmica ao frio em andamento",
+                                weight=ft.FontWeight.BOLD,
+                            ),
                             ft.Button(
                                 content="Registrar retirada do frio",
                                 icon=ft.Icons.LOGOUT,

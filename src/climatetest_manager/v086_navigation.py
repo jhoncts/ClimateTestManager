@@ -11,7 +11,6 @@ import asyncio
 import traceback
 from contextlib import suppress
 from datetime import datetime
-from pathlib import Path
 
 import flet as ft
 
