@@ -49,6 +49,7 @@ class DatabaseTests(unittest.TestCase):
                         "system_incidents",
                         "user_notification_reads",
                         "administrator_recovery",
+                        "thermal_cold_workflows",
                     },
                 )
                 self.assertIn(
@@ -139,10 +140,15 @@ class DatabaseTests(unittest.TestCase):
                 columns = {item["name"] for item in inspect(engine).get_columns("climate_tests")}
                 self.assertIn("chamber_started_at", columns)
                 self.assertIn("cancellation_reason", columns)
+                self.assertIn("thermal_cold_workflows", inspect(engine).get_table_names())
                 with engine.connect() as connection:
                     self.assertEqual(
                         connection.scalar(text("SELECT client FROM climate_tests WHERE id=1")),
                         "Cliente legado",
+                    )
+                    self.assertEqual(
+                        connection.scalar(text("SELECT COUNT(*) FROM thermal_cold_workflows")),
+                        0,
                     )
                     self.assertEqual(
                         connection.scalar(text("PRAGMA user_version")),
