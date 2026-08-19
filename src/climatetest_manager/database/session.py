@@ -52,8 +52,10 @@ def create_session_factory(engine: Engine) -> sessionmaker[Session]:
 def initialize_database(database_path: Path | None = None) -> Engine:
     """Cria as tabelas ausentes e devolve o engine preparado."""
 
-    # O import registra os modelos no metadata antes de create_all().
-    from climatetest_manager.database import models  # noqa: F401
+    # Os imports registram todos os modelos no metadata antes de create_all().
+    # O fluxo de frio vive em tabela própria para não reinterpretar nem alterar
+    # silenciosamente registros criados nas versões anteriores.
+    from climatetest_manager.database import cold_models, models  # noqa: F401
 
     engine = create_database_engine(database_path)
     try:
