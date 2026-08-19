@@ -39,7 +39,7 @@ jobs:
             tests/unit/test_cold_workflow_service.py
             tests/unit/test_database.py
           )
-          ruff check "${files[@]}" --fix
+          ruff check "${files[@]}" --fix || true
           ruff format "${files[@]}"
       - name: Commit formatting
         shell: bash
