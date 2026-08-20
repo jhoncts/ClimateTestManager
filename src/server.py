@@ -24,6 +24,7 @@ from climatetest_manager import (  # noqa: E402
     v086_navigation,
     v086_polish,
     v086_runtime,
+    v086_schedule,
     v086_skip_policy,
     v086_sync,
     v086_tracking,
@@ -40,6 +41,7 @@ v086_tracking.install()
 v086_details_state.install()
 v086_sync.install()
 v086_navigation.install()
+v086_schedule.install()
 
 
 def _arguments() -> argparse.Namespace:
