@@ -408,7 +408,10 @@ def _prune_duplicate_cancel(control: ft.Control) -> ft.Control:
     return control
 
 
-def _confirm_climatic_start(self: v086_runtime.V086DetailsView, started_at: datetime | None) -> None:
+def _confirm_climatic_start(
+    self: v086_runtime.V086DetailsView,
+    started_at: datetime | None,
+) -> None:
     effective_start = (started_at or datetime.now()).replace(microsecond=0)
     stages = _project_climatic_stages(self._details, self._v086_cold, effective_start)
     page = self.root.page
