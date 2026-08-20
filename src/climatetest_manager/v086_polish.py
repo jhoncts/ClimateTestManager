@@ -143,8 +143,7 @@ def _integrated_thermal_panel(self: v086_runtime.V086NewTestView) -> ft.Containe
                 ],
             ),
             ft.Text(
-                "Após o calor: acondicionamento de 24 a 72 h. "
-                "No frio: permanência de 24 a 26 h.",
+                "Após o calor: acondicionamento de 24 a 72 h. No frio: permanência de 24 a 26 h.",
                 size=10,
                 color=AppColors.TEXT_SECONDARY,
             ),
