@@ -58,9 +58,7 @@ def _project_climatic_stages(
 
     entry = entry_at.replace(microsecond=0)
     chamber_nominal = entry + timedelta(hours=details.chamber_duration_hours)
-    chamber_maximum = chamber_nominal + timedelta(
-        hours=details.chamber_duration_tolerance_hours
-    )
+    chamber_maximum = chamber_nominal + timedelta(hours=details.chamber_duration_tolerance_hours)
     stages: list[ProjectedStage] = [
         ProjectedStage(
             key="heat",
