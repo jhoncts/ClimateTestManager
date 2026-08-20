@@ -14,7 +14,7 @@ jobs:
     runs-on: windows-2022
     env:
       BETA_VERSION: 0.8.5.99
-      BETA_BUILD: R10-BETA4-20260820
+      BETA_BUILD: R10-BETA5-20260820
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -28,20 +28,29 @@ jobs:
       - name: Install dependencies
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
           python -m venv .venv
+          if ($LASTEXITCODE -ne 0) { throw "Falha ao criar ambiente virtual." }
           .\.venv\Scripts\python.exe -m pip install --upgrade pip
+          if ($LASTEXITCODE -ne 0) { throw "Falha ao atualizar pip." }
           .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+          if ($LASTEXITCODE -ne 0) { throw "Falha ao instalar dependências." }
 
       - name: Validate source before beta stamping
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
           .\.venv\Scripts\ruff.exe check .
+          if ($LASTEXITCODE -ne 0) { throw "Lint falhou." }
           .\.venv\Scripts\ruff.exe format --check .
+          if ($LASTEXITCODE -ne 0) { throw "Formatação Ruff divergente." }
           .\.venv\Scripts\pytest.exe -q
+          if ($LASTEXITCODE -ne 0) { throw "Testes automatizados falharam." }
 
       - name: Stamp isolated beta version
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
           $version = $env:BETA_VERSION
           $build = $env:BETA_BUILD
 
@@ -84,7 +93,10 @@ jobs:
 
       - name: Build beta installer
         shell: pwsh
-        run: .\scripts\build_windows.ps1
+        run: |
+          $ErrorActionPreference = "Stop"
+          .\scripts\build_windows.ps1
+          if ($LASTEXITCODE -ne 0) { throw "Build do instalador beta falhou." }
 
       - name: Verify staged bootstrap revision
         shell: pwsh
@@ -104,6 +116,7 @@ jobs:
       - name: Smoke test beta server and workstation client
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
           $version = $env:BETA_VERSION
           $build = $env:BETA_BUILD
           $releaseDir = ".\dist\ClimateTestManager-v$version"
@@ -209,7 +222,7 @@ jobs:
       - name: Upload controlled beta artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ClimateTestManager-v0.8.6-beta4-windows
+          name: ClimateTestManager-v0.8.6-beta5-windows
           if-no-files-found: error
           retention-days: 14
           path: |
