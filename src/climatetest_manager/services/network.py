@@ -9,10 +9,14 @@ from dataclasses import dataclass
 from threading import Event, Thread
 
 from climatetest_manager import __version__
-
-DISCOVERY_PORT = 8551
-DISCOVERY_REQUEST = b"CLIMATETEST_DISCOVER_V1"
-DEFAULT_APP_PORT = 8550
+from climatetest_manager.product_identity import (
+    DEFAULT_APP_PORT,
+    DISCOVERY_PORT,
+    DISCOVERY_REQUEST,
+    PRODUCT_ID,
+    SERVER_PROTOCOL_VERSION,
+    SERVICE_NAME,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,8 +115,9 @@ class DiscoveryResponder:
         identity = get_server_identity(port=self._app_port)
         payload = json.dumps(
             {
-                "service": "ClimateTestManager",
-                "protocol": 1,
+                "product_id": PRODUCT_ID,
+                "service": SERVICE_NAME,
+                "protocol": SERVER_PROTOCOL_VERSION,
                 "hostname": identity.hostname,
                 "port": identity.port,
                 "version": __version__,

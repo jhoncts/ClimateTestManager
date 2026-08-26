@@ -121,6 +121,7 @@ def test_discovery_responder_answers_signed_local_probe() -> None:
         responder.stop()
 
     payload = json.loads(data.decode("utf-8"))
+    assert payload["product_id"] == "com.jhoncts.climatetestmanager"
     assert payload["service"] == "ClimateTestManager"
     assert payload["protocol"] == 1
     assert payload["port"] == 18552
@@ -137,12 +138,18 @@ def test_update_parser_requires_newer_release_and_windows_installer() -> None:
         "assets": [
             {
                 "name": "ClimateTestManager-Setup-v0.8.0.exe",
-                "browser_download_url": "https://example.invalid/setup.exe",
+                "browser_download_url": (
+                    "https://github.com/jhoncts/ClimateTestManager/"
+                    "releases/download/v0.8.0/ClimateTestManager-Setup-v0.8.0.exe"
+                ),
                 "digest": f"sha256:{digest}",
             },
             {
                 "name": "ClimateTestManager-Setup-v0.8.0-SHA256.txt",
-                "browser_download_url": "https://example.invalid/setup.sha256",
+                "browser_download_url": (
+                    "https://github.com/jhoncts/ClimateTestManager/releases/download/"
+                    "v0.8.0/ClimateTestManager-Setup-v0.8.0-SHA256.txt"
+                ),
             },
         ],
     }

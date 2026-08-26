@@ -392,18 +392,19 @@ def test_release_and_installer_use_one_consistent_version_and_one_server_guard()
     marker = (project / "src" / "assets" / "server-build.txt").read_text(encoding="utf-8")
     server_install = (project / "scripts" / "install_server_tasks.ps1").read_text(encoding="utf-8")
 
-    assert __version__ == "0.8.5"
-    assert '#define MyAppVersion "0.8.5"' in installer
-    assert '#define MyBuildRevision "R9-20260814"' in installer
+    assert __version__ == "0.8.7"
+    assert '#define MyAppVersion "0.8.7"' in installer
+    assert '#define MyBuildRevision "R12-20260825"' in installer
     assert "ClimateTestManager-v{#MyAppVersion}" in installer
     assert "ForeignServerFound" in installer
     assert "Somente um servidor central" in installer
     assert "[InstallDelete]" in installer
-    assert '$version = "0.8.5"' in build
+    assert "$versionMatch" in build
     assert "payloadVersion" not in build
-    assert "ClimateTestManager-Setup-v0.8.5.exe" in workflow
-    assert '([string]$response.Content).Trim() -eq "R9-20260814"' in workflow
+    assert "ClimateTestManager-Setup-v0.8.7.exe" in workflow
+    assert "([string]$response.Content).Trim() -eq $env:BUILD_REVISION" in workflow
+    assert "update-manifest.json" in workflow
     assert "v0.8.0" not in workflow
-    assert '$buildRevision = "R9-20260814"' in server_install
+    assert '$buildRevision = "R12-20260825"' in server_install
     assert "/server-build.txt" in server_install
-    assert marker.strip() == "R9-20260814"
+    assert marker.strip() == "R12-20260825"

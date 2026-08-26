@@ -2,6 +2,9 @@ param(
     [Parameter(Mandatory = $true, Position = 0)]
     [ValidatePattern('^\d+\.\d+\.\d+$')]
     [string]$Version,
+    [Parameter(Mandatory = $true)]
+    [ValidatePattern('^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$')]
+    [string]$BuildRevision,
     [switch]$SkipWorkflow
 )
 
@@ -41,6 +44,11 @@ Replace-InFile `
     -Replacement "__version__ = `"$Version`""
 
 Replace-InFile `
+    -Path "src\climatetest_manager\__init__.py" `
+    -Pattern '(?m)^__build_revision__\s*=\s*"[^"]+"' `
+    -Replacement "__build_revision__ = `"$BuildRevision`""
+
+Replace-InFile `
     -Path "src\client.py" `
     -Pattern '(?m)^VERSION\s*=\s*"\d+\.\d+\.\d+"' `
     -Replacement "VERSION = `"$Version`""
@@ -51,9 +59,26 @@ Replace-InFile `
     -Replacement "APP_VERSION = `"$Version`""
 
 Replace-InFile `
+    -Path "src\client_r6.py" `
+    -Pattern '(?m)^BUILD_REVISION\s*=\s*"[^"]+"' `
+    -Replacement "BUILD_REVISION = `"$BuildRevision`""
+
+Replace-InFile `
+    -Path "src\climatetest_manager\round7_runtime.py" `
+    -Pattern '(?m)^BUILD_REVISION\s*=\s*"[^"]+"' `
+    -Replacement "BUILD_REVISION = `"$BuildRevision`""
+
+Set-Content -LiteralPath "src\assets\server-build.txt" -Value $BuildRevision -Encoding ascii -NoNewline
+
+Replace-InFile `
     -Path "installer\ClimateTestManager.iss" `
     -Pattern '(?m)^#define MyAppVersion "\d+\.\d+\.\d+"' `
     -Replacement "#define MyAppVersion `"$Version`""
+
+Replace-InFile `
+    -Path "installer\ClimateTestManager.iss" `
+    -Pattern '(?m)^#define MyBuildRevision "[^"]+"' `
+    -Replacement "#define MyBuildRevision `"$BuildRevision`""
 
 $installerPath = "installer\ClimateTestManager.iss"
 $installer = Get-Content -LiteralPath $installerPath -Raw -Encoding UTF8
@@ -65,14 +90,14 @@ $installer = [regex]::Replace(
 Set-Content -LiteralPath $installerPath -Value $installer -Encoding UTF8 -NoNewline
 
 Replace-InFile `
-    -Path "scripts\build_windows.ps1" `
+    -Path "scripts\install_server_tasks.ps1" `
     -Pattern '(?m)^\$version\s*=\s*"\d+\.\d+\.\d+"' `
     -Replacement "`$version = `"$Version`""
 
 Replace-InFile `
     -Path "scripts\install_server_tasks.ps1" `
-    -Pattern '(?m)^\$version\s*=\s*"\d+\.\d+\.\d+"' `
-    -Replacement "`$version = `"$Version`""
+    -Pattern '(?m)^\$buildRevision\s*=\s*"[^"]+"' `
+    -Replacement "`$buildRevision = `"$BuildRevision`""
 
 if (-not $SkipWorkflow) {
     $workflowPath = ".github\workflows\release.yml"
@@ -97,4 +122,5 @@ if (-not $SkipWorkflow) {
 }
 
 Write-Host "Versão do ClimateTest Manager atualizada para $Version."
+Write-Host "Revisão de build atualizada para $BuildRevision."
 Write-Host "Execute os testes antes de criar a tag v$Version."

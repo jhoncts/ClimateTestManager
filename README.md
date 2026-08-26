@@ -6,10 +6,17 @@ Aplicação cliente-servidor para controle de ensaios de resistência climática
 O projeto nasce para substituir uma planilha operacional por um software local, auditável e
 acessível na rede privada do laboratório por computadores e celulares.
 
-> Status: versão 0.8.5 candidata à implantação controlada em rede local. Um único servidor
+> Status: versão 0.8.7 para portfólio pessoal e implantação piloto controlada. Um único servidor
 > centraliza o banco, as contas, a rastreabilidade, as notificações e os backups; as demais
-> máquinas são estações de trabalho. A adoção oficial deve seguir o roteiro de validação da versão
-> e os procedimentos do laboratório.
+> máquinas são estações. Somente o servidor monitora Releases, e um técnico decide quando
+> distribuir cada versão na rede local.
+
+## Autoria e independência
+
+Este é um projeto pessoal e independente criado e mantido por **Jhon Cleiton** para portfólio,
+aprendizado e demonstração técnica. O projeto não pertence, não representa e não é endossado por
+empregadores, laboratórios ou organizações em cujos ambientes tenham ocorrido testes autorizados.
+Consulte [NOTICE.md](NOTICE.md) e [LICENSE](LICENSE).
 
 ## Funcionalidades disponíveis
 
@@ -180,8 +187,9 @@ O empacotamento deve ser executado no próprio Windows:
 .\scripts\build_windows.ps1
 ```
 
-O resultado principal será `dist/ClimateTestManager-Setup-v0.8.5.exe`. Também são gerados o
-arquivo de conferência SHA-256 e o ZIP `dist/ClimateTestManager-v0.8.5-windows.zip`. O mesmo
+O resultado principal será `dist/ClimateTestManager-Setup-v0.8.7.exe`. Também são gerados o
+arquivo de conferência SHA-256, `update-manifest.json` e o ZIP
+`dist/ClimateTestManager-v0.8.7-windows.zip`. O mesmo
 instalador configura o servidor central ou uma estação de trabalho e contém o cliente gráfico,
 o servidor LAN, o notificador silencioso, a identidade visual e a documentação de validação.
 
@@ -255,8 +263,11 @@ Outlook nem de outro calendário externo.
 - [Regras de negócio](docs/BUSINESS_RULES.md)
 - [Arquitetura](docs/ARCHITECTURE.md)
 - [Guia de desenvolvimento](docs/DEVELOPMENT.md)
-- [Instalação da v0.8.5 no Windows](docs/INSTALACAO_WINDOWS.md)
-- [Notas e validação da v0.8.5](docs/RELEASE_V085.md)
+- [Instalação da v0.8.7 no Windows](docs/INSTALACAO_WINDOWS.md)
+- [Notas e validação da v0.8.7](docs/RELEASE_V087.md)
+- [Isolamento entre produtos](docs/PRODUCT_ISOLATION.md)
+- [Atualização controlada pelo técnico](docs/ATUALIZACAO_CONTROLADA.md)
+- [Publicação de Releases no GitHub](docs/PUBLICACAO_GLOBAL.md)
 - [Dossiê de conformidade do sistema](docs/compliance/README.md)
 - [Matriz ISO/IEC 17025 para o software](docs/compliance/ISO17025_SOFTWARE_COMPLIANCE_MATRIX.md)
 - [Protocolo formal de validação](docs/compliance/VALIDATION_PROTOCOL_V050.md)

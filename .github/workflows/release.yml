@@ -9,6 +9,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   windows-release:
@@ -16,6 +18,33 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Verify tag and source version
+        shell: pwsh
+        run: |
+          $metadata = Get-Content "src/climatetest_manager/__init__.py" -Raw
+          $version = [regex]::Match($metadata, '(?m)^__version__ = "([^"]+)"').Groups[1].Value
+          $build = [regex]::Match($metadata, '(?m)^__build_revision__ = "([^"]+)"').Groups[1].Value
+          if (-not $version -or -not $build) { throw "Metadados de versão incompletos." }
+          if ($env:GITHUB_REF -like 'refs/tags/*' -and $env:GITHUB_REF_NAME -ne "v$version") {
+            throw "A tag $env:GITHUB_REF_NAME não corresponde à versão v$version do código."
+          }
+          "APP_VERSION=$version" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "BUILD_REVISION=$build" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Prepare Windows code-signing certificate
+        shell: pwsh
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_BASE64 }}
+        run: |
+          if (-not $env:CERTIFICATE_BASE64) {
+            Write-Warning "Build sem Authenticode: a Release será identificada como não assinada."
+            "CTM_UNSIGNED_RELEASE=true" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+            exit 0
+          }
+          $certificatePath = Join-Path $env:RUNNER_TEMP "climatetest-signing.pfx"
+          [IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($env:CERTIFICATE_BASE64))
+          "CTM_SIGNING_CERTIFICATE_PATH=$certificatePath" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -42,6 +71,9 @@ jobs:
 
       - name: Build executables and universal installer
         shell: pwsh
+        env:
+          CTM_SIGNING_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERTIFICATE_PASSWORD }}
+          CTM_SIGNING_TIMESTAMP_URL: ${{ secrets.WINDOWS_SIGNING_TIMESTAMP_URL }}
         run: .\scripts\build_windows.ps1
 
       - name: Smoke test packaged server and real desktop window
@@ -52,8 +84,8 @@ jobs:
           Remove-Item -LiteralPath $readyFile -Force -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Path $dataDir -Force | Out-Null
 
-          $serverExe = ".\dist\ClimateTestManager-v0.8.5\ClimateTestServer.exe"
-          $clientExe = ".\dist\ClimateTestManager-v0.8.5\ClimateTestManager.exe"
+          $serverExe = ".\dist\ClimateTestManager-v0.8.7\ClimateTestServer.exe"
+          $clientExe = ".\dist\ClimateTestManager-v0.8.7\ClimateTestManager.exe"
           $server = Start-Process `
             -FilePath $serverExe `
             -ArgumentList @(
@@ -77,7 +109,7 @@ jobs:
                   -TimeoutSec 2
                 if (($response.StatusCode -ge 200) -and
                     ($response.StatusCode -lt 300) -and
-                    (([string]$response.Content).Trim() -eq "R9-20260814")) {
+                    (([string]$response.Content).Trim() -eq $env:BUILD_REVISION)) {
                   $ready = $true
                   break
                 }
@@ -152,8 +184,8 @@ jobs:
           Remove-Item -LiteralPath $setupLog -Force -ErrorAction SilentlyContinue
           New-Item -ItemType Directory -Path $serverData -Force | Out-Null
 
-          $serverExe = ".\dist\ClimateTestManager-v0.8.5\ClimateTestServer.exe"
-          $setupExe = ".\dist\ClimateTestManager-Setup-v0.8.5.exe"
+          $serverExe = ".\dist\ClimateTestManager-v0.8.7\ClimateTestServer.exe"
+          $setupExe = ".\dist\ClimateTestManager-Setup-v0.8.7.exe"
           $server = Start-Process `
             -FilePath $serverExe `
             -ArgumentList @(
@@ -174,7 +206,7 @@ jobs:
                 $response = Invoke-WebRequest -Uri "http://127.0.0.1:18552/server-build.txt" -UseBasicParsing -TimeoutSec 2
                 if (($response.StatusCode -ge 200) -and
                     ($response.StatusCode -lt 300) -and
-                    (([string]$response.Content).Trim() -eq "R9-20260814")) {
+                    (([string]$response.Content).Trim() -eq $env:BUILD_REVISION)) {
                   $ready = $true
                   break
                 }
@@ -295,6 +327,7 @@ jobs:
           }
 
       - name: Smoke test upgrade as central server
+        timeout-minutes: 12
         shell: pwsh
         run: |
           $installDir = Join-Path $env:ProgramFiles "ClimateTest Manager"
@@ -306,7 +339,7 @@ jobs:
           New-Item -ItemType Directory -Path $programData -Force | Out-Null
           Set-Content -LiteralPath (Join-Path $programData "server-mode.marker") -Value "server" -Encoding ascii
           Copy-Item `
-            ".\dist\ClimateTestManager-v0.8.5\ClimateTestServer.exe" `
+            ".\dist\ClimateTestManager-v0.8.7\ClimateTestServer.exe" `
             (Join-Path $installDir "ClimateTestServer.exe") `
             -Force
 
@@ -325,7 +358,7 @@ jobs:
           }
 
           $setup = Start-Process `
-            -FilePath ".\dist\ClimateTestManager-Setup-v0.8.5.exe" `
+            -FilePath ".\dist\ClimateTestManager-Setup-v0.8.7.exe" `
             -ArgumentList @(
               "/VERYSILENT",
               "/SUPPRESSMSGBOXES",
@@ -367,7 +400,7 @@ jobs:
                 -TimeoutSec 2
               if (($response.StatusCode -ge 200) -and
                   ($response.StatusCode -lt 300) -and
-                  (([string]$response.Content).Trim() -eq "R9-20260814")) {
+                  (([string]$response.Content).Trim() -eq $env:BUILD_REVISION)) {
                 $ready = $true
                 break
               }
@@ -377,7 +410,7 @@ jobs:
             }
           }
           if (-not $ready) {
-            throw "Servidor instalado não publicou a revisão R9 após a atualização."
+            throw "Servidor instalado não publicou $env:BUILD_REVISION após a atualização."
           }
 
           $installStatusPath = Join-Path $env:ProgramData "ClimateTestManager\install-status.json"
@@ -385,9 +418,27 @@ jobs:
             throw "A atualização não gerou o diagnóstico install-status.json."
           }
           $installStatus = Get-Content -LiteralPath $installStatusPath -Raw | ConvertFrom-Json
-          if (($installStatus.version -ne "0.8.5") -or
-              ($installStatus.build_revision -ne "R9-20260814")) {
-            throw "O diagnóstico da instalação não confirma v0.8.5 / R9-20260814."
+          if (($installStatus.version -ne $env:APP_VERSION) -or
+              ($installStatus.build_revision -ne $env:BUILD_REVISION)) {
+            throw "O diagnóstico não confirma $env:APP_VERSION / $env:BUILD_REVISION."
+          }
+
+          $approvedInstaller = Join-Path `
+            $programData `
+            "ApprovedUpdates\ClimateTestManager-Setup-v$($env:APP_VERSION).exe"
+          if (-not (Test-Path -LiteralPath $approvedInstaller)) {
+            throw "O servidor não preservou o instalador aprovado para distribuição às estações."
+          }
+          foreach ($tool in @(
+            "deploy_update_to_stations.ps1",
+            "enable_remote_update_station.ps1"
+          )) {
+            if (-not (Test-Path -LiteralPath (Join-Path $installDir $tool))) {
+              throw "Ferramenta de atualização controlada ausente: $tool"
+            }
+          }
+          if (-not (Test-Path -LiteralPath (Join-Path $programData "stations.txt"))) {
+            throw "A instalação não criou a lista inicial de estações."
           }
 
           $installedClient = Join-Path $installDir "ClimateTestManager.exe"
@@ -408,8 +459,8 @@ jobs:
       - name: Verify installer checksum
         shell: pwsh
         run: |
-          $installer = ".\dist\ClimateTestManager-Setup-v0.8.5.exe"
-          $hashFile = ".\dist\ClimateTestManager-Setup-v0.8.5-SHA256.txt"
+          $installer = ".\dist\ClimateTestManager-Setup-v0.8.7.exe"
+          $hashFile = ".\dist\ClimateTestManager-Setup-v0.8.7-SHA256.txt"
           if (-not (Test-Path -LiteralPath $installer)) {
             throw "Instalador final não foi gerado."
           }
@@ -422,15 +473,37 @@ jobs:
             throw "SHA-256 publicado não corresponde ao instalador gerado."
           }
 
+          $manifest = Get-Content ".\dist\update-manifest.json" -Raw | ConvertFrom-Json
+          if (($manifest.version -ne $env:APP_VERSION) -or
+              ($manifest.build_revision -ne $env:BUILD_REVISION) -or
+              ($manifest.installer.sha256 -ne $actual)) {
+            throw "Manifesto global não corresponde ao instalador validado."
+          }
+
+          $signature = Get-AuthenticodeSignature -LiteralPath $installer
+          if ($env:CTM_UNSIGNED_RELEASE -eq "true" -and $signature.Status -eq "Valid") {
+            throw "O workflow marcou a Release como não assinada, mas encontrou uma assinatura."
+          }
+          if ($env:CTM_UNSIGNED_RELEASE -ne "true" -and $signature.Status -ne "Valid") {
+            throw "O certificado foi configurado, mas o instalador final não possui assinatura válida."
+          }
+
+      - name: Attest release provenance
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/attest@v4
+        with:
+          subject-path: dist/ClimateTestManager-Setup-v0.8.7.exe
+
       - name: Upload validated Windows artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ClimateTestManager-v0.8.5-Windows-Validated
+          name: ClimateTestManager-v0.8.7-Windows-Validated
           if-no-files-found: error
           path: |
-            dist/ClimateTestManager-Setup-v0.8.5.exe
-            dist/ClimateTestManager-Setup-v0.8.5-SHA256.txt
-            dist/ClimateTestManager-v0.8.5-windows.zip
+            dist/ClimateTestManager-Setup-v0.8.7.exe
+            dist/ClimateTestManager-Setup-v0.8.7-SHA256.txt
+            dist/ClimateTestManager-v0.8.7-windows.zip
+            dist/update-manifest.json
 
       - name: Publish GitHub release only from a tag
         if: startsWith(github.ref, 'refs/tags/')
@@ -438,10 +511,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          $notesFile = "docs/RELEASE_V$($env:APP_VERSION.Replace('.', '')).md"
+          if (-not (Test-Path -LiteralPath $notesFile)) {
+            throw "Notas obrigatórias não encontradas: $notesFile"
+          }
           gh release create "${{ github.ref_name }}" `
-            "dist/ClimateTestManager-Setup-v0.8.5.exe" `
-            "dist/ClimateTestManager-Setup-v0.8.5-SHA256.txt" `
-            "dist/ClimateTestManager-v0.8.5-windows.zip" `
+            "dist/ClimateTestManager-Setup-v0.8.7.exe" `
+            "dist/ClimateTestManager-Setup-v0.8.7-SHA256.txt" `
+            "dist/ClimateTestManager-v0.8.7-windows.zip" `
+            "dist/update-manifest.json" `
             --target "${{ github.sha }}" `
             --title "ClimateTest Manager ${{ github.ref_name }}" `
-            --generate-notes
+            --notes-file $notesFile

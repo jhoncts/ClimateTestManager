@@ -7,6 +7,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $signature = "CLIMATETEST_DISCOVER_V1"
+$productId = "com.jhoncts.climatetestmanager"
 $results = [System.Collections.Generic.List[object]]::new()
 $client = [System.Net.Sockets.UdpClient]::new()
 try {
@@ -27,7 +28,9 @@ try {
         try {
             $payloadText = [System.Text.Encoding]::UTF8.GetString($bytes)
             $data = $payloadText | ConvertFrom-Json
-            if ($data.service -ne "ClimateTestManager") {
+            if (($data.product_id -ne $productId) -or
+                ($data.service -ne "ClimateTestManager") -or
+                ([int]$data.protocol -ne 1)) {
                 continue
             }
             $ip = $remote.Address.ToString()

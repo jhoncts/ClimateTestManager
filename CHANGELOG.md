@@ -7,6 +7,33 @@ e o projeto utiliza versionamento semântico.
 
 ## [Não publicado]
 
+### v0.8.7 — atualização controlada e portfólio independente
+
+- Somente o servidor central consulta novas Releases no GitHub; estações deixam de monitorar o
+  canal público ou apresentar avisos de atualização.
+- Distribuidor administrativo atualiza estações por WinRM, confere SHA-256 em cada cópia, preserva
+  o endereço do servidor, testa a conexão e gera relatório CSV.
+- Bootstrap explícito habilita a administração remota em cada estação e limita a regra de firewall
+  ao servidor central informado, sem armazenar credenciais ou adicionar curingas a TrustedHosts.
+- Releases de portfólio podem ser publicadas sem Authenticode, com aviso explícito e verificação de
+  integridade; o workflow continua pronto para assinatura futura.
+- `NOTICE.md` e `LICENSE` declaram autoria pessoal, independência e direitos reservados.
+
+### v0.8.6 — fluxo frio, atualização global e isolamento entre produtos
+
+- Fluxo opcional de resistência térmica ao frio integrado ao planejamento, condicionamento,
+  agenda, detalhes e trilha de auditoria.
+- Atualizador global com manifesto estável, verificação periódica, SHA-256, tamanho e suporte a
+  validação Authenticode antes de elevar o instalador.
+- Publicação automatizada passa a anexar manifesto e atestado de proveniência e bloqueia tags
+  oficiais sem certificado Windows configurado.
+- Cliente preserva o papel servidor/estação e impede atualização prematura de uma estação quando
+  o servidor central ainda não publica a revisão exigida.
+- Identidade `com.jhoncts.climatetestmanager` validada por HTTP e descoberta UDP impede que o
+  ClimateTest incorpore a interface do CalibraLab ou de qualquer futuro produto.
+- Mutex e porta de ativação desktop deixam de usar um número copiável e passam a derivar do ID do
+  produto.
+
 ### v0.8.5 — interface final, Tabela 17 dinâmica e atualização limpa
 
 - O Novo ensaio foi reconstruído sobre uma única árvore Flet persistente, com uma única rolagem,

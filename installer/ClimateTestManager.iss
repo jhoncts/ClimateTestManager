@@ -1,6 +1,6 @@
 #define MyAppName "ClimateTest Manager"
-#define MyAppVersion "0.8.5"
-#define MyBuildRevision "R9-20260814"
+#define MyAppVersion "0.8.7"
+#define MyBuildRevision "R12-20260825"
 #define MyAppPublisher "Jhon Cleiton"
 #define MyAppExeName "ClimateTestManager.exe"
 
@@ -36,6 +36,7 @@ Name: "{commonappdata}\ClimateTestManager"
 Name: "{commonappdata}\ClimateTestManager\Data"
 Name: "{commonappdata}\ClimateTestManager\Logs"
 Name: "{commonappdata}\ClimateTestManager\Backups"
+Name: "{commonappdata}\ClimateTestManager\ApprovedUpdates"
 
 [InstallDelete]
 ; Remove somente binários e recursos do programa. Banco, fotos, preferências e backups
@@ -48,6 +49,9 @@ Type: files; Name: "{app}\LEIA-ME-PRIMEIRO.md"
 Type: files; Name: "{app}\install_server_tasks.ps1"
 Type: files; Name: "{app}\uninstall_server_tasks.ps1"
 Type: files; Name: "{app}\discover_server.ps1"
+Type: files; Name: "{app}\deploy_update_to_stations.ps1"
+Type: files; Name: "{app}\enable_remote_update_station.ps1"
+Type: files; Name: "{app}\stations.example.txt"
 Type: filesandordirs; Name: "{app}\documentacao-conformidade"
 
 [Files]
@@ -61,12 +65,18 @@ Source: "..\dist\ClimateTestManager-v{#MyAppVersion}\LEIA-ME-PRIMEIRO.md"; DestD
 Source: "..\dist\ClimateTestManager-v{#MyAppVersion}\install_server_tasks.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\dist\ClimateTestManager-v{#MyAppVersion}\uninstall_server_tasks.ps1"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\dist\ClimateTestManager-v{#MyAppVersion}\discover_server.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v{#MyAppVersion}\deploy_update_to_stations.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v{#MyAppVersion}\enable_remote_update_station.ps1"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v{#MyAppVersion}\stations.example.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\dist\ClimateTestManager-v{#MyAppVersion}\stations.example.txt"; DestDir: "{commonappdata}\ClimateTestManager"; DestName: "stations.txt"; Flags: onlyifdoesntexist uninsneveruninstall
 Source: "..\dist\ClimateTestManager-v{#MyAppVersion}\documentacao-conformidade\*"; DestDir: "{app}\documentacao-conformidade"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
 Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\climatetest.ico"
 Name: "{commondesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\climatetest.ico"
 Name: "{autoprograms}\ClimateTest Manager - Diagnóstico"; Filename: "{sys}\explorer.exe"; Parameters: """{commonappdata}\ClimateTestManager\Logs"""; IconFilename: "{app}\climatetest.ico"
+Name: "{autoprograms}\ClimateTest Manager - Atualizar estações da rede"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\deploy_update_to_stations.ps1"" -Interactive"; WorkingDir: "{app}"; IconFilename: "{app}\climatetest.ico"; Check: SelectedServerMode
+Name: "{autoprograms}\ClimateTest Manager - Permitir atualização remota"; Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; Parameters: "-NoProfile -ExecutionPolicy Bypass -File ""{app}\enable_remote_update_station.ps1"""; WorkingDir: "{app}"; IconFilename: "{app}\climatetest.ico"; Check: not SelectedServerMode
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Abrir o ClimateTest Manager"; Flags: nowait postinstall skipifsilent; Check: ShouldLaunchApplication
@@ -511,6 +521,25 @@ begin
   end;
 end;
 
+procedure PreserveApprovedServerInstaller();
+var
+  SourcePath: String;
+  DestinationDirectory: String;
+  DestinationPath: String;
+begin
+  if not InstallAsServer then
+    Exit;
+  SourcePath := ExpandConstant('{srcexe}');
+  DestinationDirectory := ExpandConstant(
+    '{commonappdata}\ClimateTestManager\ApprovedUpdates'
+  );
+  ForceDirectories(DestinationDirectory);
+  DestinationPath := AddBackslash(DestinationDirectory) +
+    'ClimateTestManager-Setup-v{#MyAppVersion}.exe';
+  if not CopyFile(SourcePath, DestinationPath, False) then
+    Log('Aviso: não foi possível preservar o instalador aprovado em ' + DestinationPath);
+end;
+
 procedure CurStepChanged(CurStep: TSetupStep);
 var
   ResultCode: Integer;
@@ -530,6 +559,7 @@ begin
   ClientReachable := False;
   ClientConfigExitCode := -1;
   WriteModeFiles();
+  PreserveApprovedServerInstaller();
 
   PowerShellPath := ExpandConstant('{sys}\WindowsPowerShell\v1.0\powershell.exe');
   if InstallAsServer then

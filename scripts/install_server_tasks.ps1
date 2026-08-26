@@ -9,8 +9,8 @@ param(
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
-$version = "0.8.5"
-$buildRevision = "R9-20260814"
+$version = "0.8.7"
+$buildRevision = "R12-20260825"
 $serverTaskName = "ClimateTestManager-Server"
 $backgroundTaskName = "ClimateTestManager-Background"
 $notifierTaskName = "ClimateTestManager-Notifications"

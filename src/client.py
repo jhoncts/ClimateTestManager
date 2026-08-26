@@ -2,6 +2,7 @@
 
 import argparse  # noqa: I001
 import asyncio
+import json
 import os
 import sys
 import threading
@@ -20,16 +21,25 @@ from climatetest_manager.client_bridge import (
 )
 from climatetest_manager.services.notifications import WindowsToastProvider
 from climatetest_manager.services.updates import (
-    automatic_update_checks_enabled,
+    central_update_checks_enabled,
     check_for_update,
     download_verified_update,
+    installed_role_and_server,
     launch_installer_elevated,
+    update_check_interval_seconds,
+)
+from climatetest_manager.product_identity import (
+    DEFAULT_APP_PORT,
+    PRODUCT_ID,
+    SERVER_IDENTITY_PATH,
+    SERVER_PROTOCOL_VERSION,
+    SERVICE_NAME,
 )
 from climatetest_manager.single_instance import SingleInstanceCoordinator
 from climatetest_manager.ui.offline import build_offline_view
 
-VERSION = "0.8.5"
-DEFAULT_PORT = 8550
+VERSION = "0.8.7"
+DEFAULT_PORT = DEFAULT_APP_PORT
 SERVER_CONFIG_FILENAME = "server.url"
 
 
@@ -106,15 +116,25 @@ def _resolve_server_url(explicit_url: str = "") -> str:
 
 
 def _server_available(server_url: str, *, timeout: float = 1.5) -> bool:
+    """Aceita somente um servidor que declare a identidade deste produto."""
+
     try:
         request = urllib.request.Request(
-            server_url,
+            server_url.rstrip("/") + SERVER_IDENTITY_PATH,
             method="GET",
             headers={"User-Agent": f"ClimateTestManager/{VERSION}"},
         )
         with urllib.request.urlopen(request, timeout=timeout) as response:
-            return 200 <= response.status < 500
-    except (OSError, urllib.error.URLError, ValueError):
+            if not (200 <= response.status < 300):
+                return False
+            payload = json.loads(response.read(4096).decode("utf-8"))
+            return bool(
+                isinstance(payload, dict)
+                and payload.get("product_id") == PRODUCT_ID
+                and payload.get("service") == SERVICE_NAME
+                and payload.get("protocol") == SERVER_PROTOCOL_VERSION
+            )
+    except (OSError, urllib.error.URLError, ValueError, json.JSONDecodeError):
         return False
 
 
@@ -353,20 +373,75 @@ async def _watch_activation_requests(
         await asyncio.sleep(0.2)
 
 
-async def _offer_available_update(page: ft.Page, tray: _TrayController) -> None:
-    """Consulta sem bloquear a UI e oferece apenas instaladores com SHA-256 válido."""
+def _server_build_revision(server_url: str, *, timeout: float = 3.0) -> str:
+    request = urllib.request.Request(
+        server_url.rstrip("/") + "/server-build.txt",
+        headers={"User-Agent": f"ClimateTestManager-Updater/{VERSION}"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            if not (200 <= response.status < 300):
+                return ""
+            return response.read(128).decode("utf-8", errors="replace").strip()
+    except (OSError, urllib.error.URLError, ValueError):
+        return ""
 
-    if not automatic_update_checks_enabled():
-        return
+
+async def _offer_available_update(
+    page: ft.Page,
+    tray: _TrayController,
+    server_url: str,
+    *,
+    already_prompted: str = "",
+) -> str:
+    """Consulta sem bloquear a UI e oferece apenas instaladores verificados."""
+
+    if not central_update_checks_enabled():
+        return already_prompted
     update = await asyncio.to_thread(check_for_update, VERSION)
     if update is None:
-        return
+        return already_prompted
+    if update.version == already_prompted:
+        return already_prompted
+
+    local_role, configured_server = installed_role_and_server()
+    if not local_role:
+        local_role = "server" if "localhost" in server_url.casefold() else "client"
+    effective_server_url = configured_server or server_url
+    required_server_build = update.build_revision if local_role == "client" else ""
+    found_server_build = ""
+    server_ready = True
+    if required_server_build:
+        found_server_build = await asyncio.to_thread(_server_build_revision, effective_server_url)
+        server_ready = found_server_build == required_server_build
 
     progress = ft.ProgressRing(width=20, height=20, stroke_width=2, visible=False)
-    status = ft.Text("", size=11, color="#66788A")
+    status = ft.Text(
+        ""
+        if server_ready
+        else (
+            "Atualize primeiro o servidor central. Esta estação será liberada "
+            "automaticamente quando ele estiver na nova versão."
+        ),
+        size=11,
+        color="#66788A" if server_ready else "#B7791F",
+    )
     install_button: ft.Button
 
     async def download_and_install() -> None:
+        if required_server_build:
+            current_server_build = await asyncio.to_thread(
+                _server_build_revision, effective_server_url
+            )
+            if current_server_build != required_server_build:
+                install_button.disabled = True
+                status.value = (
+                    f"Servidor encontrado: {current_server_build or 'indisponível'}. "
+                    f"Necessário: {required_server_build}. Atualize o servidor primeiro."
+                )
+                status.color = "#B7791F"
+                page.update()
+                return
         install_button.disabled = True
         progress.visible = True
         status.value = "Baixando e verificando a atualização..."
@@ -416,15 +491,23 @@ async def _offer_available_update(page: ft.Page, tray: _TrayController) -> None:
         )
 
     install_button = ft.Button(
-        content="Baixar e instalar",
+        content="Atualizar servidor central",
         icon=ft.Icons.SYSTEM_UPDATE_ALT,
         bgcolor="#087E8B",
         color="#FFFFFF",
+        disabled=not server_ready,
         on_click=start_update,
+    )
+    role_notice = (
+        "Aviso exclusivo do servidor central. Depois desta atualização, o técnico de TI pode "
+        "usar o atalho “Atualizar estações da rede” para distribuir a mesma versão."
     )
     dialog = ft.AlertDialog(
         modal=True,
-        title=ft.Text("Nova atualização disponível", weight=ft.FontWeight.BOLD),
+        title=ft.Text(
+            "Atualização necessária" if update.mandatory else "Nova atualização disponível",
+            weight=ft.FontWeight.BOLD,
+        ),
         content=ft.Column(
             tight=True,
             spacing=12,
@@ -434,11 +517,12 @@ async def _offer_available_update(page: ft.Page, tray: _TrayController) -> None:
                     f"Versão instalada: v{VERSION}.",
                     size=12,
                 ),
+                ft.Text(role_notice, size=11, weight=ft.FontWeight.BOLD, color="#315B6B"),
                 *notes_control,
                 ft.Row(spacing=10, controls=[progress, status]),
                 ft.Text(
-                    "O instalador é baixado do GitHub e só é executado depois da "
-                    "verificação do SHA-256 publicado.",
+                    "O instalador é baixado do canal oficial e só é executado depois da "
+                    "verificação de tamanho, SHA-256 e assinatura digital quando publicada.",
                     size=10,
                     color="#66788A",
                 ),
@@ -451,6 +535,26 @@ async def _offer_available_update(page: ft.Page, tray: _TrayController) -> None:
         actions_alignment=ft.MainAxisAlignment.END,
     )
     page.open(dialog)
+    return update.version
+
+
+async def _periodic_update_monitor(page: ft.Page, tray: _TrayController, server_url: str) -> None:
+    """Monitora o GitHub somente no servidor central administrado pelo TI."""
+
+    if not central_update_checks_enabled():
+        return
+    prompted_version = ""
+    await asyncio.sleep(2)
+    while True:
+        # O monitor nunca pode derrubar a janela por falha de internet ou de renderização.
+        with suppress(Exception):
+            prompted_version = await _offer_available_update(
+                page,
+                tray,
+                server_url,
+                already_prompted=prompted_version,
+            )
+        await asyncio.sleep(update_check_interval_seconds())
 
 
 def _remote_app(server_url: str, on_error) -> ft.FletApp:
@@ -519,7 +623,8 @@ async def desktop_main(
     page.add(root)
     page.update()
 
-    state = {"online": False, "reconnecting": False, "update_checked": False, "failures": 0}
+    state = {"online": False, "reconnecting": False, "failures": 0}
+    page.run_task(_periodic_update_monitor, page, tray, server_url)
 
     async def show_offline() -> None:
         snapshot = await load_offline_snapshot(page)
@@ -577,9 +682,6 @@ async def desktop_main(
         page.update()
         if ready_file is not None:
             await asyncio.to_thread(_write_ready_marker, ready_file, server_url)
-        if not state["update_checked"]:
-            state["update_checked"] = True
-            page.run_task(_offer_available_update, page, tray)
 
     retry.on_click = lambda _event: page.run_task(reconnect)
 

@@ -1,6 +1,7 @@
 """Regressões do executável desktop que conecta ao servidor central."""
 
 import inspect
+import json
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -18,8 +19,8 @@ class DesktopClientTests(unittest.TestCase):
 
     def test_server_name_is_normalized_with_default_port(self) -> None:
         self.assertEqual(
-            client._normalize_server_url("CPEx-SERVER"),
-            "http://cpex-server:8550",
+            client._normalize_server_url("LAB-SERVER"),
+            "http://lab-server:8550",
         )
 
     def test_explicit_port_is_preserved(self) -> None:
@@ -64,6 +65,34 @@ class DesktopClientTests(unittest.TestCase):
             client._write_ready_marker(marker, "http://localhost:8550")
             self.assertTrue(marker.exists())
             self.assertIn("ClimateTest Manager", marker.read_text(encoding="utf-8"))
+
+    @patch("client.urllib.request.urlopen")
+    def test_server_available_requires_exact_product_identity(self, urlopen) -> None:
+        response = urlopen.return_value.__enter__.return_value
+        response.status = 200
+        response.read.return_value = json.dumps(
+            {
+                "product_id": "com.jhoncts.climatetestmanager",
+                "service": "ClimateTestManager",
+                "protocol": 1,
+            }
+        ).encode("utf-8")
+
+        self.assertTrue(client._server_available("http://127.0.0.1:8550"))
+        request = urlopen.call_args.args[0]
+        self.assertEqual(
+            request.full_url,
+            "http://127.0.0.1:8550/climatetest-server.json",
+        )
+
+        response.read.return_value = json.dumps(
+            {
+                "product_id": "com.jhoncts.calibralab",
+                "service": "CalibraLab",
+                "protocol": 1,
+            }
+        ).encode("utf-8")
+        self.assertFalse(client._server_available("http://127.0.0.1:8765"))
 
 
 if __name__ == "__main__":

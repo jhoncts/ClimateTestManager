@@ -7,9 +7,12 @@ import sys
 import threading
 from contextlib import suppress
 
-_MUTEX_NAME = "ClimateTestManager.Desktop.Singleton.v1"
-_ACTIVATION_PORT = 48550
-_ACTIVATION_MESSAGE = b"SHOW\n"
+from climatetest_manager.product_identity import (
+    DESKTOP_ACTIVATION_MESSAGE,
+    DESKTOP_ACTIVATION_PORT,
+    DESKTOP_MUTEX_NAME,
+)
+
 _ERROR_ALREADY_EXISTS = 183
 
 
@@ -44,7 +47,7 @@ class SingleInstanceCoordinator:
 
         kernel32 = self._kernel32()
         ctypes.set_last_error(0)
-        handle = kernel32.CreateMutexW(None, False, _MUTEX_NAME)
+        handle = kernel32.CreateMutexW(None, False, DESKTOP_MUTEX_NAME)
         if not handle:
             # Se o mutex do Windows não puder ser usado, não bloqueie o aplicativo.
             return True
@@ -64,7 +67,7 @@ class SingleInstanceCoordinator:
         listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
-            listener.bind(("127.0.0.1", _ACTIVATION_PORT))
+            listener.bind(("127.0.0.1", DESKTOP_ACTIVATION_PORT))
             listener.listen(4)
             listener.settimeout(0.5)
         except OSError:
@@ -90,8 +93,8 @@ class SingleInstanceCoordinator:
             except OSError:
                 break
             with connection, suppress(OSError):
-                data = connection.recv(32)
-                if data.strip().upper() == _ACTIVATION_MESSAGE.strip():
+                data = connection.recv(256)
+                if data.strip() == DESKTOP_ACTIVATION_MESSAGE.strip():
                     self.activation_requested.set()
 
     @staticmethod
@@ -99,9 +102,9 @@ class SingleInstanceCoordinator:
         for _attempt in range(12):
             try:
                 with socket.create_connection(
-                    ("127.0.0.1", _ACTIVATION_PORT), timeout=0.25
+                    ("127.0.0.1", DESKTOP_ACTIVATION_PORT), timeout=0.25
                 ) as sock:
-                    sock.sendall(_ACTIVATION_MESSAGE)
+                    sock.sendall(DESKTOP_ACTIVATION_MESSAGE)
                     return
             except OSError:
                 threading.Event().wait(0.1)

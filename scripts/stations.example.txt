@@ -1,0 +1,7 @@
+# ClimateTest Manager — estações administradas pelo técnico responsável
+# Use preferencialmente o NOME DO COMPUTADOR, uma estação por linha.
+# Linhas iniciadas por # são ignoradas.
+
+# EXEMPLOS (substitua pelos nomes reais):
+# LAB-ENSAIO-01
+# LAB-ENSAIO-02
