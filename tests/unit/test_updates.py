@@ -105,7 +105,15 @@ def test_only_central_server_monitors_public_updates() -> None:
     with TemporaryDirectory() as temporary_directory:
         root = Path(temporary_directory) / "ClimateTestManager"
         root.mkdir()
-        with patch.dict("os.environ", {"PROGRAMDATA": temporary_directory}, clear=False):
+        with patch.dict(
+            "os.environ",
+            {
+                "PROGRAMDATA": temporary_directory,
+                "GITHUB_ACTIONS": "",
+                "CLIMATETEST_DISABLE_UPDATE_CHECK": "",
+            },
+            clear=False,
+        ):
             (root / "client-mode.marker").write_text("client", encoding="ascii")
             assert central_update_checks_enabled() is False
 
